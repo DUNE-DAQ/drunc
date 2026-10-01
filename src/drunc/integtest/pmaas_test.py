@@ -84,7 +84,7 @@ us_2_commands_stage_1 = """
 
 pmshell_commands_stage_2 = f"""
     echo pms_ps_all_sessions
-    ps -w 300
+    ps 
 
     echo pms_ps_session_1_only
     ps -s {pms_session_name_1} -w 180
@@ -99,7 +99,7 @@ pmshell_commands_stage_2 = f"""
 us_1_commands_stage_2 = """
 
     echo us_1_ps_only
-    ps -w 300
+    ps 
 
     echo us_1_logs_scoped
     logs -n root-controller --how-far 5
@@ -112,7 +112,7 @@ us_1_commands_stage_2 = """
 us_2_commands_stage_2 = """
 
     echo us_2_ps_only
-    ps -w 300
+    ps 
 
     echo us_2_logs_scoped
     logs -n root-controller --how-far 5
@@ -124,13 +124,13 @@ us_2_commands_stage_2 = """
 
 pmshell_commands_stage_3 = """
     echo pms_ps_after_us_terminate
-    ps -w 300
+    ps 
 
     echo pms_terminate_all
     terminate
 
     echo pms_ps_final
-    ps -w 300
+    ps 
     """.split()
 
 # Find a free network port to use for the process manager
@@ -138,13 +138,25 @@ pm_port = find_free_port(50020, 52000)
 
 # The command lines that should be used to start the applications
 procmsg_startup_commands = ["drunc-process-manager", "<proc_mgr_choice>", str(pm_port)]
-pmapp = idc.DAQControlApplication("pm", procmsg_startup_commands)
+pmapp = idc.DAQControlApplication(
+    "pm",
+    procmsg_startup_commands,
+    idc.KeyPhraseWaitParameters(
+        search_phrase="communicating through",
+        timeout_waiting_for_first_msg=5,
+        wait_time_after_last_msg=5,
+    ),
+)
 
 pmshell_startup_commands = [
     "drunc-process-manager-shell",
     f"grpc://localhost:{pm_port}",
 ]
-pmshellapp = idc.DAQControlApplication("pmshell", pmshell_startup_commands)
+pmshellapp = idc.DAQControlApplication(
+    "pmshell",
+    pmshell_startup_commands,
+    idc.KeyPhraseWaitParameters(search_phrase="Ready"),
+)
 
 us_1_startup_commands = [
     "drunc-unified-shell",
@@ -153,7 +165,11 @@ us_1_startup_commands = [
     "<config_session_name>",
     us_session_name_1,
 ]
-us_1_app = idc.DAQControlApplication("us_1", us_1_startup_commands)
+us_1_app = idc.DAQControlApplication(
+    "us_1",
+    us_1_startup_commands,
+    idc.KeyPhraseWaitParameters(search_phrase="ready with"),
+)
 
 us_2_startup_commands = [
     "drunc-unified-shell",
@@ -162,43 +178,47 @@ us_2_startup_commands = [
     "<config_session_name>",
     us_session_name_2,
 ]
-us_2_app = idc.DAQControlApplication("us_2", us_2_startup_commands)
+us_2_app = idc.DAQControlApplication(
+    "us_2",
+    us_2_startup_commands,
+    idc.KeyPhraseWaitParameters(search_phrase="ready with"),
+)
 
 # Packaging up the commands into DAQCommandSets
 cmd_set_1 = idc.DAQCommandSet(
     "pmshell",
     pmshell_commands_stage_1,
-    idc.CommandWaitParameters(style=idc.CommandWaitStyle.ECHO),
+    idc.EchoCommandWaitParameters(),
 )
 cmd_set_2 = idc.DAQCommandSet(
     "us_1",
     us_1_commands_stage_1,
-    idc.CommandWaitParameters(style=idc.CommandWaitStyle.ECHO),
+    idc.EchoCommandWaitParameters(),
 )
 cmd_set_3 = idc.DAQCommandSet(
     "us_2",
     us_2_commands_stage_1,
-    idc.CommandWaitParameters(style=idc.CommandWaitStyle.ECHO),
+    idc.EchoCommandWaitParameters(),
 )
 cmd_set_4 = idc.DAQCommandSet(
     "pmshell",
     pmshell_commands_stage_2,
-    idc.CommandWaitParameters(style=idc.CommandWaitStyle.ECHO),
+    idc.EchoCommandWaitParameters(),
 )
 cmd_set_5 = idc.DAQCommandSet(
     "us_1",
     us_1_commands_stage_2,
-    idc.CommandWaitParameters(style=idc.CommandWaitStyle.ECHO),
+    idc.EchoCommandWaitParameters(),
 )
 cmd_set_6 = idc.DAQCommandSet(
     "us_2",
     us_2_commands_stage_2,
-    idc.CommandWaitParameters(style=idc.CommandWaitStyle.ECHO),
+    idc.EchoCommandWaitParameters(),
 )
 cmd_set_7 = idc.DAQCommandSet(
     "pmshell",
     pmshell_commands_stage_3,
-    idc.CommandWaitParameters(style=idc.CommandWaitStyle.ECHO),
+    idc.EchoCommandWaitParameters(),
 )
 
 # Putting everything together into a DAQSessionIngredients object

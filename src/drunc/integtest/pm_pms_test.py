@@ -45,12 +45,12 @@ dunerc_commands = f"""
 
     echo pre_boot
     echo-on-server pre_boot
-    ps -w 300
+    ps 
     boot config/daqsystemtest/example-configs.data.xml local-1x1-config {daq_session_name}
     wait 15
     echo post_boot
     echo-on-server post_boot
-    ps -w 300
+    ps 
 
 
     echo test_logs
@@ -69,16 +69,16 @@ dunerc_commands = f"""
     restart -n root-controller
     wait 5
     echo post_restart_mlt
-    ps -w 300
+    ps 
     echo-on-server post_restart_mlt
 
 
     echo test_kill_mlt
-    ps -w 300
+    ps 
     kill -n mlt
     wait 2
     echo test_kill_mlt_post
-    ps -w 300
+    ps 
     echo test_kill_mlt_done
 
 
@@ -87,19 +87,19 @@ dunerc_commands = f"""
     restart -n trg-controller
     wait 5
     echo test_recovery_post
-    ps -w 300
+    ps 
     echo test_recovery_done
 
 
     echo test_flush
-    ps -w 300
+    ps 
     kill -n mlt --crash 
     wait 5
     echo after_crash
-    ps -w 300
+    ps 
     flush
     echo after_flush
-    ps -w 300
+    ps 
     echo test_flush_done
 
     echo test_terminate
@@ -115,19 +115,31 @@ pm_port = find_free_port(50020, 52000)
 
 # The command lines that should be used to start the applications
 procmsg_startup_commands = ["drunc-process-manager", "<proc_mgr_choice>", str(pm_port)]
-pmapp = idc.DAQControlApplication("pm", procmsg_startup_commands)
+pmapp = idc.DAQControlApplication(
+    "pm",
+    procmsg_startup_commands,
+    idc.KeyPhraseWaitParameters(
+        search_phrase="communicating through",
+        timeout_waiting_for_first_msg=5,
+        wait_time_after_last_msg=5,
+    ),
+)
 
 pmshell_startup_commands = [
     "drunc-process-manager-shell",
     f"grpc://localhost:{pm_port}",
 ]
-pmshellapp = idc.DAQControlApplication("pmshell", pmshell_startup_commands)
+pmshellapp = idc.DAQControlApplication(
+    "pmshell",
+    pmshell_startup_commands,
+    idc.KeyPhraseWaitParameters(search_phrase="Ready"),
+)
 
 # Packaging up the commands into DAQCommandSets
 cmd_set = idc.DAQCommandSet(
     "pmshell",
     dunerc_commands,
-    idc.CommandWaitParameters(style=idc.CommandWaitStyle.ECHO),
+    idc.EchoCommandWaitParameters(),
 )
 
 # Putting everything together into a DAQSessionIngredients object

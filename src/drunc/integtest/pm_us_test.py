@@ -101,12 +101,12 @@ dunerc_commands = (
 
     echo pre_boot
     echo-on-server pre_boot
-    ps -w 300
+    ps 
     boot
     wait 15
     echo post_boot
     echo-on-server post_boot
-    ps -w 300
+    ps 
 
 
     echo test_logs
@@ -125,16 +125,16 @@ dunerc_commands = (
     restart -n root-controller
     wait 5
     echo post_restart_mlt
-    ps -w 300
+    ps 
     echo-on-server post_restart_mlt
 
 
     echo test_kill_mlt
-    ps -w 300
+    ps 
     kill -n mlt
     wait 2
     echo test_kill_mlt_post
-    ps -w 300
+    ps 
     echo test_kill_mlt_done
 
 
@@ -143,7 +143,7 @@ dunerc_commands = (
     restart -n trg-controller
     wait 5
     echo test_recovery_post
-    ps -w 300
+    ps 
     echo test_recovery_done
 
     echo pre_fsm_status
@@ -151,14 +151,14 @@ dunerc_commands = (
     echo pre_fsm_status_done
 
     echo test_flush
-    ps -w 300
+    ps 
     kill -n mlt --crash
     wait 5
     echo after_crash
-    ps -w 300
+    ps 
     flush
     echo after_flush
-    ps -w 300
+    ps 
     echo test_flush_done
 
     echo test_terminate
@@ -197,7 +197,15 @@ pm_port = find_free_port(50020, 52000)
 
 # The command lines that should be used to start the applications
 procmsg_startup_commands = ["drunc-process-manager", "<proc_mgr_choice>", str(pm_port)]
-pmapp = idc.DAQControlApplication("pm", procmsg_startup_commands)
+pmapp = idc.DAQControlApplication(
+    "pm",
+    procmsg_startup_commands,
+    idc.KeyPhraseWaitParameters(
+        search_phrase="communicating through",
+        timeout_waiting_for_first_msg=5,
+        wait_time_after_last_msg=5,
+    ),
+)
 
 drunc_startup_commands = [
     "drunc-unified-shell",
@@ -206,11 +214,13 @@ drunc_startup_commands = [
     "<config_session_name>",
     "<daq_session_name>",
 ]
-druncapp = idc.DAQControlApplication("us", drunc_startup_commands)
-
-cmd_set_list = idc.DAQCommandSet(
-    "us", dunerc_commands, idc.CommandWaitParameters(style=idc.CommandWaitStyle.ECHO)
+druncapp = idc.DAQControlApplication(
+    "us",
+    drunc_startup_commands,
+    idc.KeyPhraseWaitParameters(search_phrase="ready with"),
 )
+
+cmd_set_list = idc.DAQCommandSet("us", dunerc_commands, idc.EchoCommandWaitParameters())
 
 
 # Putting everything together into a DAQSessionIngredients object
