@@ -147,7 +147,7 @@ dunerc_commands = (
     echo test_recovery_done
 
     echo pre_fsm_status
-    status -w 140
+    status
     echo pre_fsm_status_done
 
     echo test_flush
@@ -187,7 +187,7 @@ dunerc_commands = (
     echo {_SHUTDOWN_MARKER}
     shutdown
     echo {_SHUTDOWN_MARKER}_done
-    status -w 140
+    status
     echo {_SHUTDOWN_MARKER}_status_done
     """
 ).split()

@@ -87,7 +87,7 @@ pmshell_commands_stage_2 = f"""
     ps 
 
     echo pms_ps_session_1_only
-    ps -s {pms_session_name_1} -w 180
+    ps -s {pms_session_name_1}
 
     echo pms_logs_ambiguous
     logs -n root-controller
