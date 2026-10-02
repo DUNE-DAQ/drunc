@@ -1,5 +1,4 @@
 import getpass
-from time import sleep
 from typing import Callable
 
 import click
@@ -18,6 +17,7 @@ from drunc.process_manager.process_manager_driver import ProcessManagerDriver
 from drunc.process_manager.utils import tabulate_process_instance_list
 from drunc.unified_shell.context import UnifiedShellContext
 from drunc.utils.shell_utils import InterruptedCommand, format_table_width, log_pm_cmd
+from drunc.utils.shell_utils import wait as shell_wait
 from drunc.utils.utils import get_logger, log_echo, resolve_context_peer
 
 
@@ -227,13 +227,19 @@ def dummy_boot(
 
 
 @click.command("wait")
-@click.argument("sleep_time", type=int, default=1)
+@click.argument("sleep_time", type=int)
+@click.option(
+    "--progress-steps",
+    type=int,
+    default=None,
+    help="Number of progress updates to print when --progress is set.",
+)
 @click.pass_obj
-def wait(obj: ProcessManagerContext, sleep_time: int) -> None:
+def wait(
+    obj: ProcessManagerContext, sleep_time: int, progress_steps: int | None
+) -> None:
     log = get_logger("process_manager.wait")
-    log.info(f"Command [green]wait[/green] running for {sleep_time} seconds.")
-    sleep(sleep_time)  # seconds
-    log.info(f"Command [green]wait[/green] ran for {sleep_time} seconds.")
+    shell_wait(log, sleep_time, progress_steps)
 
 
 @click.command("terminate")
