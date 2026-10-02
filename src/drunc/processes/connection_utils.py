@@ -1,14 +1,16 @@
+import logging
 import time
-from typing import Any, Callable, Optional
+from typing import Callable, Optional, Tuple, TypeVar, Union
 
+T = TypeVar("T") 
 
 def wait_for(
-    condition: Callable[[], Any],
-    expected_value: Any,
+    condition: Callable[[], T],
+    expected_value: Optional[Union[T, Tuple[T, ...], Callable[[T], bool]]] = None,
     timeout: float = 10.0,
     poll_interval: float = 0.1,
-    logger: Optional[Any] = None,
-) -> Optional[Any]:
+    logger: Optional[logging.Logger] = None,
+) -> Optional[T]:
     """
     Wait for a condition to return an expected value within a timeout period.
 

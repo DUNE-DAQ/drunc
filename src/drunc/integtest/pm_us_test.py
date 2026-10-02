@@ -100,13 +100,13 @@ dunerc_commands = (
     """
 
     echo pre_boot
-    echo-on-server pre_boot
-    ps 
+    echo --server  pre_boot
+    ps
     boot
     wait 15
     echo post_boot
-    echo-on-server post_boot
-    ps 
+    echo --server  post_boot
+    ps
 
 
     echo test_logs
@@ -124,13 +124,13 @@ dunerc_commands = (
     echo test_wait_progress_done
 
     echo pre_restart_mlt
-    echo-on-server pre_restart_mlt
+    echo --server  pre_restart_mlt
     restart -n mlt
     restart -n root-controller
     wait 5
     echo post_restart_mlt
-    ps 
-    echo-on-server post_restart_mlt
+    ps
+    echo --server  post_restart_mlt
 
 
     echo test_kill_mlt
@@ -166,10 +166,10 @@ dunerc_commands = (
     echo test_flush_done
 
     echo test_terminate
-    echo-on-server test_terminate
+    echo --server  test_terminate
     terminate
     echo test_terminate_done
-    echo-on-server test_terminate_done
+    echo --server  test_terminate_done
 
     wait 15
     boot
