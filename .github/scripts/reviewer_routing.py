@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import os
+import random
 import re
 import sys
 from dataclasses import dataclass
@@ -70,25 +71,23 @@ class DeterministicSelector:
     """Choose one reviewer deterministically from a label's weighted pool.
 
     The selector first removes usernames listed in ``context.excluded``. It
-    then treats each remaining reviewer's weight as that many consecutive
-    slots, in configuration order, and maps the pull request number into those
-    slots with ``PR number % total weight``.
+    then seeds a pseudo-random number generator with the pull request number
+    and label, draws a uniform integer in ``[0, total weight)``, and maps it onto the
+    remaining reviewers' weights in configuration order.
 
-    For example, with ``alice`` at weight 3 and ``bob`` at weight 1, the total
-    is 4. PR numbers with remainder 0, 1, or 2 select ``alice``; remainder 3
-    selects ``bob``. Thus PR #10 selects ``alice`` (10 % 4 == 2), while PR #11
-    selects ``bob`` (11 % 4 == 3). Re-running selection for the same PR and
-    unchanged pool returns the same candidate.
+    For example, with ``alice`` at weight 3 and ``bob`` at weight 1, ``alice``
+    is selected with probability 3/4 and ``bob`` with probability 1/4.
+    Re-running selection for the same PR, label, and unchanged pool returns
+    the same candidate, while different labels on one PR draw independently.
 
-    Exclusions are applied before calculating the slots. If ``alice`` is the
-    PR author, only ``bob`` remains, so the total weight is 1 and every PR
-    number selects ``bob``. The caller handles reviewer requests and can retry
-    selection after excluding a candidate GitHub rejects.
+    Exclusions are applied before drawing. If ``alice`` is the PR author, only
+    ``bob`` remains and is always selected. The caller handles reviewer
+    requests and can retry selection after excluding a candidate GitHub
+    rejects.
 
-    Weights create a repeatable distribution across PR numbers; they are not
-    random choice, workload balancing, or a rotation based on past reviews.
-    This class selects a candidate; the routing code separately requests the
-    review from GitHub.
+    Weights are selection probabilities, not workload balancing or a rotation
+    based on past reviews. This class selects a candidate; the routing code
+    separately requests the review from GitHub.
     """
 
     def select(
@@ -96,9 +95,9 @@ class DeterministicSelector:
         reviewers: list[Reviewer],
         context: SelectionContext,
     ) -> Reviewer | None:
-        """Select according to weighted PR-number slots, skipping exclusions."""
+        """Select by a weighted draw seeded with the PR and label, skipping exclusions."""
         # Remove the author (and any other exclusions) before summing weights so
-        # excluded reviewers contribute no slots to the selection.
+        # excluded reviewers have zero probability of selection.
         eligible = [
             reviewer
             for reviewer in reviewers
@@ -108,15 +107,13 @@ class DeterministicSelector:
         if not total_weight:
             return None
 
-        # The PR number gives every run for this PR the same slot. Weights turn
-        # that slot into a repeatable proportion of the pool's total slots.
-        slot = context.pull_number % total_weight
+        # Per-label seed keeps reruns reproducible while decorrelating labels on one PR.
+        seed = f"{context.pull_number}:{context.label}"
+        draw = random.Random(seed).randrange(total_weight)
         for reviewer in eligible:
-            # Each reviewer owns `weight` consecutive slots in config order.
-            if slot < reviewer.weight:
+            if draw < reviewer.weight:
                 return reviewer
-            # Skip this reviewer's slots and test the next reviewer's range.
-            slot -= reviewer.weight
+            draw -= reviewer.weight
         raise AssertionError("Weighted selection did not resolve")
 
 
