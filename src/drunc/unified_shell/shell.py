@@ -20,7 +20,6 @@ from drunc.controller.configuration import ControllerConfHandler
 from drunc.controller.interface.commands import (
     connect,
     disconnect,
-    echo,
     exclude,
     expert_command,
     include,
@@ -54,10 +53,9 @@ from drunc.process_manager.interface.process_manager import run_pm
 from drunc.process_manager.utils import get_pm_type_from_name, validate_k8s_session_name
 from drunc.unified_shell.commands import (
     boot,
-    echo_on_server,
+    echo,
     flush,
     kill,
-    log_on_server,
     logs,
     ps,
     restart,
@@ -346,7 +344,7 @@ def unified_shell(
         sys.exit(1)
     ctx.obj.log.debug("Communication with the process manager verified successfully")
 
-    ctx.obj.get_driver("process_manager").log_on_server(
+    ctx.obj.get_driver("process_manager").send_log(
         f"{getpass.getuser()} connected from unified shell"
     )
 
@@ -374,8 +372,7 @@ def unified_shell(
         boot,
         flush,
         kill,
-        log_on_server,
-        echo_on_server,
+        echo,
         logs,
         ps,
         restart,
@@ -396,7 +393,6 @@ def unified_shell(
         take_control,
         surrender_control,
         who_am_i,
-        echo,
         who_is_in_charge,
         include,
         exclude,
@@ -557,7 +553,7 @@ def unified_shell(
                 )
 
         # Remove the connection to the process manager
-        ctx.obj.get_driver("process_manager").log_on_server(
+        ctx.obj.get_driver("process_manager").send_log(
             f"{getpass.getuser()} disconnected from unified shell"
         )
         ctx.obj.get_driver("process_manager").close()
