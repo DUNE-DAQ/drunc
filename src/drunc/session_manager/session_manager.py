@@ -3,6 +3,7 @@
 import abc
 from os import getenv
 from pathlib import Path
+from threading import Lock
 
 from conffwk import Configuration
 from druncschema.description_pb2 import CommandDescription, Description
@@ -15,6 +16,8 @@ from druncschema.session_manager_pb2 import (
     AllActiveSessions,
     AllConfigKeys,
     ConfigKey,
+    LoadSessionRequest,
+    LoadSessionResponse,
 )
 from druncschema.session_manager_pb2_grpc import SessionManagerServicer
 from grpc import ServicerContext
@@ -40,12 +43,14 @@ class SessionManager(abc.ABC, SessionManagerServicer):
         """
         super().__init__()
 
-        self.log = get_logger("session_manager", rich_handler=True)
-        self.log.debug(pid_info_str())
-        self.log.debug("Initialized SessionManager")
-
         self.name = name
         self.configuration = configuration
+        self._active_sessions: dict[str, ActiveSession] = {}
+        self._active_sessions_lock = Lock()
+
+        self.log = get_logger("session_manager", rich_handler=True)
+        self.log.debug(pid_info_str())
+        self.log.debug("Initialised session manager")
 
     def describe(self, request: Request, context: ServicerContext) -> Description:
         """Respond with a description of this session manager service.
@@ -78,6 +83,12 @@ class SessionManager(abc.ABC, SessionManagerServicer):
                 help="List all available configurations.",
                 return_type="session_manager_pb2.AllConfigKeys",
             ),
+            CommandDescription(
+                name="load_session",
+                data_type=["None"],
+                help="Load a session based on the provided configuration key.",
+                return_type="session_manager_pb2.LoadSessionResponse",
+            ),
         ]
 
         return Description(
@@ -102,21 +113,13 @@ class SessionManager(abc.ABC, SessionManagerServicer):
         """
         self.log.debug(f"{self.name} running list_all_sessions")
 
-        dummy_config = ConfigKey(
-            file="dummy_config_file",
-            session_id="dummy_config_session_id",
-        )
-
-        dummy_session = ActiveSession(
-            name="dummy_session",
-            user="dummy_user",
-            config_key=dummy_config,
-        )
+        with self._active_sessions_lock:
+            active_sessions = list(self._active_sessions.values())
 
         return AllActiveSessions(
             name=self.name,
             token=None,
-            active_sessions=[dummy_session],
+            active_sessions=active_sessions,
             flag=ResponseFlag.EXECUTED_SUCCESSFULLY,
         )
 
@@ -188,3 +191,40 @@ class SessionManager(abc.ABC, SessionManagerServicer):
             config_keys=configs,
             flag=ResponseFlag.EXECUTED_SUCCESSFULLY,
         )
+
+    def load_session(
+        self, request: LoadSessionRequest, context: ServicerContext
+    ) -> LoadSessionResponse:
+        """Load a session based on the provided configuration key.
+
+        Args:
+            request: The incoming request containing the configuration key.
+            context: The gRPC context (not used).
+
+        Returns:
+            LoadSessionResponse: A response containing loaded session metadata.
+        """
+        self.log.debug(f"{self.name} running load_session")
+
+        file = request.config_key.file
+        session_id = request.config_key.session_id
+        self.log.info(f"Loading session: '{session_id}' from file: '{file}'")
+
+        session = ActiveSession(
+            name="session_name", user="session_user", config_key=request.config_key
+        )
+
+        with self._active_sessions_lock:
+            if session_id in self._active_sessions:
+                raise DruncSetupException(
+                    message="Unable to load session",
+                    details=f"Session '{session_id}' already exists.",
+                )
+
+            # TODO: Implement the actual session loading logic here.
+            # TODO: Set user name and session name (different from session ID).
+            # TODO: Store connection URL in `ActiveSession`.
+
+            self._active_sessions[session_id] = session
+
+            return LoadSessionResponse(session=session)

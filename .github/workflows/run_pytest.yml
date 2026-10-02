@@ -1,10 +1,27 @@
 name: Run pytest
 
 on:
+  # Run on any pushes to the main branch which releases are generated from
+  push:
+    branches:
+      - develop
+      - 'prep-release/**'
+
   pull_request:
+    branches:
+      - develop
+      - 'prep-release/**'
+    # If taking a PR out of draft mode, run the workflow on the PR event as well
+    types: [opened, synchronize, reopened, ready_for_review]
+
+# Cancel any running jobs for this same branch if a new commit is pushed
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   install_and_test:
+    if: github.event.pull_request.draft == false
 
     runs-on: ubuntu-latest
 

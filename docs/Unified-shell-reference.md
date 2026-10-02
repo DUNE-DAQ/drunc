@@ -414,7 +414,6 @@ logs -n root-controller --how-far 5
            INFO     "Controller": 'df-controller@localhost:5600' (type ChildNodeType.gRPC)                                           controller.py:123
            INFO     "Controller": 'trg-controller@localhost:5700' (type ChildNodeType.gRPC)                                          controller.py:123
            INFO     "Controller": 'hsi-controller@localhost:5800' (type ChildNodeType.gRPC)                                          controller.py:123
-           INFO     "Broadcast": ready                                                                                          broadcast_sender.py:65
 root-controller was started on localhost:3333
 ───────────────────────────────────────────────────────────────────────────────────────────── End ──────────────────────────────────────────────────────────────────────────────────────────────
 ```

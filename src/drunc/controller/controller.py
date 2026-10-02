@@ -1,4 +1,4 @@
-import multiprocessing
+import os
 import threading
 import time
 from concurrent.futures import ThreadPoolExecutor
@@ -6,7 +6,7 @@ from typing import Callable, List, TypeVar
 
 from daqpytools.logging import LogHandlerConf, setup_daq_ers_logger
 from druncschema.authoriser_pb2 import ActionType, SystemType
-from druncschema.broadcast_pb2 import BroadcastType
+from druncschema.common_pb2 import LoggerTarget, SendLogRequest, SendLogResponse
 from druncschema.controller_pb2 import (
     DescribeFSMRequest,
     DescribeFSMResponse,
@@ -47,9 +47,6 @@ from grpc import ServicerContext
 from drunc.authoriser.configuration import DummyAuthoriserConfHandler
 from drunc.authoriser.decorators import authentified_and_authorised
 from drunc.authoriser.dummy_authoriser import DummyAuthoriser
-from drunc.broadcast.server.broadcast_sender import BroadcastSender
-from drunc.broadcast.server.configuration import BroadcastSenderConfHandler
-from drunc.broadcast.server.decorators import broadcasted
 from drunc.connectivity_service.client import ConnectivityServiceClient
 from drunc.connectivity_service.exceptions import ApplicationLookupUnsuccessful
 from drunc.controller.children_interface.child_node import ChildNode
@@ -69,6 +66,7 @@ from drunc.fsm.exceptions import (
     DotDruncJsonNotFound,
 )
 from drunc.fsm.utils import convert_fsm_transition
+from drunc.utils.grpc_utils import ServerTimeout
 from drunc.utils.utils import get_logger
 
 T = TypeVar("T")
@@ -85,7 +83,6 @@ class Controller(ControllerServicer):
         self._previous_error_state = False
         self.name = name
         self.session = session
-        self.broadcast_service = None
         self.monitoring_metrics = ControllerMonitoringMetrics()
         self.handlerconf = LogHandlerConf(init_ers=True)
         self.log = get_logger(f"controller.core.{name}_ctrl")
@@ -109,18 +106,9 @@ class Controller(ControllerServicer):
         self.opmon_publisher = getattr(self.configuration, "opmon_publisher", None)
         self.stop_event: threading.Event | None = None
         self.thread: threading.Thread | None = None
-        bsch = BroadcastSenderConfHandler(
-            data=self.configuration.data.controller.broadcaster,
-        )
 
-        self.broadcast_service = BroadcastSender(
-            name=name,
-            session=session,
-            configuration=bsch,
-        )
-
-        self.fsm_config = FSMConfHandler(
-            data=self.configuration.data.controller.fsm,
+        self.fsm_config = FSMConfHandler.from_pyobject(
+            data=self.configuration.controller.fsm,
         )
 
         self.stateful_node = StatefulNode(
@@ -132,10 +120,9 @@ class Controller(ControllerServicer):
             top_segment_controller=self.top_segment_controller,
         )
 
-        dach = DummyAuthoriserConfHandler(
+        dach = DummyAuthoriserConfHandler.from_pyobject(
             data=self.configuration.authoriser,
         )
-
         self.authoriser = DummyAuthoriser(dach, SystemType.CONTROLLER)
 
         self.actor = ControllerActor(token)
@@ -144,17 +131,29 @@ class Controller(ControllerServicer):
         self.connectivity_service_thread = None
         self.uri = ""
         if self.configuration.session.connectivity_service:
-            connection_server = self.configuration.session.connectivity_service.host
-            connection_port = (
-                self.configuration.session.connectivity_service.service.port
+            # Remaps the localhost into the correct server
+            # and also grabs the correct port from the right environment from the config
+
+            connection_server_host = (
+                self.configuration.session.connectivity_service.host
             )
+            connection_port = os.getenv("CONNECTION_PORT")
+            if connection_server_host == "localhost":
+                injected_hostname = os.getenv("DRUNC_HOST_NAME")
+                if not injected_hostname:
+                    raise ValueError("DRUNC_HOST_NAME environment variable is not set.")
+                self.log.debug(
+                    f"Remapping connectivity service host from 'localhost' to '{injected_hostname}'"
+                )
+                connection_server_host = injected_hostname
+
             log_init.info(
-                f"Connectivity server {connection_server}:{connection_port} is enabled"
+                f"Connectivity server {connection_server_host}:{connection_port} is enabled"
             )
 
             self.connectivity_service = ConnectivityServiceClient(
                 session=self.session,
-                address=f"{connection_server}:{connection_port}",
+                address=f"{connection_server_host}:{connection_port}",
             )
 
     def init_controller(self) -> None:
@@ -225,6 +224,9 @@ class Controller(ControllerServicer):
             for response in child_responses:
                 children_states[response.name] = response.status.state
                 if response.status.in_error:
+                    self.log.error(
+                        f"Child {response.name} is in error state. Placing controller in error state."
+                    )
                     self.stateful_node.to_error()
 
             if any([c.lower() != "initial" for c in children_states.values()]):
@@ -235,7 +237,8 @@ class Controller(ControllerServicer):
         bad_children = [k for k, v in children_states.items() if v.lower() != "initial"]
         if bad_children:
             log_init_controller.error(
-                f"Children that did not initialise in time: {bad_children}"
+                f"Children that did not initialise in time: [red]{', '.join(bad_children).rstrip(', ')}[/]. Placing "
+                "controller in error state."
             )
             self.stateful_node.to_error()
 
@@ -245,7 +248,7 @@ class Controller(ControllerServicer):
             log_init_controller.info(f"Taking control of {child.name}")
             child.take_control(execute_on_all_subsequent_children_in_path=True)
 
-        interval_s = getattr(self.configuration.data, "interval_s", 10.0)
+        interval_s = getattr(self.configuration, "interval_s", 10.0)
 
         if self.opmon_publisher is not None:
             self.stop_event = threading.Event()
@@ -256,27 +259,8 @@ class Controller(ControllerServicer):
             )
             self.thread.start()
 
-        self.broadcast(message="ready", btype=BroadcastType.SERVER_READY)
         self.stateful_node.set_ready_state(True)
         log_init_controller.info("Controller ready")
-
-    """
-    A couple of simple pass-through functions to the broadcasting service
-    """
-
-    def broadcast(self, *args, **kwargs):
-        return self.broadcast_service.broadcast(*args, **kwargs)
-
-    def can_broadcast(self, *args, **kwargs):
-        if self.broadcast_service:
-            return self.broadcast_service.can_broadcast(*args, **kwargs)
-        return False
-
-    def describe_broadcast(self, *args, **kwargs):
-        return self.broadcast_service.describe_broadcast(*args, **kwargs)
-
-    def interrupt_with_exception(self, *args, **kwargs):
-        return self.broadcast_service._interrupt_with_exception(*args, **kwargs)
 
     def controller_publisher(self, message, custom_origin: dict | None = None):
         if isinstance(message, FSMStatus) and message.in_error:
@@ -360,6 +344,13 @@ class Controller(ControllerServicer):
         if not self.connectivity_service:
             return
 
+        self.log.debug(
+            f"Looking for connectivity service at address {self.connectivity_service.address}"
+        )
+        if not self.connectivity_service.is_ready(timeout=20):
+            raise ValueError(
+                "Connectivity service unavailable for control address advertising."
+            )
         self.log.info(
             f"Registering {self.name} ({address}) to the connectivity service at {self.connectivity_service.address}"
         )
@@ -394,12 +385,6 @@ class Controller(ControllerServicer):
             self.log.info("Unregistering from the connectivity service")
             self.connectivity_service.retract(self.name + "_control", fail_quickly=True)
 
-        if self.can_broadcast():
-            self.broadcast(
-                btype=BroadcastType.SERVER_SHUTDOWN,
-                message="over_and_out",
-            )
-
         self.log.info("Stopping children")
         for child in self.children_nodes:
             self.log.debug(f"Stopping {child.name}")
@@ -423,14 +408,6 @@ class Controller(ControllerServicer):
                         self.log.debug("opmon publisher stopped")
             except Exception as e:
                 self.log.warning(f"Error stopping opmon publisher: {e}")
-
-        self.log.debug("Threading threads")
-        for t in threading.enumerate():
-            self.log.debug(f"{t.name} TID: {t.native_id} is_alive: {t.is_alive}")
-
-        with multiprocessing.Manager() as manager:
-            self.log.debug("Multiprocess threads")
-            self.log.debug(manager.list())
 
     def __del__(self):
         self.terminate()
@@ -625,7 +602,6 @@ class Controller(ControllerServicer):
     ############# Status, description commands #############
     ########################################################
 
-    @broadcasted
     @authentified_and_authorised(action=ActionType.READ, system=SystemType.CONTROLLER)
     @publish_command_time
     def status(
@@ -688,7 +664,6 @@ class Controller(ControllerServicer):
 
         return response
 
-    @broadcasted
     @authentified_and_authorised(action=ActionType.READ, system=SystemType.CONTROLLER)
     @publish_command_time
     def describe(
@@ -717,8 +692,6 @@ class Controller(ControllerServicer):
                 session=self.session,
                 commands=None,
             )
-            if broadcast_description := self.describe_broadcast():
-                description.broadcast.Pack(broadcast_description)
             response.description.CopyFrom(description)
 
         # Children nodes (ignore exclusion).
@@ -754,7 +727,6 @@ class Controller(ControllerServicer):
 
         return response
 
-    @broadcasted
     @authentified_and_authorised(action=ActionType.READ, system=SystemType.CONTROLLER)
     @publish_command_time
     def describe_fsm(
@@ -837,7 +809,6 @@ class Controller(ControllerServicer):
     ############# FSM commands #############
     ########################################
 
-    @broadcasted
     @authentified_and_authorised(action=ActionType.UPDATE, system=SystemType.CONTROLLER)
     @in_control
     @publish_command_time
@@ -854,13 +825,14 @@ class Controller(ControllerServicer):
             flag=ResponseFlag.EXECUTED_SUCCESSFULLY,
         )
 
+        # Parse and validate target.
         try:
-            # Parse and validate target.
             request.target = self.parse_target_string(request.target)
         except ValueError:
             response.flag = ResponseFlag.NOT_EXECUTED_BAD_REQUEST_FORMAT
             return response
 
+        # Extract command information.
         command = request.command
         command_name = command.command_name
 
@@ -892,6 +864,7 @@ class Controller(ControllerServicer):
                 )
             )
 
+        # Extract FSM transition.
         transition = self.stateful_node.get_fsm_transition(command_name)
         self.log.debug(f"FSM transition: {transition}")
 
@@ -928,7 +901,7 @@ class Controller(ControllerServicer):
             response.fsm_flag = FSMResponseFlag.FSM_INVALID_TRANSITION
             return response
 
-        # This node.
+        # Execute FSM transition on this node.
         if request.target == self.name or request.execute_along_path:
             fsm_args = self.stateful_node.decode_fsm_arguments(command)
             fsm_data = self.stateful_node.prepare_transition(
@@ -972,17 +945,23 @@ class Controller(ControllerServicer):
             child_command = FSMCommand()
             child_command.CopyFrom(command)
             child_command.data = fsm_data
-            child_responses = self.propagate_concurrently(
-                lambda child, target: child.execute_fsm_command(
-                    child_command,
-                    target,
-                    request.execute_along_path,
-                    request.execute_on_all_subsequent_children_in_path,
-                ),
-                child_list,
-                indices=connected_indices,
-            )
-            response.children.extend(child_responses)
+            try:
+                child_responses = self.propagate_concurrently(
+                    lambda child, target: child.execute_fsm_command(
+                        child_command,
+                        target,
+                        request.execute_along_path,
+                        request.execute_on_all_subsequent_children_in_path,
+                    ),
+                    child_list,
+                    indices=connected_indices,
+                )
+                response.children.extend(child_responses)
+            except ServerTimeout as e:
+                response.fsm_flag = FSMResponseFlag.FSM_FAILED
+                self.stateful_node.to_error()
+                self.log.error(f"FSM command '{command_name}' failed: {e}")
+                return response
 
             # Finish propagating FSM transition to children.
             self.stateful_node.finish_propagating_transition_mark(transition)
@@ -1016,7 +995,6 @@ class Controller(ControllerServicer):
 
         return response
 
-    @broadcasted
     @authentified_and_authorised(action=ActionType.EXPERT, system=SystemType.CONTROLLER)
     @in_control
     @publish_command_time
@@ -1076,7 +1054,6 @@ class Controller(ControllerServicer):
 
         return response
 
-    @broadcasted
     @authentified_and_authorised(action=ActionType.UPDATE, system=SystemType.CONTROLLER)
     @in_control
     @publish_command_time
@@ -1142,7 +1119,6 @@ class Controller(ControllerServicer):
 
         return response
 
-    @broadcasted
     @authentified_and_authorised(action=ActionType.UPDATE, system=SystemType.CONTROLLER)
     @in_control
     @publish_command_time
@@ -1208,7 +1184,6 @@ class Controller(ControllerServicer):
 
         return response
 
-    @broadcasted
     @authentified_and_authorised(action=ActionType.UPDATE, system=SystemType.CONTROLLER)
     @in_control
     @publish_command_time
@@ -1337,7 +1312,6 @@ class Controller(ControllerServicer):
     ############# Actor commands #############
     ##########################################
 
-    @broadcasted
     @authentified_and_authorised(action=ActionType.UPDATE, system=SystemType.CONTROLLER)
     @publish_command_time
     def take_control(
@@ -1413,7 +1387,6 @@ class Controller(ControllerServicer):
 
         return response
 
-    @broadcasted
     @authentified_and_authorised(action=ActionType.UPDATE, system=SystemType.CONTROLLER)
     @in_control
     @publish_command_time
@@ -1490,7 +1463,6 @@ class Controller(ControllerServicer):
 
         return response
 
-    @broadcasted
     @authentified_and_authorised(action=ActionType.READ, system=SystemType.CONTROLLER)
     @publish_command_time
     def who_is_in_charge(
@@ -1552,7 +1524,6 @@ class Controller(ControllerServicer):
     ####### Integration test commands ########
     ##########################################
 
-    @broadcasted
     @authentified_and_authorised(action=ActionType.UPDATE, system=SystemType.CONTROLLER)
     @in_control
     @publish_command_time
@@ -1569,7 +1540,6 @@ class Controller(ControllerServicer):
             name=self.name,
             flag=ResponseFlag.EXECUTED_SUCCESSFULLY,
         )
-
         try:
             # Parse and validate target.
             request.target = self.parse_target_string(request.target)
@@ -1611,5 +1581,95 @@ class Controller(ControllerServicer):
         # This node.
         if request.target == self.name or request.execute_along_path:
             self.stateful_node.to_error()
+        self.log.critical(
+            f"Error state for this node: {self.stateful_node.node_is_in_error()}"
+        )
+
+        self.log.critical(f"Returning to_error response: {response}")
+        return response
+
+    @authentified_and_authorised(action=ActionType.READ, system=SystemType.CONTROLLER)
+    @publish_command_time
+    def send_log(
+        self,
+        request: SendLogRequest,
+        context: ServicerContext,
+    ) -> SendLogResponse:
+        """
+        Logs a message on the server with the specified severity level.
+
+        Args:
+            request (SendLogRequest): The request containing the log message, severity level, and target information.
+            context (ServicerContext): The gRPC context for the request.
+
+        Returns:
+            SendLogResponse: The response indicating the result of the logging operation.
+
+        Raises:
+            None
+        """
+        response = SendLogResponse(
+            token=None,
+            flag=ResponseFlag.EXECUTED_SUCCESSFULLY,
+        )
+
+        try:
+            # Parse and validate target.
+            request.target = self.parse_target_string(request.target)
+        except ValueError:
+            response.flag = ResponseFlag.NOT_EXECUTED_BAD_REQUEST_FORMAT
+            return response
+
+        # This node.
+        if request.target == self.name or request.execute_along_path:
+            request.target = ""
+
+        # Children nodes (ignore exclusion).
+        child_list = self.address_target_path(
+            request.target,
+            request.execute_on_all_subsequent_children_in_path,
+            include_excluded_nodes=True,
+        )
+        connected_indices, disconnected_indices = self._partition_connected_children(
+            child_list,
+            operation_name="who_is_in_charge",
+        )
+        child_responses = self.propagate_concurrently(
+            lambda child, target: child.send_log(
+                request.text,
+                request.severity,
+                request.logger,
+                request.target,
+                request.execute_along_path,
+                request.execute_on_all_subsequent_children_in_path,
+            ),
+            child_list,
+            indices=connected_indices,
+        )
+        child_responses.extend(
+            [
+                SendLogResponse(
+                    token=None,
+                    name=child_list[i][0].name,
+                    flag=ResponseFlag.NOT_EXECUTED_NOT_READY,
+                )
+                for i in disconnected_indices
+            ]
+        )
+        response.children.extend(child_responses)
+
+        # This node.
+        if request.target in [self.name, ""] or request.execute_along_path:
+            if request.logger == LoggerTarget.ECHO:
+                self.log.critical("Echo logging is not implemented")
+                return SendLogResponse(
+                    token=request.token,
+                    name=self.name,
+                    flag=ResponseFlag.NOT_EXECUTED_NOT_IMPLEMENTED,
+                )
+
+            level = request.severity.lower()
+            log_method = getattr(self.log, level, self.log.info)
+            log_method(request.text)
 
         return response

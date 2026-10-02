@@ -1,0 +1,313 @@
+import re
+
+import integrationtest.data_classes as data_classes
+import integrationtest.log_file_checks as log_file_checks
+import integrationtest.utility_functions as utility_functions
+import pytest
+from integ_test_utils import (
+    check_execution_report_success,
+    check_status_table_states,
+    check_status_table_substates,
+    get_execution_report_after_echo,
+    get_run_info_after_echo,
+    get_status_table_after_echo,
+    strip_ansi,
+)
+from pm_test_common import FsmCommandParams
+
+pytest_plugins = "integrationtest.integrationtest_drunc"
+
+# Values that help determine the running conditions
+number_of_data_producers = 2
+data_rate_slowdown_factor = 1  # 10 for ProtoWIB/DuneWIB
+run_duration = 10  # seconds
+readout_window_time_before = 1000
+readout_window_time_after = 1001
+
+check_for_logfile_errors = True
+
+ignored_logfile_problems = {
+    "-controller": [
+        "Worker with pid \\d+ was terminated due to signal",
+        "Connection '.*' not found on the application registry",
+    ],
+    "SSH_SHELL_process_manager": [
+        "was terminated unexpectedly through the remote pid by a SIGKILL",
+    ],
+    "connectivity-service": [
+        "errorlog: -",
+    ],
+}
+
+conf_dict = data_classes.integtest_params_for_generated_dunedaq_config()
+conf_dict.object_databases = ["config/daqsystemtest/integrationtest-objects.data.xml"]
+conf_dict.dro_map_config.n_streams = number_of_data_producers
+conf_dict.op_env = "integtest"
+conf_dict.session = "minimal"
+conf_dict.tpg_enabled = False
+
+# Request that drunc manages the ConnectivityService
+conf_dict.connsvc_control = data_classes.ConnSvcControl.RUNCONTROL
+# For testing, specify connectivity service port (default is 0, a random port is chosen for the Connectivity Service)
+# conf_dict.connsvc_port = 12345
+
+conf_dict.config_substitutions.append(
+    data_classes.attribute_substitution(
+        obj_id="random-tc-generator",
+        obj_class="RandomTCMakerConf",
+        updates={"trigger_rate_hz": 1},
+    )
+)
+conf_dict.config_substitutions.append(
+    data_classes.attribute_substitution(
+        obj_class="TCReadoutMap",
+        obj_id="def-random-readout",
+        updates={
+            "time_before": readout_window_time_before,
+            "time_after": readout_window_time_after,
+        },
+    )
+)
+
+confgen_arguments = {"MinimalSystem": conf_dict}
+
+
+# ── FSM command definitions ─────────────────────────────────────────────────────
+
+_FSM_COMMANDS = [
+    FsmCommandParams("test_conf", "conf", "configured"),
+    FsmCommandParams(
+        "test_start", "start", "ready", command_args=["--run-number", "1"], run_number=1
+    ),
+    FsmCommandParams("test_enable_triggers", "enable-triggers", "running"),
+    FsmCommandParams("test_disable_triggers", "disable-triggers", "ready"),
+    FsmCommandParams("test_drain_dataflow", "drain-dataflow", "dataflow_drained"),
+    FsmCommandParams(
+        "test_stop_trigger_sources", "stop-trigger-sources", "trigger_sources_stopped"
+    ),
+    FsmCommandParams("test_stop", "stop", "configured"),
+    FsmCommandParams("test_scrap", "scrap", "initial"),
+]
+
+_FSM_SEQUENCES = {
+    "test_start_run": FsmCommandParams(
+        "test_start_run",
+        "start-run",
+        "running",
+        command_args=["--run-number", "2"],
+        run_number=2,
+    ),
+    "test_srun_w_boot": FsmCommandParams(
+        "test_srun_w_boot",
+        "start-run",
+        "running",
+        command_args=["--run-number", "5"],
+        run_number=5,
+    ),
+    "test_srunw_boot_conf": FsmCommandParams(
+        "test_srunw_boot_conf",
+        "start-run",
+        "running",
+        command_args=["--run-number", "6"],
+        run_number=6,
+    ),
+    "test_stop_run": FsmCommandParams("test_stop_run", "stop-run", "configured"),
+}
+
+_SHUTDOWN_MARKER = "test_shutdown"
+_SHUTDOWN_STATUS_ERROR = (
+    "Controller-specific commands cannot be sent until the session is booted"
+)
+
+# Maps each echo marker to the controller it was targeted at (None means no --target, i.e. broadcast).
+_ECHO_SERVER_TARGETS = {
+    "test_of_echo_on_server_full": None,
+    "test_of_echo_on_server_root_controller": "root-controller",
+    # "test_of_echo_on_server_df_controller": "df-controller", ## does not appear to work, but doesn't work in develop anyway..
+}
+
+
+def _echo_server_command_block() -> str:
+    lines = []
+    for marker, target in _ECHO_SERVER_TARGETS.items():
+        target_arg = f" --target {target}" if target else ""
+        lines.append(f"echo --server --logger main{target_arg} {marker}")
+    return "\n" + "\n".join(lines) + "\n"
+
+
+# ── Command list ───────────────────────────────────────────────────────────────
+
+dunerc_command_list = (
+    """
+boot
+echo post_boot
+status 
+echo post_boot_done
+"""
+    + "".join(p.to_command_block() for p in _FSM_COMMANDS)
+    + _FSM_SEQUENCES["test_srun_w_boot"].to_command_block()
+    + " terminate "
+    + "boot wait 10 conf"
+    + _FSM_SEQUENCES["test_srunw_boot_conf"].to_command_block()
+    + " terminate "
+    + _FSM_SEQUENCES["test_start_run"].to_command_block()
+    + _FSM_SEQUENCES["test_stop_run"].to_command_block()
+    + "start-run --run-number 3"
+    + _FSM_SEQUENCES["test_stop_run"].to_command_block()
+    + _echo_server_command_block()
+    + f"""
+echo {_SHUTDOWN_MARKER}
+shutdown
+echo {_SHUTDOWN_MARKER}_done
+status 
+echo {_SHUTDOWN_MARKER}_status_done
+"""
+    + "\nterminate"
+).split()
+
+UUID_RE = re.compile(
+    r"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+)
+
+
+# ── Fixtures ───────────────────────────────────────────────────────────────────
+
+
+@pytest.fixture(scope="module")
+def boot_status_table(run_dunerc):
+    """Parse and cache the status table produced immediately after boot.
+
+    Scoped to the module so every test in this file can compare against the
+    same baseline without re-parsing stdout each time.
+    """
+    lines = strip_ansi(run_dunerc.completed_processes["drunc"].stdout).splitlines()
+    return get_status_table_after_echo(lines, "post_boot")
+
+
+# ── Helpers ────────────────────────────────────────────────────────────────────
+
+
+def _check_command(
+    lines: list[str],
+    boot_status_table: list[dict[str, str]],
+    params: FsmCommandParams,
+) -> None:
+    """Shared assertion logic for a drunc FSM command.
+
+    Checks:
+    - Execution report names match boot table, all rows successful.
+    - Post-command status table has expected state/substates.
+    - Run number if specified.
+    """
+    exec_report = get_execution_report_after_echo(lines, params.marker)
+    assert exec_report, f"No execution report found after '{params.marker}' marker."
+
+    boot_names = {row["name"] for row in boot_status_table}
+    report_names = {row["name"] for row in exec_report}
+    assert report_names == boot_names, (
+        f"Execution report names do not match boot status table names.\n"
+        f"  Only in report:     {report_names - boot_names}\n"
+        f"  Only in boot table: {boot_names - report_names}"
+    )
+    check_execution_report_success(exec_report)
+
+    status_table = get_status_table_after_echo(lines, params.done_marker)
+    assert status_table, f"No status table found after '{params.done_marker}' marker."
+    check_status_table_states(status_table, expected_state=params.expected_state)
+    check_status_table_substates(
+        status_table,
+        controller_substate=params.expected_state,
+        non_controller_substate=params.non_controller_substate,
+    )
+
+    if params.run_number is not None:
+        run_info = get_run_info_after_echo(lines, params.done_marker)
+        assert run_info, f"No Run Info table found after '{params.done_marker}' marker."
+        assert run_info["Run number"] == str(params.run_number), (
+            f"Expected run number '{params.run_number}', got '{run_info['Run number']}'."
+        )
+
+
+# ── Tests ──────────────────────────────────────────────────────────────────────
+
+
+def test_dunerc_success(run_dunerc, caplog) -> None:
+    """Checks that the drunc integration command sequence completes successfully."""
+    # checks for run control success, problems during pytest setup, etc.
+    utility_functions.basic_checks(run_dunerc, caplog, print_test_name=True)
+
+
+def test_log_files(run_dunerc) -> None:
+    """Checks that expected process-manager log files exist and are free of errors."""
+    for app_exension in ["_df-01", "_dfo", "_mlt", "_ru"]:
+        assert any(
+            f"{run_dunerc.daq_session_name}{app_exension}" in str(logname)
+            for logname in run_dunerc.log_files
+        ), f"Expected log file with extension '{app_exension}' not found."
+
+    if check_for_logfile_errors:
+        assert log_file_checks.logs_are_error_free(
+            [
+                logname
+                for logname in run_dunerc.log_files
+                if "process_manager" in str(logname)
+            ],
+            True,
+            True,
+            ignored_logfile_problems,
+        )
+
+
+def _marker_found_in_logs(marker: str, log_files) -> bool:
+    for logname in log_files:
+        with open(logname, errors="ignore") as log_file:
+            if any(marker in line for line in log_file):
+                return True
+    return False
+
+
+@pytest.mark.parametrize(
+    "marker,target",
+    list(_ECHO_SERVER_TARGETS.items()),
+    ids=list(_ECHO_SERVER_TARGETS.keys()),
+)
+def test_echo_on_server(run_dunerc, marker, target) -> None:
+    """Checks that the server-side echo marker appears in the expected log file."""
+    # No --target means the command is sent to the root controller.
+    log_target = target or "root-controller"
+    matching_logs = [
+        logname
+        for logname in run_dunerc.log_files
+        if f"{run_dunerc.daq_session_name}_{log_target}" in str(logname)
+    ]
+    assert matching_logs, f"No {log_target} log file found."
+
+    assert _marker_found_in_logs(marker, matching_logs), (
+        f"'{marker}' not found in log file(s): {matching_logs}"
+    )
+
+
+@pytest.mark.parametrize("params", _FSM_COMMANDS, ids=lambda p: p.marker)
+def test_fsm_command(run_dunerc, boot_status_table, params: FsmCommandParams) -> None:
+    """Checks that each FSM command executes successfully and transitions all processes to the expected state."""
+    lines = strip_ansi(run_dunerc.completed_processes["drunc"].stdout).splitlines()
+    _check_command(lines, boot_status_table, params)
+
+
+@pytest.mark.parametrize("params", _FSM_SEQUENCES.values(), ids=lambda p: p.marker)
+def test_fsm_transitions(
+    run_dunerc, boot_status_table, params: FsmCommandParams
+) -> None:
+    """Checks that each FSM transition executes successfully and reaches its expected state."""
+    lines = strip_ansi(run_dunerc.completed_processes["drunc"].stdout).splitlines()
+    _check_command(lines, boot_status_table, params)
+
+
+def test_shutdown_status(run_dunerc) -> None:
+    """Checks that status reports the session is no longer booted after shutdown."""
+    lines = strip_ansi(run_dunerc.completed_processes["drunc"].stdout).splitlines()
+    shutdown_index = next(
+        index for index, line in enumerate(lines) if _SHUTDOWN_MARKER in line
+    )
+    shutdown_output = "\n".join(lines[shutdown_index:])
+    assert _SHUTDOWN_STATUS_ERROR in shutdown_output

@@ -1,13 +1,15 @@
 import time
-from typing import Any, Callable, Optional
+from typing import Callable, Optional, TypeVar
+
+T = TypeVar("T")
 
 
 def wait_for(
-    condition: Callable[[], Any],
-    expected_value: Any,
+    condition: Callable[[], T],
+    expected_value: object,
     timeout: float = 10.0,
     poll_interval: float = 0.1,
-) -> Optional[Any]:
+) -> Optional[T]:
     """
     Wait for a condition to return an expected value within a timeout period.
 

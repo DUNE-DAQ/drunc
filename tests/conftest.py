@@ -1,6 +1,7 @@
 import getpass
 import logging
 import os
+import socket
 import time
 from pathlib import Path
 from subprocess import Popen
@@ -32,13 +33,17 @@ def load_test_config() -> None:
 
     # Determine the path to the test configurations
     cwd = Path(os.path.abspath(__file__))
-    test_configs = cwd.parent / ".." / "config" / "tests"
+    test_configs = cwd.parent / ".." / "config" / "drunc"
     test_configs = test_configs.resolve()
     print(f"{test_configs=}")
 
     # Ensure the consolidated configuration directory exists
     os.makedirs(consolidated_conf_path, exist_ok=True)
     DUNEDAQ_DB_PATH += f":{test_configs!s}:{consolidated_conf_path!s}"
+
+    # Add the drunc root too
+    drunc_root = cwd.parent.parent
+    DUNEDAQ_DB_PATH += f":{drunc_root!s}"
 
     # For debugging, print the DUNEDAQ_DB_PATH entries
     print("DUNEDAQ_DB_PATH entries:")
@@ -103,6 +108,9 @@ def boot_session(
     # Prepare environment variables
     env = os.environ.copy()
     env["DUNEDAQ_SESSION"] = session_name
+    env["DRUNC_HOST_NAME"] = (
+        socket.gethostname()
+    )  # This works as the process is a subprocess that does not run in a container.
 
     # Load the configuration, get the DAL
     configuration_consolidated_file = f"oksconflibs:{configuration_consolidated_file}"

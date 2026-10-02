@@ -1,4 +1,7 @@
-from typing import Any
+import multiprocessing
+
+from drunc.grpc_testing_tools.available_grpc_servers import ServerType
+from drunc.grpc_testing_tools.stubs import P, TargetFunc
 
 
 class RunningGrpcServer:
@@ -7,7 +10,13 @@ class RunningGrpcServer:
     The server could have been started via any supported method (multiprocessing, SSH, etc.)
     """
 
-    def __init__(self, process_id: str, target_func: Any, args: tuple, kwargs: dict):
+    def __init__(
+        self,
+        process_id: str,
+        target_func: TargetFunc[P, object],
+        args: tuple[object, ...],
+        kwargs: dict[str, object],
+    ) -> None:
         """
         Initialise process handle with execution parameters.
 
@@ -21,15 +30,15 @@ class RunningGrpcServer:
         self.target_func = target_func
         self.args = args
         self.kwargs = kwargs
-        self._process = None
+        self._process: multiprocessing.Process | None = None
         self._started = False
-        self.startup_error = None
-        self.host = None
-        self.server_id = None
-        self.port = None
-        self.server_type = None
-        self.ready_event = None
-        self.stop_event = None
+        self.startup_error: Exception | None = None
+        self.host: str | None = None
+        self.server_id: str | None = None
+        self.port: int | None = None
+        self.server_type: str | ServerType | None = None
+        self.ready_event: multiprocessing.synchronize.Event | None = None
+        self.stop_event: multiprocessing.synchronize.Event | None = None
 
     def is_valid(self) -> bool:
         """Check if the process handle is valid"""
@@ -48,11 +57,11 @@ class RunningGrpcServer:
         return self._started
 
     @property
-    def process(self) -> Any:
+    def process(self) -> multiprocessing.Process | None:
         """Get the underlying process object (implementation-specific)."""
         return self._process
 
-    def set_process(self, process: Any) -> None:
+    def set_process(self, process: multiprocessing.Process) -> None:
         """Set the underlying process object."""
         self._process = process
 
@@ -61,7 +70,7 @@ class RunningGrpcServer:
         self._started = True
 
     def set_server_info(
-        self, server_id: str, host: str, port: int, server_type: str
+        self, server_id: str, host: str, port: int, server_type: str | ServerType
     ) -> None:
         """Set the server information for this process."""
         self.server_id = server_id

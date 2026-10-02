@@ -1,14 +1,27 @@
+from __future__ import annotations
+
+from typing import TYPE_CHECKING, Dict, Optional, Union, cast
+
+if TYPE_CHECKING:
+    from drunc.fsm._protocols import (
+        ActionMethodProtocol,
+        ConfigProtocol,
+        ContextProtocol,
+        FSMActionProtocol,
+    )
+
+
 # Define the abcs first to avoid circular imports
 class FSMAction:
     """Abstract class defining a generic action"""
 
-    def __init__(self, name):
+    def __init__(self, name: str) -> None:
         self.name = name
 
 
 class Callback:
-    def __init__(self, method: "conffwk.dal.FSMAction", mandatory: bool = True):
-        self.method: "conffwk.dal.FSMAction" = method
+    def __init__(self, method: ActionMethodProtocol, mandatory: bool = True) -> None:
+        self.method: ActionMethodProtocol = method
         self.mandatory: bool = mandatory
 
 
@@ -17,9 +30,7 @@ import traceback
 from dataclasses import dataclass
 from enum import Enum
 from inspect import Parameter, signature
-from typing import Optional, Union
 
-import conffwk
 from druncschema.controller_pb2 import Argument, FSMSequence
 from druncschema.generic_pb2 import bool_msg, float_msg, int_msg, string_msg
 from google.protobuf import any_pb2
@@ -32,7 +43,7 @@ from drunc.utils.utils import get_logger, regex_match
 
 
 class PreOrPostTransitionSequence:
-    def __init__(self, transition: Transition, pre_or_post: str = "pre"):
+    def __init__(self, transition: Transition, pre_or_post: str = "pre") -> None:
         self.transition: Transition = transition
         if pre_or_post not in ["pre", "post"]:
             raise DruncSetupException(
@@ -41,12 +52,10 @@ class PreOrPostTransitionSequence:
 
         self.prefix: str = pre_or_post
 
-        self.sequence: list(Callback) = []
+        self.sequence: list[Callback] = []
         self.log = get_logger("controller.core.PreOrPostTransitionSequence")
 
-    def add_callback(
-        self, action: "conffwk.dal.FSMaction", mandatory: bool = True
-    ) -> None:
+    def add_callback(self, action: FSMActionProtocol, mandatory: bool = True) -> None:
         """
         Add a callback to the sequence. The method to be called will be determined by
         the name of the transition and the prefix (pre or post).
@@ -83,7 +92,7 @@ class PreOrPostTransitionSequence:
             )
         ]
 
-    def __str__(self):
+    def __str__(self) -> str:
         return ", ".join(
             [
                 f"{cb.method.__self__.__class__.__name__} (mandatory={cb.mandatory})"
@@ -91,26 +100,34 @@ class PreOrPostTransitionSequence:
             ]
         )
 
-    def execute(self, transition_data, transition_args, ctx=None):
+    def execute(
+        self,
+        transition_data: str | None,
+        transition_args: Dict[str, object],
+        ctx: ContextProtocol,
+    ) -> str:
         self.log.debug(f"{transition_data=}, {transition_args=}")
         if not transition_data:
             transition_data = "{}"
 
         try:
-            input_data = json.loads(transition_data)
+            input_data = cast(dict[str, object], json.loads(transition_data))
         except:
             raise fsme.TransitionDataOfIncorrectFormat(transition_data)
 
         for callback in self.sequence:
             try:
-                self.log.debug(f"data before callback: {input_data}")
-                self.log.debug(
+                self.log.critical(f"data before callback: {input_data}")
+                self.log.critical(
                     f"executing the callback: {callback.method.__name__} from {callback.method.__module__}"
                 )
-                input_data = callback.method(
-                    _input_data=input_data, _context=ctx, **transition_args
+                input_data = cast(
+                    dict[str, object],
+                    callback.method(
+                        _input_data=input_data, _context=ctx, **transition_args
+                    ),
                 )
-                self.log.debug(f"data after callback: {input_data}")
+                self.log.critical(f"data after callback: {input_data}")
                 if input_data:
                     ctx.runinfo.update(input_data)
 
@@ -149,11 +166,11 @@ class PreOrPostTransitionSequence:
         """
 
         # Construct the list of arguments by looking at the signature of the methods
-        arguments: list(Argument) = []
+        arguments: list[Argument] = []
 
         # Check that there are no duplicate parameter names across the callbacks
         # otherwise, we won't know which one to use when executing the sequence
-        all_sequence_arguments: set(str) = set()  # set(Argument names)
+        all_sequence_arguments: set[str] = set()  # set(Argument names)
 
         # Iterate over the callbacks, construct the list of arguments
         for callback in self.sequence:
@@ -184,7 +201,7 @@ class PreOrPostTransitionSequence:
                 # Determine the type of the argument, and set the default value if it is
                 # optional. If the type is not one of the supported types, raise an
                 # error
-                t: Argument.Type = Argument.Type.INT
+                t: int = Argument.Type.INT
 
                 if p.annotation in (str, Optional[str], Union[str, None]):
                     t = Argument.Type.STRING
@@ -256,7 +273,7 @@ class FSMDestinationResult:
 
 
 class FSM:
-    def __init__(self, conf):
+    def __init__(self, conf: ConfigProtocol) -> None:
         self.log = get_logger("controller.core.FSM")
         self.configuration = conf
 
@@ -280,7 +297,7 @@ class FSM:
             self.log.debug(f"Pre transition: {self.pre_transition_sequences[t]}")
             self.log.debug(f"Post transition: {self.post_transition_sequences[t]}")
 
-    def _enusure_unique_transition(self, transitions):
+    def _enusure_unique_transition(self, transitions: list[Transition]) -> None:
         a_set = set()
         for t in transitions:
             if t.name in a_set:
@@ -299,10 +316,14 @@ class FSM:
         """Grab all the transitions"""
         return self.sequences
 
-    def is_destination_of_this_transition(self, state, transition) -> bool:
-        return transition.destination == state
+    def is_destination_of_this_transition(
+        self, state: str, transition: Transition
+    ) -> bool:
+        return bool(transition.destination == state)
 
-    def get_destination_state(self, source_state, transition) -> FSMDestinationResult:
+    def get_destination_state(
+        self, source_state: str, transition: Transition
+    ) -> FSMDestinationResult:
         """Tells us where a particular transition will take us, given the source_state"""
         right_name = [t for t in self.transitions if t == transition]
 
@@ -336,7 +357,7 @@ class FSM:
             destination_type=FSMDestinationType.TRANSITION_NOT_VALID,
         )
 
-    def get_executable_transitions(self, source_state) -> list[Transition]:
+    def get_executable_transitions(self, source_state: str) -> list[Transition]:
         valid_transitions = []
 
         for tr in self.transitions:
@@ -349,7 +370,7 @@ class FSM:
 
         return valid_transitions
 
-    def get_executable_sequences(self, source_state) -> list[FSMSequence]:
+    def get_executable_sequences(self, source_state: str) -> list[FSMSequence]:
         valid_sequences = []
 
         for seq in self.sequences:
@@ -366,7 +387,7 @@ class FSM:
 
         return valid_sequences
 
-    def get_transition(self, transition_name) -> Transition:
+    def get_transition(self, transition_name: str) -> Transition:
         self.log.debug(f"Searching for transition {transition_name}")
         transition = [t for t in self.transitions if t.name == transition_name]
         self.log.debug(f"Found transition {transition}")
@@ -374,22 +395,30 @@ class FSM:
             raise fsme.NoTransitionOfName(transition_name)
         return transition[0]
 
-    def can_execute_transition(self, source_state, transition) -> bool:
+    def can_execute_transition(self, source_state: str, transition: Transition) -> bool:
         """Check that this transition is allowed given the source_state"""
         self.log.debug(f"can_execute_transition {transition.source!s} {source_state}")
-        return regex_match(transition.source, source_state)
+        return bool(regex_match(transition.source, source_state))
 
     def prepare_transition(
-        self, transition, transition_data, transition_args, ctx=None
-    ):
+        self,
+        transition: Transition,
+        transition_data: str,
+        transition_args: Dict[str, object],
+        ctx: ContextProtocol,
+    ) -> str:
         transition_data = self.pre_transition_sequences[transition].execute(
             transition_data, transition_args, ctx
         )
         return transition_data
 
     def finalise_transition(
-        self, transition, transition_data, transition_args, ctx=None
-    ):
+        self,
+        transition: Transition,
+        transition_data: str,
+        transition_args: Dict[str, object],
+        ctx: ContextProtocol,
+    ) -> str:
         transition_data = self.post_transition_sequences[transition].execute(
             transition_data, transition_args, ctx
         )

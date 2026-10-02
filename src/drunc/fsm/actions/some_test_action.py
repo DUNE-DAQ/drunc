@@ -1,5 +1,6 @@
 from enum import Enum
 
+from drunc.fsm._protocols import ConfigurationProtocol, ContextProtocol
 from drunc.fsm.core import FSMAction
 
 
@@ -9,18 +10,18 @@ class an_enum(Enum):
 
 
 class SomeTestAction(FSMAction):
-    def __init__(self, configuration):
+    def __init__(self, configuration: ConfigurationProtocol) -> None:
         super().__init__(name="test-action")
 
     def pre_conf(
         self,
-        _input_data: dict,
-        _context,
+        _input_data: dict[str, object],
+        _context: ContextProtocol,
         some_int: int,
         some_str: str,
         some_float: float = 0.2,
-        **kwargs,
-    ) -> dict:
+        **kwargs: object,
+    ) -> dict[str, object]:
         print(f"Running pre_conf of {self.name}")
         _input_data["some_int"] = some_int
         _input_data["some_str"] = some_str

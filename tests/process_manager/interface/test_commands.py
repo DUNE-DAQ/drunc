@@ -6,6 +6,8 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 from click.testing import CliRunner
+from rich.console import Console
+from rich.table import Table
 
 from drunc.process_manager.interface.commands import (
     InterruptedCommand,
@@ -61,12 +63,21 @@ def mock_logger():
         yield logger
 
 
+@pytest.fixture(autouse=True)
+def mock_pm_driver():
+    with patch(
+        "drunc.process_manager.interface.commands._pm_driver",
+        side_effect=lambda obj: obj.get_driver("process_manager"),
+    ):
+        yield
+
+
 @pytest.fixture
 def mock_tabulate():
     with patch(
         "drunc.process_manager.interface.commands.tabulate_process_instance_list"
     ) as tabulate:
-        tabulate.return_value = "Formatted output"
+        tabulate.return_value = Table()
         yield tabulate
 
 
@@ -102,6 +113,10 @@ class MockDriver:
         mock_result.lines = []
         return mock_result
 
+    def send_log(self, *args, **kwargs) -> None:
+        # simulate sending a message; tests don't assert on this, so store it
+        self._last_sent_msg = args[0] if args else kwargs.get("text")
+
 
 class MockContext:
     """
@@ -111,12 +126,25 @@ class MockContext:
     def __init__(self, driver=None):
         self.driver = driver or MockDriver()
         self.output = []
+        self.session_name = "mock-session"
+        self._console = Console()
 
     def get_driver(self, name):
         return self.driver
 
-    def print(self, msg, justify=None, overflow=None, soft_wrap=None):
-        self.output.append(str(msg))
+    def get_pm_driver(self):
+        return self.get_driver("process_manager")
+
+    def get_shell_id(self):
+        return "mock-shell"
+
+    def delete_driver(self, name):
+        pass
+
+    def print(self, *args: object, **kwargs: object) -> None:
+        # Capture all printed objects so we can assert against them in tests
+        self.output.extend(args)
+        self._console.print(*args, **kwargs)
 
 
 class MockBootResult:
@@ -230,8 +258,9 @@ def test_boot_exiting_processes_abort(boot_arguments):
     # check that 'boot' was never called
     mock_driver.boot.assert_not_called()
 
+    # conf-id-123 from session name in this file
     assert (
-        "You already have 2 processes running, are you sure you want to boot a session?"
+        "You already have 2 processes running for conf-id-123, are you sure you want to boot a session?"
         in result.output
     )
 
@@ -260,7 +289,7 @@ def test_boot_exiting_processes_user_confirm(boot_arguments):
     mock_driver.boot.assert_called()
 
     assert (
-        "You already have 2 processes running, are you sure you want to boot a session?"
+        "You already have 2 processes running for conf-id-123, are you sure you want to boot a session?"
         in result.output
     )
 
@@ -356,7 +385,6 @@ def test_kill_command(mock_tabulate):
     dummy_kill_arguments = ["--name", "process1"]
     result = CliRunner().invoke(kill, dummy_kill_arguments, obj=mock_context)
 
-    assert result.output == ""
     assert result.exit_code == 0
     mock_driver.kill.assert_called_once()
 

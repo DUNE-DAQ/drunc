@@ -5,9 +5,10 @@ This module provides abstraction over different process execution methods (multi
 """
 
 from abc import ABC, abstractmethod
-from typing import Any, Dict, List, Optional
+from typing import Dict, List, Optional
 
 from drunc.grpc_testing_tools.grpc_running_server_data import RunningGrpcServer
+from drunc.grpc_testing_tools.stubs import P, TargetFunc
 
 
 class ProcessConnectionManager(ABC):
@@ -18,7 +19,7 @@ class ProcessConnectionManager(ABC):
     follow, whether using local multiprocessing or remote SSH execution.
     """
 
-    def __init__(self, env_vars: Dict[str, str] = None):
+    def __init__(self, env_vars: Dict[str, str] | None = None) -> None:
         """
         Initialise process connection manager.
 
@@ -30,7 +31,11 @@ class ProcessConnectionManager(ABC):
 
     @abstractmethod
     def create_process(
-        self, process_id: str, target_func: Any, *args, **kwargs
+        self,
+        process_id: str,
+        target_func: TargetFunc[P, object],
+        *args: object,
+        **kwargs: object,
     ) -> RunningGrpcServer:
         """
         Create a new process handle for execution.

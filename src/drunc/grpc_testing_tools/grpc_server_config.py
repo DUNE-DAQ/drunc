@@ -1,4 +1,4 @@
-from typing import Any, List, Tuple
+from typing import List, Tuple
 
 from drunc.grpc_testing_tools.available_grpc_servers import ServerType
 
@@ -19,10 +19,10 @@ class GrpcServerConfig:
         port: int,
         max_workers: int,
         log_file: str,
-        server_options: List[Tuple[str, Any]] = None,
-        client_options: List[Tuple[str, Any]] = None,
-        **kwargs,
-    ):
+        server_options: List[Tuple[str, object]] | None = None,
+        client_options: List[Tuple[str, object]] | None = None,
+        **kwargs: object,
+    ) -> None:
         """
         Initialise gRPC server configuration.
 
@@ -57,7 +57,7 @@ class GrpcServerConfig:
             required_params = []
 
         # Store extra parameters and validate required ones are present
-        self.extra_params = {}
+        self.extra_params: dict[str, object] = {}
         for key, param in kwargs.items():
             if key in required_params:
                 self.extra_params[key] = param
@@ -73,7 +73,7 @@ class GrpcServerConfig:
                 f"Missing required parameter '{param}' for server type '{server_type}'"
             )
 
-    def get_param(self, key: str, default: Any = None) -> Any:
+    def get_param(self, key: str, default: object = None) -> object:
         """
         Get an additional parameter value.
 

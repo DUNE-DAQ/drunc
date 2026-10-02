@@ -2,7 +2,7 @@ from drunc.session_manager.interface.session_manager import session_manager_cli
 from drunc.utils.utils import get_logger, get_root_logger
 
 
-def main():
+def main() -> None:
     try:
         session_manager_cli()
     except Exception as e:

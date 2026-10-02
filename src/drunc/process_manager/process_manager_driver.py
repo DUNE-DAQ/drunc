@@ -7,12 +7,14 @@ import time
 from collections.abc import Iterator
 from time import sleep
 from typing import Dict, List
+from urllib.parse import urlparse
 
 import conffwk
 import grpc
 from daqconf.set_connectivity_service_port import set_connectivity_service_port
 from daqconf.set_rc_controller_port import set_rc_controller_port
 from daqconf.utils import find_free_port
+from druncschema.common_pb2 import LoggerTarget, SendLogRequest, SendLogResponse
 from druncschema.description_pb2 import Description
 from druncschema.process_manager_pb2 import (
     BootRequest,
@@ -35,9 +37,8 @@ from drunc.exceptions import DruncSetupException, DruncShellException
 from drunc.process_manager.oks_parser import get_full_db_path
 from drunc.process_manager.utils import format_hostname, get_log_path, get_rte_script
 from drunc.utils.grpc_utils import (
+    RichErrorClientInterceptor,
     copy_token,
-    extract_grpc_rich_error,
-    handle_grpc_error,
 )
 from drunc.utils.utils import (
     file_is_read_only,
@@ -48,6 +49,7 @@ from drunc.utils.utils import (
     resolve_localhost_and_127_ip_to_network_ip,
     resolve_localhost_to_hostname,
     strip_non_drunc_loggers,
+    touch_and_chmod,
 )
 
 
@@ -60,7 +62,9 @@ class ProcessManagerDriver:
         options = [
             ("grpc.keepalive_time_ms", 60000)  # pings the server every 60 seconds
         ]
-        self.channel = grpc.insecure_channel(self.address, options=options)
+        raw_channel = grpc.insecure_channel(self.address, options=options)
+        rich_interceptor = RichErrorClientInterceptor(logger=self.log)
+        self.channel = grpc.intercept_channel(raw_channel, rich_interceptor)
         self.stub = ProcessManagerStub(self.channel)
         self.token = copy_token(token)
 
@@ -83,22 +87,44 @@ class ProcessManagerDriver:
         except Exception as e:
             self.log.error(f"Error closing gRPC channel: {e}", exc_info=True)
 
+    def update_controller_logs(self, ctrl_dal: "conffwk.dal.Session", level: str):
+        """
+        Update the log level of the controller in the DAL.
+        Will automatically capitalise any string to match the configuration schema.
+
+        Args:
+            ctrl_dal: The controller DAL object.
+            level: The new log level to set.
+
+        Returns:
+            The updated controller DAL object.
+
+        Raises:
+            None
+        """
+        ctrl_dal.controller_log_level = level.upper()
+        return ctrl_dal
+
     # ----- Boot workflow -----
+
     def boot(
         self,
         conf_file: str,
         conf_id: str,
         user: str,
         session_name: str,
-        log_level: str,
+        log_level: str | None = None,
         override_logs: bool = True,
         timeout: int | float = 60,
         sleep_between_app_boot: (
             int | float
         ) = 0,  # This may be useful if you have are using SSHPM, and have SSHD's maxstartups setting set to a low value.
         **kwargs,
-    ) -> Iterator[ProcessInstanceList] | None:
+    ) -> Iterator[ProcessInstanceList]:
         self.log.info(f"Booting session [green]{session_name}[/green]")
+
+        # Assume oksconflibs if no framework is defined
+        conf_file = f"oksconflibs:{conf_file}" if ":" not in conf_file else conf_file
 
         # Step 1 - consolidate configuration
         self._consolidate_config(session_name, conf_file)
@@ -108,6 +134,13 @@ class ProcessManagerDriver:
 
         # Step 3 - check for port conflicts and update configuration/DAL as needed
         db, session_dal = self.check_port_conflicts(db, session_dal)
+
+        # Step 3.25 - Update controller dal
+        if log_level:
+            session_dal = self.update_controller_logs(session_dal, log_level)
+
+        # step 3.5 update localhost mapping
+        session_dal = self.resolve_localhost(session_dal)
 
         # Step 4 - connect to the connection service
         csc, connection_server, connection_port = self._connect_to_service(
@@ -129,7 +162,7 @@ class ProcessManagerDriver:
         ):
             if not request:
                 self.log.error("[red]No boot request was generated, ending boot.[/red]")
-                return None
+                return
             if request.process_description.metadata.name in [
                 app.id for app in session_dal.infrastructure_applications
             ]:
@@ -158,20 +191,31 @@ class ProcessManagerDriver:
             previous_host = this_host
             last_boot_on_host_at[this_host] = time.time()
 
-            try:
-                response = self.stub.boot(request, timeout=timeout)
-                yield response
+            # ensures users can access the opmon files (permissions)
+            # This is for the opmon files of the apps
 
-            except grpc.RpcError as e:
-                try:
-                    error_details = extract_grpc_rich_error(e)
-                    self.log.error(error_details)
-                except Exception as extraction_error:
-                    self.log.debug(
-                        f"Could not extract rich error details from gRPC error: {extraction_error}",
-                        exc_info=True,
-                    )
-                handle_grpc_error(e)
+            if session_dal.opmon_uri.type == "file":
+                # For future, this should probably be taken from the metadata
+                opmon_file = (
+                    f"{request.process_description.process_execution_directory}/info."
+                    + request.process_description.metadata.session
+                    + "."
+                    + request.process_description.metadata.name
+                    + ".json"
+                )
+
+                self.log.debug(
+                    f"Touching and changing permissions for {opmon_file} because opmon is of type {session_dal.opmon_uri.type}"
+                )
+                touch_and_chmod(opmon_file)
+
+            response = self.stub.boot(request, timeout=timeout)
+            self.log.info(
+                f"Booted '{request.process_description.metadata.name}' "
+                f"from session '{request.process_description.metadata.session}' "
+                f"with UUID {response.values[0].uuid.uuid} on host {request.process_description.metadata.hostname}"
+            )
+            yield response
 
         # Step 7: discover segment root controller
         self._discover_controller(
@@ -255,7 +299,10 @@ class ProcessManagerDriver:
         override_logs: bool,
         pwd: str,
     ) -> BootRequest:
-        host = format_hostname(app["restriction"])
+        # Run mapping to physical hostname to enable multi host usage
+        host = resolve_localhost_to_hostname(format_hostname(app["restriction"]))
+
+        # this is one of the two minimal changes needed to get this working in general?
         name = app["name"]
         exe = app["type"]
         args = app["args"]
@@ -264,7 +311,17 @@ class ProcessManagerDriver:
         data_path = app.get("data_path")
         env["DUNE_DAQ_BASE_RELEASE"] = os.getenv("DUNE_DAQ_BASE_RELEASE")
         env["SPACK_RELEASES_DIR"] = os.getenv("SPACK_RELEASES_DIR")
+        # Some edge cases throw issues with DISPLAY being set, so we remove it from the
+        # environment
+        env.pop("DISPLAY", None)
         tree_id = app["tree_id"]
+
+        # The following line is required to provide an independent method of injecting
+        # the hostname into the environment for applications that need it. This is the
+        # case for containerized applications, for which the hostname is not
+        # automatically injected into the environment, and standard methods like
+        # socket.gethostname() do not return the expected value.
+        env["DRUNC_HOST_NAME"] = host
         self.log.debug(f"{name}:\n{json.dumps(app, indent=4)}")
 
         try:
@@ -371,19 +428,29 @@ To debug it, close drunc and run the following command:
                 )
                 return
 
-    def update_connectivity_port_dal(
-        self,
-        env_variables: list["conffwk.dal.Variable | conffwk.dal.VariableSet"],
-        new_port: int,
-    ) -> None:
-        """Process a dal::Variable object, placing key/value pairs in a dictionary"""
-        for item in env_variables:
-            if item.className() == "VariableSet":
-                self.update_connectivity_port_dal(item.contains, new_port)
-            else:
-                if item.className() == "Variable":
-                    if item.name == "CONNECTION_PORT":
-                        item.value = new_port
+    def resolve_localhost(self, session_dal):
+        def dal_localhost_mapping(dal_host: str):
+            if dal_host != "localhost":
+                return dal_host
+
+            resolved_address = resolve_localhost_to_hostname(dal_host)
+            if "://" not in resolved_address:
+                resolved_address = "grpc://" + resolved_address
+
+            resolved_server = urlparse(resolved_address).hostname
+            self.log.debug(
+                f"Resolved connection server 'localhost' to '{resolved_server}' to avoid K8s hairpinning."
+            )
+            return resolved_server
+
+        session_dal.connectivity_service.host = dal_localhost_mapping(
+            session_dal.connectivity_service.host
+        )
+        session_dal.segment.controller.runs_on.runs_on.id = dal_localhost_mapping(
+            session_dal.segment.controller.runs_on.runs_on.id
+        )
+
+        return session_dal
 
     def check_port_conflicts(
         self, db: conffwk.Configuration, session_dal: "conffwk.dal.Session"
@@ -513,13 +580,6 @@ To debug it, close drunc and run the following command:
             connection_server = session_dal.connectivity_service.host
             connection_port = session_dal.connectivity_service.service.port
 
-            if connection_server == "localhost":
-                resolved_server = resolve_localhost_to_hostname(connection_server)
-                self.log.debug(
-                    f"Resolved connection server 'localhost' to '{resolved_server}' to avoid K8s hairpinning."
-                )
-                connection_server = resolved_server
-
             client = ConnectivityServiceClient(
                 session_name, f"{connection_server}:{connection_port}"
             )
@@ -548,13 +608,13 @@ To debug it, close drunc and run the following command:
         def get_controller_address(session_dal, session_name):
             from drunc.process_manager.oks_parser import collect_variables
 
-            env = {}
+            env: dict[str, str] = {}
             collect_variables(session_dal.environment, env)
 
             # 1: Try dynamic lookup via Connectivity Service
             if csc:
-                self.log.debug(
-                    f"Attempting to discover controller '{top_controller_name}' via connectivity service at {connection_server}:{connection_port}"
+                self.log.info(
+                    f"Looking for top controller '{top_controller_name}' in the connectivity service at http://{connection_server}:{connection_port}"
                 )
                 try:
                     timeout = (
@@ -763,20 +823,8 @@ To debug it, close drunc and run the following command:
             )
             self.log.debug(f"{request=}\n\n")
 
-            try:
-                response = self.stub.boot(request, timeout=timeout)
-                yield response
-
-            except grpc.RpcError as e:
-                try:
-                    error_details = extract_grpc_rich_error(e)
-                    self.log.error(error_details)
-                except Exception as extraction_error:
-                    self.log.debug(
-                        f"Could not extract rich error details from gRPC error: {extraction_error}",
-                        exc_info=True,
-                    )
-                handle_grpc_error(e)
+            response = self.stub.boot(request, timeout=timeout)
+            yield response
 
     def _prepare_exec_and_args_dummy_boot(self, sleep: int, n_sleeps: int) -> list:
         args = [
@@ -818,155 +866,76 @@ To debug it, close drunc and run the following command:
         timeout: int | float = 130,
     ) -> ProcessInstanceList:
         request = Request(token=copy_token(self.token))
-
-        try:
-            response = self.stub.terminate(request, timeout=timeout)
-        except grpc.RpcError as e:
-            try:
-                error_details = extract_grpc_rich_error(e)
-                self.log.error(error_details)
-            except Exception as extraction_error:
-                self.log.debug(
-                    f"Could not extract rich error details from gRPC error: {extraction_error}",
-                    exc_info=True,
-                )
-            handle_grpc_error(e)
-
+        msg = f"[green]{request.token.user_name}[/green] sent terminate"
+        self.log.info(msg)
+        response = self.stub.terminate(request, timeout=timeout)
         return response
 
     def kill(
         self, request: ProcessQuery, timeout: int | float = 60
     ) -> ProcessInstanceList:
         request.token.CopyFrom(self.token)
-
-        try:
-            response = self.stub.kill(request, timeout=timeout)
-        except grpc.RpcError as e:
-            try:
-                error_details = extract_grpc_rich_error(e)
-                self.log.error(error_details)
-            except Exception as extraction_error:
-                self.log.debug(
-                    f"Could not extract rich error details from gRPC error: {extraction_error}",
-                    exc_info=True,
-                )
-            handle_grpc_error(e)
-
+        log_msg_session_name_extension = (
+            f" for session [green]{request.session}[/green]"
+            if hasattr(request, "session")
+            else ""
+        )
+        msg = (
+            f"[green]{request.token.user_name}[/green] sent kill"
+            + log_msg_session_name_extension
+        )
+        self.log.info(msg)
+        response = self.stub.kill(request, timeout=timeout)
         return response
 
     def logs(self, request: LogRequest, timeout: int | float = 60) -> LogLines | None:
         request.token.CopyFrom(self.token)
+        response = self.stub.logs(request, timeout=timeout)
 
-        try:
-            response = self.stub.logs(request, timeout=timeout)
-
-            # Check if the response indicates a BadQuery error
-            if response.flag == ResponseFlag.NOT_EXECUTED_BAD_REQUEST_FORMAT:
-                lines = response.lines
-                if len(lines) == 1:
-                    lines = lines[0]
-                self.log.warning(f"Bad query for logs: {lines}")
-                return None
-
-            # Check for other error flags
-            if response.flag == ResponseFlag.DRUNC_EXCEPTION_THROWN:
-                self.log.error(f"Exception occurred on server: {response.lines}")
-                return None
-
-            return response
-
-        except grpc.RpcError as e:
-            try:
-                error_details = extract_grpc_rich_error(e)
-                self.log.error(error_details)
-            except Exception as extraction_error:
-                self.log.debug(
-                    f"Could not extract rich error details from gRPC error: {extraction_error}",
-                    exc_info=True,
-                )
-            handle_grpc_error(e)
+        # Check if the response indicates a BadQuery error
+        if response.flag == ResponseFlag.NOT_EXECUTED_BAD_REQUEST_FORMAT:
+            lines = response.lines
+            if len(lines) == 1:
+                lines = lines[0]
+            self.log.warning(f"Bad query for logs: {lines}")
             return None
+
+        # Check for other error flags
+        if response.flag == ResponseFlag.DRUNC_EXCEPTION_THROWN:
+            self.log.error(f"Exception occurred on server: {response.lines}")
+            return None
+
+        return response
 
     def ps(
         self, request: ProcessQuery, timeout: int | float = 60
     ) -> ProcessInstanceList:
         request.token.CopyFrom(self.token)
-
-        try:
-            response = self.stub.ps(request, timeout=timeout)
-        except grpc.RpcError as e:
-            try:
-                error_details = extract_grpc_rich_error(e)
-                self.log.error(error_details)
-            except Exception as extraction_error:
-                self.log.debug(
-                    f"Could not extract rich error details from gRPC error: {extraction_error}",
-                    exc_info=True,
-                )
-
-            handle_grpc_error(e)
-
+        response = self.stub.ps(request, timeout=timeout)
         return response
 
     def flush(
         self, request: ProcessQuery, timeout: int | float = 60
     ) -> ProcessInstanceList:
         request.token.CopyFrom(self.token)
-
-        try:
-            response = self.stub.flush(request, timeout=timeout)
-        except grpc.RpcError as e:
-            try:
-                error_details = extract_grpc_rich_error(e)
-                self.log.error(error_details)
-            except Exception as extraction_error:
-                self.log.debug(
-                    f"Could not extract rich error details from gRPC error: {extraction_error}",
-                    exc_info=True,
-                )
-
-            handle_grpc_error(e)
-
+        response = self.stub.flush(request, timeout=timeout)
         return response
 
     def restart(
         self, request: ProcessQuery, timeout: int | float = 60
     ) -> ProcessInstanceList:
         request.token.CopyFrom(self.token)
-
-        try:
-            response = self.stub.restart(request, timeout=timeout)
-        except grpc.RpcError as e:
-            try:
-                error_details = extract_grpc_rich_error(e)
-                self.log.error(error_details)
-            except Exception as extraction_error:
-                self.log.debug(
-                    f"Could not extract rich error details from gRPC error: {extraction_error}",
-                    exc_info=True,
-                )
-
-            handle_grpc_error(e)
-
+        response = self.stub.restart(request, timeout=timeout)
+        self.log.info(
+            f"Restarted [green]{request.names}[/green] "
+            f"from session [green]{response.values[0].process_description.metadata.session} [/green]"
+            f"with UUID [green]{response.values[0].uuid.uuid}[/green] on host [green]{response.values[0].process_description.metadata.hostname}[/green]"
+        )
         return response
 
     def describe(self, timeout: int | float = 60) -> Description:
         request = Request(token=copy_token(self.token))
-
-        try:
-            response = self.stub.describe(request, timeout=timeout)
-        except grpc.RpcError as e:
-            try:
-                error_details = extract_grpc_rich_error(e)
-                self.log.error(error_details)
-            except Exception as extraction_error:
-                self.log.debug(
-                    f"Could not extract rich error details from gRPC error: {extraction_error}",
-                    exc_info=True,
-                )
-
-            handle_grpc_error(e)
-
+        response = self.stub.describe(request, timeout=timeout)
         return response
 
     # ----- logging helpers -----
@@ -1008,3 +977,44 @@ To find the controller address, you can look up \'{top_controller_name}_control\
 [yellow]connect {{controller_address}}:{{controller_port}}>[/]
 """
         )
+
+    def send_log(
+        self,
+        text: str,
+        severity: str = "INFO",
+        logger: int = LoggerTarget.MAIN,
+        target: str = "",
+        execute_along_path: bool = False,
+        execute_on_all_subsequent_children_in_path: bool = True,
+        timeout: int | float = 60,
+    ) -> SendLogResponse:
+        """Send a log message to the process manager over gRPC.
+
+        Args:
+            text: The message to log.
+            severity: The log severity, such as ``INFO`` or ``ERROR``.
+            logger: The server logger target.
+            target: The target node for the message.
+            execute_along_path: Whether to execute along the target path.
+            execute_on_all_subsequent_children_in_path: Whether to execute on all
+                subsequent children in the target path.
+            timeout: The gRPC request timeout in seconds.
+
+        Returns:
+            The response from the process manager.
+
+        Raises:
+            grpc.RpcError: If the gRPC request fails.
+        """
+        request = SendLogRequest(
+            token=self.token,
+            text=text,
+            severity=severity,
+            logger=logger,
+            target=target,
+            execute_along_path=execute_along_path,
+            execute_on_all_subsequent_children_in_path=execute_on_all_subsequent_children_in_path,
+        )
+        request.token.CopyFrom(self.token)
+        response: SendLogResponse = self.stub.send_log(request, timeout=timeout)
+        return response

@@ -2,8 +2,10 @@ import copy as cp
 import os
 import re
 from functools import update_wrapper
+from typing import cast
 
 import click
+from click.decorators import FC
 from druncschema.process_manager_pb2 import (
     BootRequest,
     ProcessInstance,
@@ -20,7 +22,7 @@ from drunc.process_manager.configuration import (
     get_process_manager_configuration,
 )
 from drunc.processes.process_metadata import ProcessMetadata
-from drunc.utils.configuration import parse_conf_url
+from drunc.utils.configuration import ConfTypes, parse_conf_url
 from drunc.utils.utils import now_str
 
 
@@ -49,42 +51,66 @@ def compute_role_from_boot_request(boot_request: BootRequest) -> str:
     )
 
 
+def build_process_query(
+    session: str | None,
+    name: tuple[str, ...],
+    user: str | None,
+    uuid: tuple[str, ...],
+    at_least_one: bool,
+    all_processes_by_default: bool = False,
+    crash: bool = False,
+) -> ProcessQuery:
+    is_trivial_query = bool(
+        (len(uuid) == 0) and (session is None) and (len(name) == 0) and (user is None)
+    )
+
+    if is_trivial_query and at_least_one:
+        raise click.BadParameter(
+            "You need to provide at least a '--uuid', '--session', '--user' or '--name'!\nAll these values are presented with 'ps'.\nIf you want to kill everything, use 'ps' and 'kill'."
+        )
+
+    query_names = list(name)
+    if all_processes_by_default and is_trivial_query:
+        query_names = [".*"]
+
+    uuids = [ProcessUUID(uuid=uuid_) for uuid_ in uuid]
+    return ProcessQuery(
+        session=session or "",
+        names=query_names,
+        user=user or "",
+        uuids=uuids,
+        crash=crash,
+    )
+
+
 def generate_process_query(
-    f, at_least_one: bool, all_processes_by_default: bool = False
-):
+    f: FC, at_least_one: bool, all_processes_by_default: bool = False
+) -> FC:
     @click.pass_context
-    def new_func(ctx, session, name, user, uuid, **kwargs):
-        is_trivial_query = bool(
-            (len(uuid) == 0)
-            and (session is None)
-            and (len(name) == 0)
-            and (user is None)
-        )
-
-        if is_trivial_query and at_least_one:
-            raise click.BadParameter(
-                "You need to provide at least a '--uuid', '--session', '--user' or '--name'!\nAll these values are presented with 'ps'.\nIf you want to kill everything, use 'ps' and 'kill'."
-            )
-
-        if all_processes_by_default and is_trivial_query:
-            name = [".*"]
-
-        uuids = [ProcessUUID(uuid=uuid_) for uuid_ in uuid]
-
-        query = ProcessQuery(
+    def new_func(
+        ctx: click.Context,
+        session: str | None,
+        name: tuple[str, ...],
+        user: str | None,
+        uuid: tuple[str, ...],
+        **kwargs: object,
+    ) -> object:
+        crash = bool(kwargs.pop("crash", False))
+        query = build_process_query(
             session=session,
-            names=name,
+            name=name,
             user=user,
-            uuids=uuids,
-            crash=kwargs.pop("crash", False),
+            uuid=uuid,
+            at_least_one=at_least_one,
+            all_processes_by_default=all_processes_by_default,
+            crash=crash,
         )
-        # print(query)
         return ctx.invoke(f, query=query, **kwargs)
 
-    return update_wrapper(new_func, f)
+    return cast(FC, update_wrapper(new_func, f))
 
 
-def make_tree(values):
+def make_tree(values: list[ProcessInstance]) -> list[str]:
     lines = []
     for result in values:
         m = result.process_description.metadata
@@ -146,17 +172,21 @@ def order_process_by_name(processes: list[ProcessInstance]):
 
 def tabulate_process_instance_list(
     pil: ProcessInstanceList, title: str, long: bool = False, width: int | None = None
-):
+) -> Table:
     t = Table(title=title, width=width)
     t.add_column("session")
     t.add_column("friendly name")
     t.add_column("user")
     t.add_column("host")
     t.add_column("uuid")
-    t.add_column("alive")
-    t.add_column("exit-code")
 
-    sorted_pil = order_process_by_name(pil.values)
+    sorted_pil = order_process_by_name(list(pil.values))
+    process_statuses = [_get_process_status_label(process) for process in sorted_pil]
+
+    t.add_column("status")
+    show_exit_status = any(status != "Alive" for status in process_statuses)
+    if show_exit_status:
+        t.add_column("exit-status")
 
     show_remote_pid = long and any(
         process.HasField("remote_pid") for process in sorted_pil
@@ -168,19 +198,15 @@ def tabulate_process_instance_list(
 
     tree_str = make_tree(sorted_pil)
     try:
-        for process, line in zip(sorted_pil, tree_str):
+        for process, line, process_status in zip(
+            sorted_pil, tree_str, process_statuses
+        ):
             m = process.process_description.metadata
-            alive = (
-                "True"
-                if process.status_code == ProcessInstance.StatusCode.RUNNING
-                else "[danger]False[/danger]"
-            )
             row = [m.session, line, m.user, m.hostname, process.uuid.uuid]
 
-            process_return_code = (
-                process.return_code if process.HasField("return_code") else "NONE"
-            )
-            row += [alive, f"{process_return_code}"]
+            row += [process_status]
+            if show_exit_status:
+                row += [_get_process_exit_status(process, process_status)]
             if show_remote_pid:
                 row += [
                     process.remote_pid
@@ -198,6 +224,32 @@ def tabulate_process_instance_list(
             "Unable to extract the parameters for tabulate_process_instance_list, exiting."
         )
     return t
+
+
+def _get_process_status_label(process: ProcessInstance) -> str:
+    try:
+        status_name = ProcessInstance.StatusCode.Name(process.status_code)
+    except ValueError:
+        return "Unknown"
+
+    return {
+        "PENDING": "Pending",
+        "ALIVE": "Alive",
+        "RUNNING": "Alive",
+        "TERMINATING": "Terminating",
+        "DEAD": "Dead",
+        "UNKNOWN": "Unknown",
+    }.get(status_name, "Unknown")
+
+
+def _get_process_exit_status(process: ProcessInstance, process_status: str) -> str:
+    if process_status == "Alive":
+        return ""
+
+    if process.HasField("return_code"):
+        return str(process.return_code)
+
+    return "Not available"
 
 
 def strip_env_for_rte(env):
@@ -334,6 +386,9 @@ def validate_k8s_session_name(session: str) -> bool:
     return True
 
 
+#! Note for future developers
+# This can probably be removed since we've added the
+# pm_type attribute in each of the process managers
 def get_pm_type_from_name(pm_name: str) -> ProcessManagerTypes:
     """
     Get the ProcessManagerTypes enum value from a string name.
@@ -347,11 +402,15 @@ def get_pm_type_from_name(pm_name: str) -> ProcessManagerTypes:
     pm_conf_file = get_process_manager_configuration(pm_name)
 
     conf_path, conf_type = parse_conf_url(pm_conf_file)
-    pmch = ProcessManagerConfHandler(
-        log_path="./", type=conf_type, data=conf_path.split(":")[1]
-    )
+    path_or_url = conf_path.split(":")[1]
 
-    return pmch.data.type
+    if conf_type == ConfTypes.JsonFileName:
+        pmch = ProcessManagerConfHandler.from_json(path=path_or_url)
+    else:
+        # OKS or other types - fallback to from_pyobject
+        pmch = ProcessManagerConfHandler.from_pyobject(data=path_or_url)
+
+    return getattr(pmch, "pm_type", pmch.type)
 
 
 def format_hostname(hostname: str) -> str:

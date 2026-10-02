@@ -11,8 +11,10 @@ from drunc.utils.utils import expand_path
 
 def validate_run_type(run_type: str) -> str:
     """Validate the run type
-    :param run_type: the run type
-    :return: the validated run type
+    Args:
+        run_type: the run type
+    Returns:
+        the validated run type
     """
     RUN_TYPES = ["PROD", "TEST"]
     if run_type not in RUN_TYPES:
@@ -22,7 +24,7 @@ def validate_run_type(run_type: str) -> str:
     return run_type
 
 
-def get_dotdrunc_json(path: str | None = None):
+def get_dotdrunc_json(path: str | None = None):  # type: ignore[no-untyped-def]
     # Resolution order: DOTDRUNC env var -> provided path -> default path
     file_path = os.getenv("DOTDRUNC") or path or "~/.drunc.json"
     try:

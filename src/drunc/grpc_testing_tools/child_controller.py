@@ -10,7 +10,10 @@ import os
 import signal
 import threading
 
+import grpc
+
 from drunc.grpc_testing_tools.test_services_pb2 import (
+    DummyRequest,
     DummyResponse,
     KillRequest,
     KillResponse,
@@ -30,7 +33,7 @@ class ChildControllerServiceImpl(ChildControllerServiceServicer):
     instruction processing, and graceful shutdown requests.
     """
 
-    def __init__(self, name: str):
+    def __init__(self, name: str) -> None:
         """
         Initialise the ChildController service implementation.
 
@@ -39,7 +42,9 @@ class ChildControllerServiceImpl(ChildControllerServiceServicer):
         """
         self.name = name
 
-    def MakeRequest(self, request, context):
+    def MakeRequest(
+        self, request: DummyRequest, context: grpc.ServicerContext
+    ) -> DummyResponse:
         """
         Handle incoming connectivity test requests.
 
@@ -52,7 +57,17 @@ class ChildControllerServiceImpl(ChildControllerServiceServicer):
         """
         return DummyResponse(reply=f"{self.name} server response: {request.message}")
 
-    def Kill(self, request: KillRequest, context) -> KillResponse:
+    def Kill(self, request: KillRequest, context: grpc.ServicerContext) -> KillResponse:
+        """
+        Handle shutdown requests from the RootController.
+
+        Args:
+            request: KillRequest containing optional reason and grace period
+            context: gRPC context object
+
+        Returns:
+            KillResponse indicating shutdown initiation and details
+        """
         grace_period = (
             max(request.grace_period_seconds, 1)
             if request.grace_period_seconds > 0
@@ -69,7 +84,7 @@ class ChildControllerServiceImpl(ChildControllerServiceServicer):
             "Shutdown thread starting...",
         ]
 
-        def delayed_shutdown():
+        def delayed_shutdown() -> None:
             """Send SIGTERM to this process after a brief delay."""
             import time
 

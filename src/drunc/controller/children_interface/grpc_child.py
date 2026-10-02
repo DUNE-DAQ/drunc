@@ -3,6 +3,7 @@ import time
 from typing import NoReturn, cast
 
 import grpc
+from druncschema.common_pb2 import LoggerTarget, SendLogRequest, SendLogResponse
 from druncschema.controller_pb2 import (
     DescribeFSMRequest,
     DescribeFSMResponse,
@@ -35,15 +36,13 @@ from druncschema.generic_pb2 import PlainText, Stacktrace
 from druncschema.token_pb2 import Token
 from grpc_status import rpc_status
 
-from drunc.broadcast.client.broadcast_handler import BroadcastHandler
-from drunc.broadcast.client.configuration import BroadcastClientConfHandler
 from drunc.connectivity_service.exceptions import (
     ApplicationLookupUnsuccessful,
 )
 from drunc.controller.children_interface.child_node import ChildNode
 from drunc.exceptions import DruncSetupException
 from drunc.grpc_settings import CONTROLLER_CLIENT_GRPC_CONFIG
-from drunc.utils.configuration import ConfHandler, ConfTypes
+from drunc.utils.configuration import ConfHandler
 from drunc.utils.grpc_utils import (
     ServerUnreachable,
     rethrow_if_unreachable_server,
@@ -56,12 +55,17 @@ from drunc.utils.utils import (
 
 
 class gRCPChildConfHandler(ConfHandler):
+    """Handler for gRPC child node configuration."""
+
+    def _post_process_oks(self) -> None:
+        self.controller = self._raw_data.controller
+
     def get_uri(self):
-        for service in self.data.controller.exposes_service:
-            if self.data.controller.id + "_control" in service.id:
-                return f"{service.protocol}://{self.data.controller.runs_on.runs_on.id}:{service.port}"
+        for service in self.controller.exposes_service:
+            if self.controller.id + "_control" in service.id:
+                return f"{service.protocol}://{self.controller.runs_on.runs_on.id}:{service.port}"
         raise DruncSetupException(
-            f"gRPC API child node {self.data.controller.id} does not expose a control service"
+            f"gRPC API child node {self.controller.id} does not expose a control service"
         )
 
 
@@ -116,7 +120,7 @@ class gRPCChildNode(ChildNode):
             tries_remaining -= 1
 
             try:
-                response = self.stub.describe(request)
+                self.stub.describe(request)
 
             except grpc.RpcError as error:
                 if tries_remaining == 0:
@@ -130,8 +134,9 @@ class gRPCChildNode(ChildNode):
                 time.sleep(5)
 
             else:
-                self.log.info(f"Connected to the controller ({self.uri})!")
-                self.start_listening(response.description.broadcast)
+                self.log.info(
+                    f"Application {self.name} connected to the parent application ({self.uri})!"
+                )
                 break
 
     def _attempt_reconnection(self, retry_call):
@@ -185,9 +190,7 @@ class gRPCChildNode(ChildNode):
             del self.channel
         if self.stub:
             del self.stub
-
         self.channel = None
-        self.broadcast.stop()
 
     def check_connection(self) -> bool:
         """Probe child connectivity and retry once after reconnecting if needed.
@@ -232,14 +235,6 @@ class gRPCChildNode(ChildNode):
                 return False
 
         return False
-
-    def start_listening(self, bdesc):
-        self.broadcast = BroadcastHandler(
-            BroadcastClientConfHandler(
-                data=bdesc,
-                type=ConfTypes.ProtobufAny,
-            )
-        )
 
     def status(
         self,
@@ -614,3 +609,50 @@ class gRPCChildNode(ChildNode):
                     self.log.error(text)
 
         raise error
+
+    def send_log(
+        self,
+        text: str,
+        severity: str = "INFO",
+        logger: "LoggerTarget" = LoggerTarget.MAIN,
+        target: str = "",
+        execute_along_path: bool = False,
+        execute_on_all_subsequent_children_in_path: bool = True,
+    ) -> SendLogResponse:
+        """
+        Log a message on the server with the specified severity.
+
+        Args:
+            text (str): The message to log.
+            severity (str): The severity level of the log message (default: "INFO").
+            target (str): The target for the log message (default: "").
+            execute_along_path (bool): Whether to execute along the path (default: False).
+            execute_on_all_subsequent_children_in_path (bool): Whether to execute on all subsequent children in the path (default: True).
+
+        Returns:
+            SendLogResponse: The response from the server after logging the message.
+        """
+        request = SendLogRequest(
+            token=None,
+            text=text,
+            severity=severity,
+            target=target,
+            execute_along_path=execute_along_path,
+            execute_on_all_subsequent_children_in_path=execute_on_all_subsequent_children_in_path,
+            logger=logger,
+        )
+
+        try:
+            response = self.stub.send_log(request)
+        except grpc.RpcError as e:
+            try:
+                self.handle_child_grpc_error(e)
+            except ServerUnreachable:
+                self.log.info(
+                    f"Connection to {self.name} at {self.uri} failed during send_log, attempting to reconnect..."
+                )
+                response = self._attempt_reconnection(
+                    lambda: self.stub.send_log(request)
+                )
+
+        return response

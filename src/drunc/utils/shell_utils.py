@@ -3,76 +3,17 @@
 import abc
 import getpass
 from collections.abc import MutableMapping
-from typing import Callable, ParamSpec, Protocol, TypeVar, cast
 
 import click
 from druncschema.token_pb2 import Token
-from rich.console import Console
+from rich.console import Console, Group
+from rich.measure import Measurement
+from rich.table import Table
 
+from drunc.controller.controller_driver import ControllerDriver
 from drunc.exceptions import DruncShellException
+from drunc.process_manager.process_manager_driver import ProcessManagerDriver
 from drunc.utils.utils import get_logger
-
-
-class CommandLike(Protocol):
-    """Protocol for command-like objects."""
-
-    name: str
-
-
-class SequenceLike(Protocol):
-    """Protocol for sequence-like objects."""
-
-    id: str
-
-
-class FSMDescriptionLike(Protocol):
-    """Protocol for FSM description-like objects."""
-
-    commands: list[CommandLike]
-    sequences: list[SequenceLike]
-
-
-class DescribeFSMReplyLike(Protocol):
-    """Protocol for describe FSM reply-like objects."""
-
-    description: FSMDescriptionLike
-
-
-class StatusLike(Protocol):
-    """Protocol for status-like objects."""
-
-    state: str
-    in_error: bool
-
-
-class StatusReplyLike(Protocol):
-    """Protocol for status reply-like objects."""
-
-    status: StatusLike
-
-
-class ControllerDriverProtocol(Protocol):
-    """Protocol for controller driver objects."""
-
-    def status(self) -> StatusReplyLike:
-        """Get the current status.
-
-        Returns:
-            StatusReplyLike: The current status.
-        """
-        ...
-
-    def describe_fsm(self) -> DescribeFSMReplyLike:
-        """Describe the FSM.
-
-        Returns:
-            DescribeFSMReplyLike: The FSM description.
-        """
-        ...
-
-
-P = ParamSpec("P")
-R = TypeVar("R")
 
 
 class InterruptedCommand(DruncShellException):
@@ -95,95 +36,30 @@ def create_dummy_token_from_uname() -> Token:
     )
 
 
-def add_traceback_flag() -> Callable[[Callable[P, R]], Callable[P, R]]:
-    """Add a traceback flag to a command.
-
-    Returns:
-        Callable: A decorator that adds the traceback flag.
-    """
-
-    def wrapper(f0: Callable[P, R]) -> Callable[P, R]:
-        f1 = click.option(
-            "-t/-nt",
-            "--traceback/--no-traceback",
-            default=None,
-            help="Print full exception traceback",
-        )(f0)
-        return f1
-
-    return wrapper
-
-
-class DecodedResponse:
-    """Decoded response object.
-
-    Warning: This should be kept in sync with
-    druncschema/request_response.proto/Response class
-    """
-
-    name = None
-    token = None
-    data = None
-    flag = None
-    children: list["DecodedResponse"] = []
-
-    def __init__(
-        self,
-        name: str,
-        token: Token,
-        flag: object,
-        data: object | None = None,
-        children: list["DecodedResponse"] | None = None,
-    ) -> None:
-        """Initialize a DecodedResponse.
-
-        Args:
-            name: The name of the response.
-            token: The token associated with the response.
-            flag: The response flag.
-            data: The response data. Defaults to None.
-            children: Child responses. Defaults to None.
-        """
-        self.name = name
-        self.token = token
-        self.flag = flag
-        self.data = data
-        if children is None:
-            self.children = []
-        else:
-            self.children = children
-
-    @staticmethod
-    def to_string(obj: "DecodedResponse", prefix: str = "") -> str:
-        """Convert a DecodedResponse to a string representation.
-
-        Args:
-            obj: The DecodedResponse to convert.
-            prefix: A prefix to add to the string. Defaults to empty string.
-
-        Returns:
-            str: The string representation of the response.
-        """
-        text = (
-            f"{prefix} {obj.name} -> response flag={obj.flag} type={type(obj.data)}\n"
-        )
-        for v in obj.children:
-            if v is None:
-                continue
-            text += DecodedResponse.to_string(v, prefix + "  ")
-        return text
-
-    def __str__(self) -> str:
-        """Return string representation of the DecodedResponse.
-
-        Returns:
-            str: The string representation.
-        """
-        return DecodedResponse.to_string(self)
-
-
 class ShellContext:
     """Base class for shell contexts."""
+
+    shell_id: str | None = (
+        None  # used for logging if its a PM shell or Unified shell etc
+    )
+
+    def get_shell_id(self) -> str | None:
+        """
+        Get the shell ID.
+
+        This is primarily used by the superclasses of the ShellContext to identify the
+        type of shell (e.g., PM shell, Unified shell) for logging purposes.
+
+        Args:
+            None
+
+        Returns:
+            str | None: The shell ID, or None if not set.
+
+        Raises:
+            None
+        """
+        return self.shell_id
 
     def _reset(
         self,
@@ -211,10 +87,11 @@ class ShellContext:
             exit(1)
 
     @abc.abstractmethod
-    def reset(self, **kwargs: object) -> None:
+    def reset(self, *args: object, **kwargs: object) -> None:
         """Reset the shell context.
 
         Args:
+            *args: Additional positional arguments.
             **kwargs: Additional keyword arguments.
         """
         pass
@@ -294,6 +171,47 @@ class ShellContext:
                 1
             )  # used to avoid having to catch multiple Attribute errors when this function gets called
 
+    def get_pm_driver(self, quiet_fail: bool = False) -> ProcessManagerDriver:
+        """
+        Get the process manager driver from the context.
+
+        Args:
+            quiet_fail: If True, return None on failure instead of raising an exception.
+
+        Returns:
+            ProcessManagerDriver: The process manager driver.
+
+        Raises:
+            RuntimeError: If the process manager driver is not initialized.
+        """
+        pmd = self.get_driver("process_manager", quiet_fail=quiet_fail)
+
+        # Check the type for mypy and runtime safety.
+        if not isinstance(pmd, ProcessManagerDriver):
+            raise RuntimeError("ProcessManagerDriver is not loaded!")
+
+        return pmd
+
+    def get_controller_driver(self, quiet_fail: bool = False) -> ControllerDriver:
+        """
+        Get the root controller driver from the context.
+
+        Args:
+            quiet_fail: If True, return None on failure instead of raising an exception.
+
+        Returns:
+            ControllerDriver: The process manager driver.
+
+        Raises:
+            RuntimeError: If the process manager driver is not initialized.
+        """
+        ctrld = self.get_driver("controller", quiet_fail=quiet_fail)
+
+        if not isinstance(ctrld, ControllerDriver):
+            raise RuntimeError("ControllerDriver is not loaded!")
+
+        return ctrld
+
     def has_driver(self, name: str) -> bool:
         """Check if a driver exists in the context.
 
@@ -346,7 +264,7 @@ class ShellContext:
     def print_status_summary(self) -> None:
         """Print a summary of the FSM status and available transitions."""
         log = get_logger("utils.ShellContext")
-        controller = cast(ControllerDriverProtocol, self.get_driver("controller"))
+        controller = self.get_controller_driver()
         status = controller.status().status
         describe_fsm = controller.describe_fsm().description
         current_state = status.state
@@ -365,3 +283,87 @@ class ShellContext:
             log.info(
                 f"Current FSM status is [green]{current_state}[/green]. Available transitions are [green]{'[/green], [green]'.join(available_actions)}[/green]. Available sequence commands are [green]{'[/green], [green]'.join(available_sequences)}[/green]."
             )
+
+
+def format_table_width(
+    ctx_or_console: ShellContext | Console,
+    table: Table | Group,
+    fit: bool,
+) -> Table | Group:
+    """Configure a table or group of tables for single-line row formatting.
+
+    Args:
+        ctx_or_console: Shell context or Rich Console instance.
+        table: Table or Group of tables to format.
+        fit: If True, constrains the table to the console width (using ellipsis truncation
+            to keep single lines). If False, expands the table to its full unconstrained
+            content width without truncating.
+
+    Returns:
+        The formatted table or group.
+    """
+    # Duck-type Console extraction
+    console = (
+        ctx_or_console._console
+        if hasattr(ctx_or_console, "_console")
+        else ctx_or_console
+    )
+
+    # Recursively format Group instances
+    if isinstance(table, Group):
+        for renderable in table.renderables:
+            if isinstance(renderable, (Table, Group)):
+                format_table_width(console, renderable, fit=fit)
+        return table
+
+    table.expand = False
+
+    # 1. Prevent cell line-splitting so each row is always strictly 1 visual line
+    for col in table.columns:
+        col.no_wrap = True
+
+    if fit:
+        # Constrain to the terminal window; columns will truncate with '…' instead of wrapping
+        table.width = console.width
+    else:
+        # Measure and set the true content width up to 10,000 characters
+        options = console.options.update(max_width=10000)
+        table.width = Measurement.get(console, options, table).maximum
+
+    return table
+
+
+def log_pm_cmd(obj: ShellContext) -> None:
+    """Log a process-manager shell command with only explicitly provided arguments.
+
+    The current Click command context is inspected and only parameters whose source is
+    ``COMMANDLINE`` are included in the log message. This keeps defaulted values out
+    of the message while still recording the command name, optional session name, and
+    shell identity.
+
+    These are sent over via  so that it can be displayed in the process manager
+    shell
+
+    Args:
+        obj (ShellContext): Active shell context used to send the log message.
+    """
+
+    ctx_cmd = click.get_current_context(silent=True)
+    cmd_name = ctx_cmd.command.name if ctx_cmd and ctx_cmd.command else None
+    parms_dict: dict[str, str] = {}
+    if ctx_cmd and ctx_cmd.command:
+        for param in ctx_cmd.command.params:
+            name = param.name
+            if name is None:
+                continue
+            if (
+                ctx_cmd.get_parameter_source(name)
+                == click.core.ParameterSource.COMMANDLINE
+            ):
+                parms_dict[name] = f"{ctx_cmd.params[name]!r}"
+
+    args = f" with arguments {parms_dict}" if parms_dict else ""
+    session = f" for session {obj.session_name}" if hasattr(obj, "session_name") else ""
+    msg = f"{getpass.getuser()} sent {cmd_name}{args}{session} via {obj.get_shell_id()}"
+    pm_driver = obj.get_pm_driver()
+    pm_driver.send_log(msg)

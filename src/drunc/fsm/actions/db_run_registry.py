@@ -7,6 +7,7 @@ from daqconf.consolidate import consolidate_db
 from daqconf.jsonify import jsonify_xml_data
 from daqconf.validate import validate_session
 
+from drunc.fsm._protocols import ContextProtocol
 from drunc.fsm.actions.utils import get_dotdrunc_json
 from drunc.fsm.core import FSMAction
 from drunc.fsm.exceptions import (
@@ -20,7 +21,7 @@ from drunc.utils.utils import get_logger
 
 
 class DBRunRegistry(FSMAction):
-    def __init__(self, configuration):
+    def __init__(self, configuration: object) -> None:
         super().__init__(name="db-run-registry")
         self.log = get_logger("controller.iface.usvc_db_run_registry")
 
@@ -36,7 +37,12 @@ class DBRunRegistry(FSMAction):
             ) from exc
         self.timeout = 2
 
-    def pre_start(self, _input_data: dict, _context, **kwargs):
+    def pre_start(
+        self,
+        _input_data: dict[str, object],
+        _context: ContextProtocol,
+        **kwargs: object,
+    ) -> dict[str, object]:
         """
         Upload a copy of the XML and JSON configurations used to take the current run to
         the Run Registry, and insert a new run number entry.
@@ -57,9 +63,7 @@ class DBRunRegistry(FSMAction):
 
         # Seems like run_number isn't in _input_data in post_drain_dataflow so need to
         # initialise it here
-        self.run_number = _input_data[
-            "run"
-        ]
+        self.run_number = _input_data["run"]
 
         # Get the environment variables for upload
         software_version = os.getenv("DUNE_DAQ_BASE_RELEASE")
@@ -119,10 +123,11 @@ class DBRunRegistry(FSMAction):
         with tarfile.open(fileobj=tarball, mode="w:gz") as tar:
             tar.add(xml_filename, arcname=os.path.basename(xml_filename))
             tar.add(json_filename, arcname=os.path.basename(json_filename))
-            tar.add(entry_point_filename, arcname=os.path.basename(entry_point_filename))
+            tar.add(
+                entry_point_filename, arcname=os.path.basename(entry_point_filename)
+            )
         # f_tar.close()
 
-        
         # Publish to the run registry
         with open(tarball_name, "rb") as f:
             files = {"file": f}
@@ -162,7 +167,12 @@ class DBRunRegistry(FSMAction):
 
         return _input_data
 
-    def post_drain_dataflow(self, _input_data, _context, **kwargs):
+    def post_drain_dataflow(
+        self,
+        _input_data: dict[str, object],
+        _context: ContextProtocol,
+        **kwargs: object,
+    ) -> None:
         try:
             requests.get(
                 self.API_SOCKET + "/runregistry/updateStopTime/" + str(self.run_number),

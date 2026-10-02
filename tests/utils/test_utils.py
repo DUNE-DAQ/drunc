@@ -20,6 +20,7 @@ from drunc.utils.utils import (
     now_str,
     parent_death_pact,
     regex_match,
+    resolve_context_peer,
     resolve_localhost_and_127_ip_to_network_ip,
     resolve_localhost_to_hostname,
     validate_command_facility,
@@ -157,6 +158,12 @@ def test_resolve_localhost_and_127_ip_to_network_ip():
     assert resolved == generate_address(this_ip)
 
 
+def test_resolve_context_peer():
+    assert resolve_context_peer("grpc:np04-srv-028:50000") == "np04-srv-028:50000"
+    assert resolve_context_peer("np04-srv-028:50000") == "np04-srv-028:50000"
+    assert resolve_context_peer("") == ""
+
+
 def test_host_is_local():
     this_ip = socket.gethostbyname(socket.gethostname())
     hostname = socket.gethostname()
@@ -201,9 +208,12 @@ def test_parent_death_pact():
     pids = psutil.pids()
     child_pid_still_exists = False
     for pid in pids:
-        if psutil.Process(pid).name() == "tester_child_process":
-            child_pid_still_exists = True
-            break
+        try:
+            if psutil.Process(pid).name() == "tester_child_process":
+                child_pid_still_exists = True
+                break
+        except psutil.NoSuchProcess:
+            continue
 
     assert not child_pid_still_exists
 

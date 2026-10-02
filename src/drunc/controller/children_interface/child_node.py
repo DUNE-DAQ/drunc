@@ -1,5 +1,6 @@
 from abc import ABC, abstractmethod
 
+from druncschema.common_pb2 import LoggerTarget, SendLogResponse
 from druncschema.controller_pb2 import (
     DescribeFSMResponse,
     DescribeResponse,
@@ -154,4 +155,16 @@ class ChildNode(ABC):
         execute_along_path: bool = False,
         execute_on_all_subsequent_children_in_path: bool = True,
     ) -> ToErrorResponse:
+        pass
+
+    @abstractmethod
+    def send_log(
+        self,
+        text: str,
+        severity: str = "INFO",
+        logger: "LoggerTarget" = LoggerTarget.MAIN,
+        target: str = "",
+        execute_along_path: bool = False,
+        execute_on_all_subsequent_children_in_path: bool = True,
+    ) -> SendLogResponse:
         pass

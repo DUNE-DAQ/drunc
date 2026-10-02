@@ -38,7 +38,8 @@ class ConcreteProcessManager(ProcessManager):
         """
         all-default constructor for testing purposes.
         """
-        configuration.get_data().opmon_publisher = None
+        configuration.opmon_conf = {"level": "info", "interval_s": 10.0}
+        configuration.opmon_publisher = None
         super().__init__(configuration, name, session, **kwargs)
 
     def _not_implemented_response(self):
@@ -54,9 +55,6 @@ class ConcreteProcessManager(ProcessManager):
             values=[],
             flag=ResponseFlag.NOT_EXECUTED_NOT_IMPLEMENTED,
         )
-
-    def _create_broadcast_service(self, name, session):
-        self.broadcast_service = None
 
     def _boot_impl(self, boot_request: BootRequest) -> ProcessInstanceList:
         """

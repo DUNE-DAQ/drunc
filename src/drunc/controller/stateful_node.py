@@ -20,14 +20,6 @@ class Observed:
 
     @value.setter
     def value(self, value):
-        # if self._broadcast_on_change is None or self._broadcast_key is None:
-        #     self._value = value
-        #     return
-
-        # self._broadcast_on_change.broadcast(
-        #     message = f'Changing {self._name} from {self._value} to {value}',
-        #     btype = self._broadcast_key,
-        # )
         self._value = value
         if self.stateful_node:
             self.stateful_node.log.info(f"{self._name} changed to {value}")

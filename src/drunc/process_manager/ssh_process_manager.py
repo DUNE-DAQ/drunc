@@ -3,7 +3,6 @@ import threading
 import uuid
 from typing import List, Optional
 
-from druncschema.broadcast_pb2 import BroadcastType
 from druncschema.process_manager_pb2 import (
     BootRequest,
     LogLines,
@@ -18,34 +17,45 @@ from druncschema.process_manager_pb2 import (
 from druncschema.request_response_pb2 import ResponseFlag
 
 from drunc.exceptions import DruncCommandException
+from drunc.process_manager.configuration import (
+    ProcessManagerConfHandler,
+    ProcessManagerRunningMode,
+    ProcessManagerTypes,
+)
 from drunc.process_manager.process_manager import ProcessManager
+from drunc.process_manager.ssh_process_manager_settings import (
+    SSHProcessManagerSettings,
+)
 from drunc.processes.exit_status import ExitStatus
 from drunc.processes.ssh_process_lifetime_manager import ProcessLifetimeManager
+from drunc.utils.utils import get_logger
 
 
 class SSHProcessManager(ProcessManager):
+    pm_type = ProcessManagerTypes.SSH_SHELL
+
     def __init__(
-        self, configuration, LifetimeManagerClass: ProcessLifetimeManager, **kwargs
+        self,
+        configuration: ProcessManagerConfHandler,
+        LifetimeManagerClass: type[ProcessLifetimeManager],
+        name: str = "process_manager",
+        **kwargs,
     ):
         # Used to prevent races between process exit callbacks and ps/kill/flush queries
         self.boot_request_lock = threading.Lock()
         self.ssh_lifetime_manager: Optional[ProcessLifetimeManager] = None
         self.session = getpass.getuser()  # unfortunate
-
-        super().__init__(configuration=configuration, session=self.session, **kwargs)
+        self.log = get_logger("process_manager.ssh_process_manager")
 
         self.disable_localhost_host_key_check = False
         self.disable_host_key_check = False
 
-        if self.configuration.data.settings:
+        settings = getattr(configuration, "settings", None)
+        if isinstance(settings, SSHProcessManagerSettings):
             self.disable_localhost_host_key_check = (
-                self.configuration.data.settings.get(
-                    "disable_localhost_host_key_check", False
-                )
+                settings.disable_localhost_host_key_check
             )
-            self.disable_host_key_check = self.configuration.data.settings.get(
-                "disable_host_key_check", False
-            )
+            self.disable_host_key_check = settings.disable_host_key_check
 
         # self.children_logs_depth = 1000
         # self.children_logs = {}
@@ -55,6 +65,13 @@ class SSHProcessManager(ProcessManager):
             disable_localhost_host_key_check=self.disable_localhost_host_key_check,
             logger=self.log,
             on_process_exit=self._on_ssh_process_exit,
+        )
+
+        super().__init__(
+            configuration=configuration,
+            name=name,
+            session=self.session,
+            **kwargs,
         )
         # stores the exit statuses for all dead processes by uuid
         self.archived_exit_statuses: dict[str, ExitStatus] = {}
@@ -102,7 +119,7 @@ class SSHProcessManager(ProcessManager):
     def _get_process_timeouts(self, uuids: List[str]) -> dict[str, float]:
         process_timeouts = {}
         for process_uuid in uuids:
-            process_timeouts[process_uuid] = self.configuration.data.kill_timeout
+            process_timeouts[process_uuid] = self.configuration.kill_timeout
         return process_timeouts
 
     def _on_ssh_process_exit(
@@ -137,7 +154,7 @@ class SSHProcessManager(ProcessManager):
         if uuid not in self.archived_exit_statuses:
             self.archived_exit_statuses[uuid] = exit_status
         if uuid not in self.expected_dead_applications:
-            self.add_process_to_expected_dead_processes(uuid)
+            self.add_process_to_expected_dead_processes(uuid, unexpected=True)
 
         boot_req = self.boot_request[uuid]
         name = boot_req.process_description.metadata.name
@@ -317,10 +334,8 @@ class SSHProcessManager(ProcessManager):
             )
 
     def notify_join(self, name, session, user, exit_status: ExitStatus):
-        self.log.debug(f"{self.name} sending broadcast after ssh process exit")
         end_str = exit_status.get_process_manager_log_message(name, session, user)
         self.log.info(end_str)
-        self.broadcast(end_str, BroadcastType.SUBPROCESS_STATUS_UPDATE)
 
     def __boot(self, boot_request: BootRequest, uuid: str) -> ProcessInstance:
         """
@@ -365,6 +380,9 @@ class SSHProcessManager(ProcessManager):
                 # Update hostname in boot request for this attempt
                 self.boot_request[uuid].process_description.metadata.hostname = host
 
+                self.log.debug(
+                    f"Attempting to start process {uuid} on host {host} via SSH lifetime manager"
+                )
                 # Start the process via SSH manager
                 self.ssh_lifetime_manager.start_process(
                     uuid=uuid, boot_request=self.boot_request[uuid]
@@ -382,11 +400,15 @@ class SSHProcessManager(ProcessManager):
         # Store the successful hostname in boot request metadata
         self.boot_request[uuid].process_description.metadata.hostname = hostname
 
-        self.log.info(
+        boot_msg = (
             f"Booted '{boot_request.process_description.metadata.name}' "
             f"from session '{boot_request.process_description.metadata.session}' "
-            f"with UUID {uuid}"
+            f"with UUID {uuid} on host {hostname}"
         )
+        if self.running_mode == ProcessManagerRunningMode.Standalone:
+            self.log.debug(boot_msg)
+        else:
+            self.log.info(boot_msg)
 
         # Query current process status
         alive = self.ssh_lifetime_manager.is_process_alive(uuid)
@@ -490,13 +512,16 @@ class SSHProcessManager(ProcessManager):
                 else:
                     pi.remote_pid = remote_pid_result.reason
                 ret += [pi]
-
-            return ProcessInstanceList(
+            ret_fmt = ProcessInstanceList(
                 name=self.name,
                 token=None,
                 values=ret,
                 flag=ResponseFlag.EXECUTED_SUCCESSFULLY,
             )
+            self.log.debug(
+                f"{self.name} returning {len(ret)} processes from ps query {query}"
+            )
+            return ret_fmt
 
     def _boot_impl(self, boot_request: BootRequest) -> ProcessInstanceList:
         self.log.debug(f"{self.name} running boot command")
@@ -528,7 +553,7 @@ class SSHProcessManager(ProcessManager):
         self.add_process_to_expected_dead_processes(uuid)
 
         exit_status = self.ssh_lifetime_manager.kill_process(
-            uuid, self.configuration.data.kill_timeout
+            uuid, self.configuration.kill_timeout
         )
         if exit_status is not None:
             self.archived_exit_statuses[uuid] = exit_status
@@ -692,7 +717,7 @@ class SSHProcessManager(ProcessManager):
                 del self.boot_request[proc_uuid]
                 # Clean data associated with the process from the lifetime manager
                 self.ssh_lifetime_manager.kill_process(
-                    proc_uuid, self.configuration.data.kill_timeout
+                    proc_uuid, self.configuration.kill_timeout
                 )
 
                 pi_return_code = (

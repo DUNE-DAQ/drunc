@@ -1,6 +1,7 @@
 """A set of utility functions for drunc."""
 
 import ctypes
+import ipaddress
 import logging
 import os
 import random
@@ -77,6 +78,9 @@ def get_logger(
         throttle,
         **extras,
     )
+
+
+log_echo = get_logger("echo", rich_handler=True)
 
 
 def get_shared_rich_console(logger: logging.Logger) -> Console | None:
@@ -363,6 +367,18 @@ def parent_death_pact(signal: int = signal.SIGHUP) -> None:
         raise Exception("prctl() returned nonzero retcode %d" % retcode)
 
 
+# 777 PERMISSIONS ARE COMPLETELY TEMPORARY
+# An established procedure for multi users will need to be discussed with sysadmins
+# will be removed when done
+def touch_and_chmod(filepath: str, mode: int = 0o777) -> None:
+    """Makes and sets the permissions of a file.
+    This is used to ensure multiuser support when accessing files etc."""
+
+    with open(filepath, "a"):
+        os.utime(filepath, None)
+    os.chmod(filepath, mode)
+
+
 class IncorrectAddress(DruncException):
     """Exception raised when an address is invalid."""
 
@@ -570,13 +586,14 @@ def get_control_type_and_uri_from_connectivity_service(
         ApplicationLookupUnsuccessful: If the URI cannot be resolved.
     """
     uris: list[dict[str, object]] = []
-    logger = get_logger("utils.get_control_type_and_uri_from_connectivity_service")
-    shared_console = get_shared_rich_console(logger)
+    log = get_logger("utils.get_control_type_and_uri_from_connectivity_service")
+    shared_console = get_shared_rich_console(log)
+    is_interactive = sys.stdout.isatty()
 
     start = time.time()
     elapsed = 0.0
 
-    if progress_bar:
+    if progress_bar and is_interactive:
         with Progress(
             SpinnerColumn(),
             TextColumn("[progress.description]{task.description}"),
@@ -584,11 +601,8 @@ def get_control_type_and_uri_from_connectivity_service(
             TimeRemainingColumn(),
             TimeElapsedColumn(),
             console=shared_console,
-            # transient=True,  # Clear the progress bar after completion, once we have established a more complete testing framework with the various failure modes, we can enable this to reduce console clutter
         ) as progress:
-            task = progress.add_task(
-                f"[yellow]{title}", total=timeout, visible=progress_bar
-            )
+            task = progress.add_task(f"[yellow]{title}", total=timeout, visible=True)
 
             while elapsed < timeout:
                 progress.update(task, completed=elapsed)
@@ -604,7 +618,7 @@ def get_control_type_and_uri_from_connectivity_service(
 
                 except ApplicationLookupUnsuccessful:
                     elapsed = time.time() - start
-                    logger.debug(
+                    log.debug(
                         f"Could not resolve '{name}_control' elapsed {elapsed:.2f}s/{timeout}s"
                     )
                     time.sleep(retry_wait)
@@ -612,6 +626,10 @@ def get_control_type_and_uri_from_connectivity_service(
             progress.update(task, completed=timeout)
 
     else:
+        # If a bar was requested but we are in a file, print a static log entry instead
+        if progress_bar:
+            shared_console.print(f"[yellow]{title}[/yellow] (Waiting...)")
+
         while elapsed < timeout:
             try:
                 uris = connectivity_service.resolve(
@@ -624,7 +642,7 @@ def get_control_type_and_uri_from_connectivity_service(
 
             except ApplicationLookupUnsuccessful:
                 elapsed = time.time() - start
-                logger.debug(
+                log.debug(
                     f"Could not resolve '{name}_control' elapsed {elapsed:.2f}s/{timeout}s"
                 )
                 time.sleep(retry_wait)
@@ -704,6 +722,98 @@ def resolve_target_ip(host: str) -> str | None:
         # Server only has an IPv6 address
         log.error(f"Could not resolve host: {host}")
         return None
+
+
+def resolve_context_peer(peer: str) -> str:
+    """Resolve a transport-qualified peer string to a display-friendly address.
+
+    The input is expected to look like ``transport:address``. If the address contains
+    an IP literal, it is reverse-resolved where possible and IPv6 addresses are
+    re-wrapped in brackets.
+
+    Example:
+        ``ipv4:10.73.136.70:41750`` -> ``np04-srv-028.cern.ch:41750``
+
+    Args:
+        peer (str): Transport-qualified peer string.
+
+    Returns:
+        str: The original peer string, or a resolved ``host:port`` representation.
+    """
+
+    if not peer:
+        return peer
+
+    # Some callers pass a plain host:port string without a transport prefix.
+    # Handle those directly instead of assuming the first token is always a transport.
+    if peer.startswith("[") or peer.count(":") == 1:
+        parsed = _parse_host_port(peer)
+        if parsed is not None:
+            host, port = parsed
+            resolved_host = _resolve_host(host)
+            return f"{resolved_host}:{port}"
+
+    match = re.match(r"^(?P<transport>[^:]+):(?P<address>.+)$", peer)
+    if not match:
+        return peer
+
+    parsed = _parse_host_port(match.group("address"))
+    if parsed is None:
+        return peer
+
+    host, port = parsed
+    resolved_host = _resolve_host(host)
+    return f"{resolved_host}:{port}"
+
+
+def _parse_host_port(address: str) -> tuple[str, str] | None:
+    """Extract a host and port from a peer address string.
+
+    Supports bracketed IPv6 addresses such as ``[::1]:1234`` and unbracketed
+    ``host:port`` or ``ipv4:port`` forms.
+
+    Args:
+        address (str): Address portion of a transport-qualified peer string.
+
+    Returns:
+        tuple[str, str] | None: ``(host, port)`` when parsing succeeds, otherwise
+        ``None``.
+    """
+
+    bracket_match = re.match(r"^\[(?P<host>[^\]]+)\]:(?P<port>\d+)$", address)
+    if bracket_match:
+        return bracket_match.group("host"), bracket_match.group("port")
+
+    host, sep, port = address.rpartition(":")
+    if sep and port.isdigit():
+        return host, port
+
+    return None
+
+
+def _resolve_host(host: str) -> str:
+    """Reverse-resolve an IP host and keep IPv6 output bracketed.
+
+    Args:
+        host (str): Hostname or IP literal to resolve.
+
+    Returns:
+        str: The resolved hostname, or the original host if resolution fails.
+    """
+
+    try:
+        ip_obj = ipaddress.ip_address(host)
+    except ValueError:
+        return host
+
+    try:
+        resolved_host, _, _ = socket.gethostbyaddr(str(ip_obj))
+    except (socket.herror, socket.gaierror, socket.timeout, OSError):
+        resolved_host = host
+
+    if ":" in resolved_host and not resolved_host.startswith("["):
+        return f"[{resolved_host}]"
+    return resolved_host
 
 
 def is_port_available(host: str, port: int, timeout: int = 2) -> bool:

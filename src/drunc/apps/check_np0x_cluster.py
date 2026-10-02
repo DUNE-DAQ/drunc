@@ -1,12 +1,36 @@
 import os
 import subprocess
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from typing import NotRequired, TypedDict
 
 import paramiko
 from rich import box
 from rich.console import Console
 from rich.live import Live
 from rich.table import Table
+
+
+class HostData(TypedDict):
+    """Data dictionary tracking the status of a single cluster host."""
+
+    alias: str
+    is_pingable: bool | None
+    ssh_key: str
+    key_color: str
+    cpu_count: str
+    total_cores: str
+    cpu_usage: str
+    cpu_model: str
+    model_color: str
+    ram_total: str
+    ram_usage: str
+    nfs_ok: bool
+    uptime: str
+    details: NotRequired[str]
+    ssh_key_status: NotRequired[str]
+    ssh_key_color: NotRequired[str]
+    status: NotRequired[str]
+
 
 # List of NP0x cluster hosts
 NP0X_CLUSTER_HOSTS = sorted(
@@ -48,7 +72,7 @@ MARK_CROSS = "[bold red]✘[/]"
 STYLE_OFFLINE = "[bold white on #444444] OFFLINE [/]"
 
 # Base template for host tracking
-DEFAULT_HOST_DATA = {
+DEFAULT_HOST_DATA: HostData = {
     "alias": "",
     "is_pingable": None,  # None: Waiting, True: Up, False: Down
     "ssh_key": "Pending",
@@ -70,13 +94,13 @@ class TrackingAutoAddPolicy(paramiko.MissingHostKeyPolicy):
     Custom policy to track missing host keys and update the result dict accordingly.
     """
 
-    def __init__(self, res_dict):
+    def __init__(self, res_dict: HostData) -> None:
         """
         Initialize with a reference to the result dictionary to update key status.
         """
         self.res_dict = res_dict
 
-    def missing_host_key(self, client, hostname, key):
+    def missing_host_key(self, client: object, hostname: str, key: object) -> None:
         """
         When a host key is missing, update the result dictionary to indicate that the
         key is being added.
@@ -146,7 +170,7 @@ def ping_host(hostname: str) -> bool:
     )
 
 
-def get_host_metrics(host_alias: str, ssh_config: paramiko.SSHConfig) -> dict:
+def get_host_metrics(host_alias: str, ssh_config: paramiko.SSHConfig) -> HostData:
     """
     For a given host alias, perform the following checks:
          - Ping the host to determine if it's online.
@@ -172,9 +196,36 @@ def get_host_metrics(host_alias: str, ssh_config: paramiko.SSHConfig) -> dict:
     # Look up the host configuration from the SSH config using the provided host alias.
     host_conf = ssh_config.lookup(host_alias)
 
+    def _normalise_ssh_conf_str(value: object, default: str) -> str:
+        """
+        Normalise Paramiko SSH config values to a single string.
+
+        Args:
+            value: The value from the SSH config, which may be a string or a list.
+            default: The default string to return if the value is not a string or list.
+
+        Returns:
+            str: The normalised string value from the SSH config, or the default if not
+            applicable.
+
+        Raises:
+            None. This function handles type checking and returns a default value if the
+            input is not a string or a non-empty list.
+        """
+        if isinstance(value, str):
+            return value
+        if isinstance(value, list) and value:
+            first = value[0]
+            if isinstance(first, str):
+                return first
+        return default
+
     # Determine the real hostname to connect to. If the SSH config provides a "hostname"
     # entry for this alias, use that; otherwise, use the alias itself as the hostname.
-    hostname = host_conf.get("hostname", host_alias)
+    # Note - this casting is required because Paramiko's SSHConfig.lookup() can return
+    # a list for some fields, and we want to ensure we have a single string for the
+    # hostname.
+    hostname = _normalise_ssh_conf_str(host_conf.get("hostname"), host_alias)
 
     # First, check if the host is pingable before attempting an SSH connection. If the
     # host is not pingable, attempting the SSH connection can be skipped and it can be
@@ -200,19 +251,23 @@ def get_host_metrics(host_alias: str, ssh_config: paramiko.SSHConfig) -> dict:
         # keys according to the policy set below.
         client.load_system_host_keys()
 
-        # Prepare the connection arguments based on the SSH config.
-        connect_args = {
-            "hostname": hostname,
-            "username": host_conf.get("user", os.getlogin()),
-            "port": int(host_conf.get("port", 22)),
-            "timeout": 5,
-            "key_filename": host_conf.get("identityfile", None),
-        }
+        username = _normalise_ssh_conf_str(host_conf.get("user"), os.getlogin())
+        port_raw = host_conf.get("port")
+        port = int(port_raw) if isinstance(port_raw, (str, int)) else 22
+        key_filename = (
+            _normalise_ssh_conf_str(host_conf.get("identityfile"), "") or None
+        )
 
         # Attempt to establish an SSH connection to the host using the prepared
         # arguments. If the host key is missing, the custom policy will handle it and
         # update the result dict.
-        client.connect(**connect_args)
+        client.connect(
+            hostname=hostname,
+            username=username,
+            port=port,
+            timeout=5.0,
+            key_filename=key_filename,
+        )
 
         # If the connection was successfully established and the key was valid, the
         # connection is verified and can be marked as such.
@@ -326,7 +381,7 @@ def get_host_metrics(host_alias: str, ssh_config: paramiko.SSHConfig) -> dict:
     return result
 
 
-def generate_table(results_map: dict[str, str]) -> Table:
+def generate_table(results_map: dict[str, HostData]) -> Table:
     """
     Generate a Rich Table object to display the status of the NP0x cluster hosts.
 
@@ -372,8 +427,8 @@ def generate_table(results_map: dict[str, str]) -> Table:
     # Iterate through the results_map and add a row to the table for each host.
     for host in NP0X_CLUSTER_HOSTS:
         # Retrieve the result dictionary for the current host
-        r = results_map.get(host)
-        hostname = r["alias"] if r else host
+        r = results_map.get(host, DEFAULT_HOST_DATA)
+        hostname = r["alias"] if r["alias"] else host
 
         # Host is Pingable
         if r["is_pingable"] is True:
@@ -415,7 +470,7 @@ def generate_table(results_map: dict[str, str]) -> Table:
     return table
 
 
-def main():
+def main() -> None:
     """
     Main function to execute the NP0x cluster status check and display results in a
     live-updating table.

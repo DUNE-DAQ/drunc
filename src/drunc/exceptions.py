@@ -1,88 +1,139 @@
-from google.rpc import code_pb2
+from google.protobuf.message import Message
+from google.rpc import code_pb2, error_details_pb2
 
 
 class DruncException(Exception):
     def __init__(
         self,
-        message: str = "An error occurred in Drunc.",
-        grpc_error_code=None,
-        details=None,  # optional rich error detail
-        **detail_kwargs,
-    ):
+        message: str | None = "An error occurred in Drunc.",
+        grpc_error_code: int | None = None,
+        details: str | None = None,
+        reason: str | None = None,
+        domain: str | None = None,
+        **detail_kwargs: object,
+    ) -> None:
         super().__init__(message)
 
-        if message is not None:
-            self.message = message
+        self.message: str = (
+            message if message is not None else "An error occurred in Drunc."
+        )
 
-        if grpc_error_code is None:
-            grpc_error_code = getattr(self, "grpc_error_code", code_pb2.INTERNAL)
+        self.grpc_error_code: int = (
+            grpc_error_code
+            if grpc_error_code is not None
+            else int(getattr(self.__class__, "grpc_error_code", code_pb2.INTERNAL))
+        )
 
-        if details is not None:
-            self.details = details
+        self.reason: str = (
+            reason
+            if reason is not None
+            else str(getattr(self.__class__, "reason", self.__class__.__name__))
+        )
 
-        self.detail_kwargs = detail_kwargs
+        self.domain: str = (
+            domain
+            if domain is not None
+            else str(getattr(self.__class__, "domain", "drunc"))
+        )
+
+        self.details: str | None = details
+        self.detail_kwargs: dict[str, object] = detail_kwargs
+
+        error_metadata: dict[str, str] = {"message": self.message}
+        for key, value in self.detail_kwargs.items():
+            error_metadata[key] = str(value)
+
+        self.base_error_info = error_details_pb2.ErrorInfo(
+            reason=self.reason, domain=self.domain, metadata=error_metadata
+        )
+
+    @property
+    def specialised_details(self) -> list[Message]:
+        return []
+
+    @property
+    def rich_details(self) -> list[Message]:
+        details_list: list[Message] = [self.base_error_info]
+
+        if self.specialised_details:
+            details_list.extend(self.specialised_details)
+
+        return details_list
 
 
 class DruncShellException(DruncException):
-    # Exceptions that gets thrown by shells
     pass
 
 
-class DruncSetupException(
-    DruncException
-):  # Exceptions that gets thrown when services start
-    grpc_error_code = code_pb2.FAILED_PRECONDITION
-    pass
+class DruncSetupException(DruncException):
+    grpc_error_code: int = code_pb2.FAILED_PRECONDITION
+
+    @property
+    def specialised_details(self) -> list[Message]:
+        precond = error_details_pb2.PreconditionFailure(
+            violations=[
+                error_details_pb2.PreconditionFailure.Violation(
+                    type="MISSING OR INVALID",
+                    subject=f"Services could not start. {self.message}",
+                    description=self.details or "",
+                )
+            ]
+        )
+        return [precond]
 
 
-class DruncCommandException(
-    DruncException
-):  # Exceptions that gets thrown when commands run
-    grpc_error_code = code_pb2.INTERNAL
-    pass
+class DruncCommandException(DruncException):
+    grpc_error_code: int = code_pb2.INTERNAL
+    reason: str = "COMMAND_ERROR"
 
 
-class DruncServerSideError(
-    DruncException
-):  # Exceptions that gets thrown when commands run
-    def __init__(self, error_txt, stack_txt, server_response, *args, **kwargs):
-        self.error_txt = error_txt
-        self.stack_txt = stack_txt
-        self.server_response = server_response
-        super().__init__(error_txt, stack_txt, server_response, *args, **kwargs)
+class DruncServerSideError(DruncException):
+    def __init__(
+        self,
+        error_txt: str,
+        stack_txt: str,
+        server_response: str,
+        *args: object,
+        **kwargs: object,
+    ) -> None:
+        self.error_txt: str = error_txt
+        self.stack_txt: str = stack_txt
+        self.server_response: str = server_response
 
-    def __str__(self):
+        super().__init__(
+            message=error_txt,
+            details=server_response,
+            **kwargs,  # type: ignore[arg-type]
+        )
+
+    def __str__(self) -> str:
         return f"{self.stack_txt}\n{self.error_txt}\n{self.server_response}"
 
 
 class DruncBatchShellError(DruncException):
-    def __init__(self, msg) -> None:
-        """C'tor"""
+    def __init__(self, msg: str) -> None:
         err_msg = f"Batch shell error: {msg}"
-        super().__init__(err_msg)
+        super().__init__(message=err_msg)
 
 
 class DruncBatchShellArgError(DruncException):
-    # Custom error for batch shell args
-    def __init__(self, msg) -> None:
-        """C'tor"""
+    def __init__(self, msg: str) -> None:
         err_msg = f"Batch shell error, unknown command or argument: {msg}"
-        super().__init__(err_msg)
+        super().__init__(message=err_msg)
 
 
 class DruncBatchShellUnknownCommand(DruncException):
-    def __init__(self, msg) -> None:
-        """C'tor"""
+    def __init__(self, msg: str) -> None:
         err_msg = f"Batch shell error, unknown command: {msg}"
-        super().__init__(err_msg)
+        super().__init__(message=err_msg)
 
 
 class DruncBatchShellMissingArg(DruncException):
-    def __init__(self, msg1, msg2) -> None:
+    def __init__(self, msg1: str, msg2: str) -> None:
         err_msg = f"Batch shell error, this optional argument is mandatory in batch mode. Failed command: {msg1}. Next input: {msg2}"
-        super().__init__(err_msg)
+        super().__init__(message=err_msg)
 
 
 class DruncNotImplementedException(DruncException):
-    grpc_error_code = code_pb2.UNIMPLEMENTED
-    pass
+    grpc_error_code: int = code_pb2.UNIMPLEMENTED
+    reason: str = "NOT_IMPLEMENTED"

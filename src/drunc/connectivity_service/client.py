@@ -7,7 +7,7 @@ from drunc.utils.utils import get, get_logger, http_post
 
 
 class ConnectivityServiceClient:
-    def __init__(self, session: str, address: str):
+    def __init__(self, session: str, address: str) -> None:
         self.session = session
         self.log = get_logger("utils.ConnectivityServiceClient")
 
@@ -21,7 +21,7 @@ class ConnectivityServiceClient:
             f"Connectivity service address: {self.address}, session: {self.session}"
         )
 
-    def is_ready(self, timeout: int = 10):
+    def is_ready(self, timeout: int = 10) -> bool:
         """
         Check if the service is ready by polling the connectivity service
         with an exponential backoff.
@@ -70,7 +70,7 @@ class ConnectivityServiceClient:
         )
         return False
 
-    def retract(self, uid, fail_quickly=False):
+    def retract(self, uid: str, fail_quickly: bool = False) -> None:
         data = {
             "partition": self.session,
             "connections": [
@@ -177,7 +177,9 @@ class ConnectivityServiceClient:
                 if fail_quickly:
                     return
 
-    def resolve(self, uid_regex: str, data_type: str, ntries=50) -> dict:
+    def resolve(
+        self, uid_regex: str, data_type: str, ntries: int = 50
+    ) -> dict[str, object]:
         data = {"data_type": data_type, "uid_regex": uid_regex}
         for i in range(ntries):
             try:
@@ -193,7 +195,7 @@ class ConnectivityServiceClient:
                     ignore_errors=True,
                 )
                 response.raise_for_status()
-                content = response.json()
+                content: dict[str, object] = response.json()
                 if content:
                     return content
                 else:
@@ -212,7 +214,7 @@ class ConnectivityServiceClient:
         )
         raise ApplicationLookupUnsuccessful
 
-    def publish(self, uid, uri, data_type: str):
+    def publish(self, uid: str, uri: str, data_type: str) -> None:
         for i in range(50):
             try:
                 self.log.debug(

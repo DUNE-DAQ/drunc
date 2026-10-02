@@ -33,16 +33,6 @@
           },
           "additionalProperties": true
         },
-        "broadcaster": {
-          "type": "object",
-          "properties": {
-            "type": {"type": "string"},
-            "kafka_address": {"type": "string"},
-            "publish_timeout": {"type": ["integer", "number"]}
-          },
-          "required": ["type", "kafka_address", "publish_timeout"],
-          "additionalProperties": true
-        },
         "command_address": {"type": "string"}
       },
       "required": ["type", "name"],

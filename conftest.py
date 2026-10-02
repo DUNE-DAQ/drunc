@@ -4,6 +4,14 @@ Registers custom command-line options and test markers.
 """
 
 
+def pytest_configure(config):
+    """Block coverage reporting for integration tests."""
+    if any("integtest" in str(arg) for arg in config.args):
+        plugin = config.pluginmanager.get_plugin("_cov")
+        if plugin:
+            plugin.options.no_cov = True
+
+
 def pytest_addoption(parser):
     """Register custom command-line options for pytest"""
     parser.addoption(

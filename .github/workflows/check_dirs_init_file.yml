@@ -21,6 +21,7 @@ jobs:
             -path "src/tests*" -o \
             -path "src/docs*" -o \
             -path "src/config*" -o \
+            -path "src/drunc/integtest*" -o \
             -path "src/drunc/data*" \) -prune -o \
             -type d -exec sh -c '[ ! -e "$1/__init__.py" ] && echo "$1"' _ {} \;)
 

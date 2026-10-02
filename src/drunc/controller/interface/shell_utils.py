@@ -9,11 +9,13 @@ import time
 from collections.abc import Sequence
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
+from typing import Protocol, TypeAlias
 from urllib.parse import urlparse
 
 import click
 import grpc
 from daqpytools.logging.formatter import DATE_TIME_BASE_FORMAT, TIME_ZONE
+from druncschema.common_pb2 import LoggerTarget
 from druncschema.controller_pb2 import (
     Argument,
     DescribeResponse,
@@ -27,7 +29,8 @@ from druncschema.description_pb2 import Description
 from druncschema.generic_pb2 import bool_msg, float_msg, int_msg, string_msg
 from druncschema.request_response_pb2 import ResponseFlag
 from google.protobuf import any_pb2
-from rich.console import ConsoleRenderable, Group, RichCast
+from rich.console import Console, ConsoleOptions, Group, RenderResult
+from rich.measure import Measurement
 from rich.progress import (
     BarColumn,
     Progress,
@@ -37,7 +40,10 @@ from rich.progress import (
     TimeRemainingColumn,
 )
 from rich.table import Table
+from rich.text import Text
 
+from drunc.controller.interface.context import ControllerContext
+from drunc.controller.utils import get_all_apps_with_named_substate
 from drunc.exceptions import DruncSetupException, DruncShellException
 from drunc.unified_shell.context import UnifiedShellContext, UnifiedShellMode
 from drunc.utils.grpc_utils import (
@@ -46,6 +52,7 @@ from drunc.utils.grpc_utils import (
     pack_to_any,
     unpack_any,
 )
+from drunc.utils.shell_utils import format_table_width
 from drunc.utils.utils import format_name_for_cli, get_logger, get_shared_rich_console
 
 log = get_logger("controller.iface.shell_utils")
@@ -55,6 +62,13 @@ log = get_logger("controller.iface.shell_utils")
 class StatusDescriptionPair:
     status: StatusResponse | None = None
     description: DescribeResponse | None = None
+
+
+class FSMExecutionResponseLike(Protocol):
+    name: str
+    flag: int
+    fsm_flag: int
+    children: Sequence["FSMExecutionResponseLike"]
 
 
 def match_children(
@@ -71,8 +85,12 @@ def match_children(
 
 
 def get_status_table(
-    status_response: StatusResponse, describe_response: DescribeResponse
-):
+    status_response: StatusResponse,
+    describe_response: DescribeResponse,
+    display_host_overrides: dict[str, str] | None = None,
+    show_ip_address: bool = False,
+    width: int | None = None,
+) -> Table | Group:
     status = status_response.status
     description = describe_response.description
 
@@ -81,7 +99,8 @@ def get_status_table(
             f"[dark_green]{description.session}[/dark_green] status"
             if description is not None
             else "[dark_green]status[/dark_green]"
-        )
+        ),
+        width=width,
     )
     t.add_column("Name")
     t.add_column("Info")
@@ -90,46 +109,78 @@ def get_status_table(
     t.add_column("In error")
     t.add_column("Included")
     t.add_column("Endpoint")
+    if show_ip_address:
+        t.add_column("IP Address")
 
     def add_status_to_table(
         table: Table,
         status_response: StatusResponse,
         describe_response: DescribeResponse,
         prefix: str,
-    ):
+    ) -> None:
         status = status_response.status
         description = describe_response.description
         if status is None or description is None:
             return
 
-        def update_endpoint(endpoint: str) -> str:
+        def update_endpoint(endpoint: str, proc_name: str) -> tuple[str, str]:
             """
-            Parses endpoint to a human readable hostname
+            Parses endpoint to a human readable hostname.
 
             Args:
-            endpoint: Process URI
+                endpoint: The endpoint to parse
+                proc_name: The name of the process to parse the endpoint for
 
             Returns:
-            str: URI with human readable hostname
+            tuple[str, str]: (display_endpoint, actual_endpoint)
+                display_endpoint: URI with human readable hostname
+                actual_endpoint: raw URI with actual IP/host (empty if same as display)
             """
             if not endpoint:
-                return ""
+                return "", ""
 
-            ip_address = urlparse(endpoint).hostname
-            if not ip_address:
-                return ""
-            resolved_host = get_hostname_smart(ip_address)
-            return endpoint.replace(ip_address, resolved_host)
+            parsed = urlparse(endpoint)
+            raw_host = parsed.hostname
+            if not raw_host:
+                return "", ""
 
-        table.add_row(
+            scheme = parsed.scheme
+            port = parsed.port
+
+            def make_uri(host: str) -> str:
+                uri = f"{scheme}://{host}"
+                if port is not None:
+                    uri = f"{uri}:{port}"
+                return uri
+
+            if display_host_overrides and proc_name in display_host_overrides:
+                display_host = get_hostname_smart(display_host_overrides[proc_name])
+                pretty = make_uri(display_host)
+                if display_host != raw_host:
+                    return pretty, make_uri(raw_host)
+                return pretty, ""
+
+            resolved = get_hostname_smart(raw_host)
+            if resolved != raw_host:
+                return make_uri(resolved), endpoint
+
+            return endpoint, ""
+
+        display_ep, actual_ep = update_endpoint(
+            description.endpoint, status_response.name
+        )
+        row = [
             prefix + status_response.name,
             description.info,
             status.state,
             status.sub_state,
             format_bool(status.in_error, false_is_good=True),
             format_bool(status.included),
-            update_endpoint(description.endpoint),
-        )
+            display_ep,
+        ]
+        if show_ip_address:
+            row.append(actual_ep)
+        table.add_row(*row)
 
         children = match_children(status_response.children, describe_response.children)
         children_list = sorted(list(children.keys()))
@@ -147,7 +198,7 @@ def get_status_table(
 
     add_status_to_table(t, status_response, describe_response, "")
 
-    def add_runinfo_to_table(table: Table, status: Status):
+    def add_runinfo_to_table(table: Table, status: Status) -> None:
         table.add_row("Run number", str(status.run_info.run_number))
         table.add_row("Run type", status.run_info.run_type)
         table.add_row(
@@ -180,37 +231,256 @@ def get_status_table(
     return t
 
 
-class StatusTableUpdater(Progress):
-    def __init__(self, ctx, refresh_per_second=2, *args, **kwargs) -> None:
-        self.ctx = ctx
-        self.update_table()
+def render_status_table(
+    ctx: ControllerContext | UnifiedShellContext,
+    target: str = "",
+    execute_along_path: bool = True,
+    execute_on_all_subsequent_children_in_path: bool = True,
+    show_ip_address: bool = False,
+    width: int | None = None,
+) -> Table | Group:
+    statuses = ctx.get_driver("controller").status(
+        target=target,
+        execute_along_path=execute_along_path,
+        execute_on_all_subsequent_children_in_path=execute_on_all_subsequent_children_in_path,
+    )
+    descriptions = ctx.get_driver("controller").describe(
+        target=target,
+        execute_along_path=execute_along_path,
+        execute_on_all_subsequent_children_in_path=execute_on_all_subsequent_children_in_path,
+    )
+    display_host_overrides = ctx.get_endpoint_display_host_overrides()
+    return get_status_table(
+        statuses,
+        descriptions,
+        display_host_overrides=display_host_overrides,
+        show_ip_address=show_ip_address,
+        width=width,
+    )
 
-        # Get the instance of the console that the logger is using with the rich handler
-        # so that the progress bar can be rendered in the same console, and not mess up
-        # the logs
+
+class WrappingSafeTable:
+    """
+    Renders the table that is safe for the updater, with integtest passes.
+
+    When running the StatusTableUpdater, this class ensures that tables are rendered at
+    their full width to prevent ellipses and maintain proper cursor tracking. This is
+    necessary for integration tests to be independent of terminal width limitations.
+    """
+
+    def __init__(self, renderable: Table | Group):
+        """
+        Initialize the WrappingSafeTable with the given renderable.
+
+        Args:
+            renderable (Table | Group): The table or group to be rendered safely.
+
+        Returns:
+            None: This initializer does not return anything.
+
+        Raises:
+            TypeError: If the provided renderable is not a Table or Group.
+        """
+
+        def lock_table(obj):
+            """
+            Lock the table to prevent automatic expansion and enable proper wrapping.
+
+            Args:
+                obj (Table | Group): The table or group to lock.
+
+            Returns:
+                None: This function modifies the object in place.
+            """
+            # If the object is a Group, recursively lock its renderables, otherwise lock
+            # the table itself.
+            if isinstance(obj, Group):
+                for item in obj.renderables:
+                    lock_table(item)
+            elif hasattr(obj, "columns"):
+                obj.expand = False
+                obj.width = None
+                for col in obj.columns:
+                    col.no_wrap = True
+
+        lock_table(renderable)
+        self.renderable = renderable
+
+    def __rich_console__(
+        self, console: Console, options: ConsoleOptions
+    ) -> RenderResult:
+        """
+        Render the table safely for the console, with wrapping and cursor tracking.
+        This dunder method is automatically called by the Rich module when necessary.
+
+        Args:
+            console: The Rich console to render to.
+            options: The console options, including width constraints.
+
+        Yields:
+            Text: Lines of the rendered table, with hard wrapping applied.
+        """
+        # Set the table width to a very large value to prevent automatic wrapping
+        unconstrained = options.update(max_width=10000)
+        lines = console.render_lines(self.renderable, unconstrained)
+
+        # For each line of this table render it with hard wrapping, so no contents are
+        # wrapped automatically by the console's width, or concatenated which introduces
+        # integration test failure
+        for line_segments in lines:
+            t = Text(overflow="fold")
+            for seg in line_segments:
+                t.append(seg.text, style=seg.style)
+
+            # Strip trailing padding to prevent phantom blank lines
+            t.rstrip()
+            yield t
+
+    def __rich_measure__(
+        self, console: Console, options: ConsoleOptions
+    ) -> Measurement:
+        """
+        Measure the renderable for layout purposes.
+        This dunder method is automatically called by the Rich module when necessary.
+
+        Args:
+            console: The Rich console to measure against.
+            options: The console options, including width constraints.
+
+        Returns:
+            Measurement: The minimum and maximum width of the renderable.
+        """
+        return Measurement(console.width, console.width)
+
+
+class StatusTableUpdater(Progress):
+    def __init__(
+        self,
+        ctx: ControllerContext | UnifiedShellContext,
+        refresh_per_second: float = 2,
+        *args: object,
+        **kwargs: object,
+    ) -> None:
+        """
+        Initialize the status table updater.
+
+        Args:
+            ctx: The controller context or unified shell context.
+            refresh_per_second: How often to refresh the status table.
+            *args: Additional positional arguments for the Progress superclass.
+            **kwargs: Additional keyword arguments for the Progress superclass.
+
+        Returns:
+            None.
+
+        Raises:
+            None.
+        """
+        # Store the controller context for later use.
+        self.ctx = ctx
+
+        # Obtain the shared Rich console for consistent output styling.
         shared_console = get_shared_rich_console(self.ctx.log)
         if shared_console:
             kwargs["console"] = shared_console
 
+        # Detect if standard output is a real terminal screen. This is most common in
+        # integration tests, where the output is typically captured and not displayed on
+        # a real terminal. This prevents the cascade of status tables.
+        # Note - "TERM" == "dumb" indicates a non-interactive terminal. See the UNIX
+        # docs: https://invisible-island.net/ncurses/terminfo.src.html#tic-dumb
+        self.is_interactive = sys.stdout.isatty() and os.environ.get("TERM") != "dumb"
+
+        # Completely disable the animation loop if writing to a file or CI pipe
+        if not self.is_interactive:
+            kwargs["disable"] = True
+
+        # Remove default Live parameters so our required implemnentation holds.
+        kwargs.pop("vertical_overflow", None)
+
+        # Remove the 'fit' parameter to ensure our custom layout handling is used.
+        kwargs.pop("fit", None)
+
         super().__init__(*args, refresh_per_second=refresh_per_second, **kwargs)
 
-    def update_table(self):
-        # The following debug log line will be used in an integration test to validate
-        # that issue 817 does not appear again (rich table overriding the log entries)
-        self.ctx.log.debug("Updating the status table...")
-        statuses = self.ctx.get_driver("controller").status()
-        descriptions = self.ctx.get_driver("controller").describe()
-        self.table = get_status_table(statuses, descriptions)
+        # Only configure Live parameters if we are actually animating
+        if hasattr(self, "live") and self.is_interactive:
+            self.live.vertical_overflow = "visible"
 
-    def get_renderable(self) -> ConsoleRenderable | RichCast | str:
-        renderable = Group(self.table, *self.get_renderables())
-        return renderable
+        self.update_table()
+
+    def update_table(self) -> None:
+        """
+        Update the status table with the latest information from the controller context.
+
+        Args:
+            None.
+
+        Returns:
+            None.
+
+        Raises:
+            None.
+        """
+        self.table = render_status_table(self.ctx)
+
+    def get_renderable(self):
+        """
+        Get the renderable object for the status table, wrapped in a Group.
+
+        Args:
+            None.
+
+        Returns:
+            A Rich renderable object representing the status table.
+
+        Raises:
+            None.
+        """
+        # Retrieve the raw status table, if it exists. If not, return a Group containing
+        # only the other renderables.
+        raw_table = getattr(self, "table", None)
+        if not raw_table:
+            return Group(*self.get_renderables())
+
+        # Wrap the raw table in a WrappingSafeTable to ensure it is displayed correctly.
+        protected_table = WrappingSafeTable(raw_table)
+        return Group(*self.get_renderables(), protected_table)
+
+    def stop(self) -> None:
+        """
+        Stop the live display and print the final state if animation was disabled.
+
+        Args:
+            None.
+
+        Returns:
+            None.
+
+        Raises:
+            None.
+        """
+        super().stop()
+
+        # If animation was disabled for a file, print the final state once at the end.
+        if getattr(self, "disable", False):
+            self.update_table()
+
+            # Print the task description
+            for task in self.tasks:
+                self.console.print(task.description)
+
+            # Print the protected table
+            raw_table = getattr(self, "table", None)
+            if raw_table:
+                self.console.print(WrappingSafeTable(raw_table))
 
 
-def controller_cleanup_wrapper(ctx):
-    def controller_cleanup():
+def controller_cleanup_wrapper(
+    ctx: ControllerContext | UnifiedShellContext,
+):
+    def controller_cleanup() -> None:
         log = logging.getLogger("controller.shell_utils")
-        # remove the shell from the controller broadcast list
         dead = False
         who = ""
 
@@ -240,7 +510,9 @@ def controller_cleanup_wrapper(ctx):
     return controller_cleanup
 
 
-def controller_setup(ctx, controller_address):
+def controller_setup(
+    ctx: ControllerContext | UnifiedShellContext, controller_address: str
+) -> Description:
     log = logging.getLogger("controller.shell_utils")
     if not hasattr(ctx, "took_control"):
         raise DruncSetupException(
@@ -291,8 +563,6 @@ def controller_setup(ctx, controller_address):
         f"{controller_address} is '{desc.name}.{desc.session}' (name.session), starting listening..."
     )
     ctx.get_driver("controller").name = f"{desc.name}.{desc.session}"
-    if desc.HasField("broadcast"):
-        ctx.start_listening_controller(desc.broadcast)
 
     log.debug("Connected to the controller")
 
@@ -335,7 +605,9 @@ def controller_setup(ctx, controller_address):
     return desc
 
 
-def search_fsm_command(command_name: str, command_list: list[FSMCommand]):
+def search_fsm_command(
+    command_name: str, command_list: list[FSMCommand]
+) -> FSMCommand | None:
     for command in command_list:
         if command_name == command.name:
             return command
@@ -378,13 +650,17 @@ class UnhandledArguments(ArgumentException):
         super(UnhandledArguments, self).__init__(message)
 
 
-def format_bool(b, format=["dark_green", "red"], false_is_good=False):
+def format_bool(
+    b: bool,
+    format: Sequence[str] = ("dark_green", "red"),
+    false_is_good: bool = False,
+) -> str:
     index_true = 0 if not false_is_good else 1
     index_false = 1 if not false_is_good else 0
     return f"[{format[index_true]}]Yes[/]" if b else f"[{format[index_false]}]No[/]"
 
 
-def tree_prefix(i, n):
+def tree_prefix(i: int, n: int) -> str:
     first_one = "└── "
     first_many = "├── "
     next = "├── "
@@ -402,7 +678,7 @@ def tree_prefix(i, n):
 def validate_and_format_fsm_arguments(
     arguments: dict[str, int | bool | str | float | None] | None,
     command_arguments: list[Argument],
-) -> dict[str, int | bool | str | float | None]:
+) -> dict[str, any_pb2.Any]:
     """
     Validates and formats the arguments passed to an FSM command based on the command's
     argument descriptions.
@@ -423,7 +699,7 @@ def validate_and_format_fsm_arguments(
 
     # Define the output dict that will be sent to the controller, with argument names
     # and their formatted values
-    out_dict: dict[str, any_pb2] = {}
+    out_dict: dict[str, any_pb2.Any] = {}
 
     # Strip out any arguments that are None, as they are considered not passed, and will
     # be set to default values if they exist, or raise an error if they are mandatory
@@ -437,7 +713,6 @@ def validate_and_format_fsm_arguments(
     for argument_desc in command_arguments:  #  type: Argument
         aname: str = argument_desc.name
         atype: str = Argument.Type.Name(argument_desc.type)
-        adefa: str | int | float | bool | None = argument_desc.default_value
 
         # Check for duplicate arguments
         if aname in out_dict:
@@ -453,7 +728,8 @@ def validate_and_format_fsm_arguments(
         # If the argument is not passed, and it has a default value, use the default value
         value: str | int | float | bool | None = arguments.get(aname)
         if value is None:
-            out_dict[aname] = adefa
+            if argument_desc.HasField("default_value"):
+                out_dict[aname] = argument_desc.default_value
             continue
 
         # Convert the argument value to the appropriate type based on the argument
@@ -490,7 +766,9 @@ def validate_and_format_fsm_arguments(
     return out_dict
 
 
-def collect_not_ready(response, found=None):
+def collect_not_ready(
+    response: StatusResponse, found: list[str] | None = None
+) -> list[str]:
     if found is None:
         found = []
 
@@ -536,6 +814,7 @@ def run_one_fsm_command(
     if (
         obj.running_mode in [UnifiedShellMode.BATCH, UnifiedShellMode.SEMIBATCH]
         and obj.get_driver("controller").status().status.in_error
+        and not obj.no_stop_error_batch_mode
     ):
         obj.get_driver("controller").status()
         log.error(
@@ -573,7 +852,7 @@ def run_one_fsm_command(
     else:
 
         class DummyCommand:
-            pass
+            arguments: list[Argument]
 
         command_desc = DummyCommand()
         command_desc.arguments = []
@@ -636,14 +915,45 @@ def run_one_fsm_command(
             str(ae)
         )  # TODO: Manually raise exception, see if the str declaration is needed with rich handling
         return
-    except ServerTimeout as e:
-        log.error(e)
+    except ServerTimeout:
         log.error(
             "The command timed out, unfortunately this means the server is in undefined state, and [red]your best option at this stage is to [bold]terminate[/bold] and [bold]boot[/bold][/]."
         )
-        log.error(
-            "Alternatively, if you are patient, you can try to wait a bit longer and send [yellow]'status'[/yellow] to check if the command ends up being executed (you may want to check the logs of the controller and application with the [yellow]'logs'[/yellow] command)."
+        # The following line is outdated, but in the future when error states and their
+        # recovery are better defined, we can provide better options to the user.
+        # log.error(
+        #     "Alternatively, if you are patient, you can try to wait a bit longer and send [yellow]'status'[/yellow] to check if the command ends up being executed (you may want to check the logs of the controller and application with the [yellow]'logs'[/yellow] command)."
+        # )
+
+        # Mark the controller as in error state, so that if the user tries to run
+        # another command, it will be prevented, and they will be encouraged to check
+        # the error application logs
+        status_response = obj.get_driver("controller").status()
+        apps_that_timed_out = get_all_apps_with_named_substate(
+            status_response, "executing_cmd"
         )
+        apps_that_timed_out_str = ", ".join(apps_that_timed_out)
+        err_str = (
+            "The session did not complete the stateful transition in the specified "
+            f"time of {timeout} seconds. To investigate the cause, [yellow]check the "
+            f"logs of {apps_that_timed_out_str} with the logs command[/] as:"
+        )
+        log.error(err_str)
+        for app in apps_that_timed_out:
+            log.error(f"\t[yellow]logs -n {app}[/]")
+        obj.get_driver("controller").send_log(
+            err_str, severity="ERROR", logger=LoggerTarget.MAIN
+        )
+        obj.get_driver("controller").to_error(
+            execute_on_all_subsequent_children_in_path=False
+        )
+
+        statuses = obj.get_driver("controller").status()
+        descriptions = obj.get_driver("controller").describe()
+        t = get_status_table(statuses, descriptions)
+        obj.print(t)
+        obj.print_status_summary()
+
         return
 
     if not result:
@@ -654,7 +964,9 @@ def run_one_fsm_command(
     t.add_column("Command execution")
     t.add_column("FSM transition")
 
-    def bool_to_success(flag_message, message_type):
+    def bool_to_success(
+        flag_message: int, message_type: type[ResponseFlag] | type[FSMResponseFlag]
+    ) -> str:
         flag = message_type.Name(flag_message).replace("_", " ").title()
         success = False
 
@@ -671,7 +983,9 @@ def run_one_fsm_command(
 
         return f"[dark_green]{flag}[/]" if success else f"[red]{flag}[/]"
 
-    def add_to_table(table, response, prefix=""):
+    def add_to_table(
+        table: Table, response: FSMExecutionResponseLike, prefix: str = ""
+    ) -> None:
         executed_command = response.flag == ResponseFlag.EXECUTED_SUCCESSFULLY
 
         table.add_row(
@@ -687,12 +1001,13 @@ def run_one_fsm_command(
             add_to_table(table, child_response, "  " + prefix)
 
     add_to_table(t, result)
-    obj.print(t)  # rich tables require console printing
 
-    statuses = obj.get_driver("controller").status()
-    descriptions = obj.get_driver("controller").describe()
-    t = get_status_table(statuses, descriptions)
-    obj.print(t)
+    execution_report_table = format_table_width(obj, t, False)
+    obj.print(execution_report_table, soft_wrap=True)
+
+    status_table = format_table_width(obj, render_status_table(obj), False)
+    obj.print(status_table, soft_wrap=True)
+
     obj.print_status_summary()
 
 
@@ -713,7 +1028,7 @@ def generate_fsm_command(ctx, transition: FSMCommandDescription, controller_name
     """
 
     # Construct the partial command executing the defined FSM command with click options
-    cmd: functools.partial = functools.partial(
+    cmd = functools.partial(
         run_one_fsm_command,
         controller_name=controller_name,
         transition_name=transition.name,
@@ -727,7 +1042,8 @@ def generate_fsm_command(ctx, transition: FSMCommandDescription, controller_name
     )(cmd)
 
     # Define the mapping of gRPC argument types to click types
-    type_map: dict[int, str | int | float | bool] = {
+    ClickValueType: TypeAlias = type[str] | type[int] | type[float] | type[bool]
+    type_map: dict[int, ClickValueType] = {
         Argument.Type.STRING: str,
         Argument.Type.INT: int,
         Argument.Type.FLOAT: float,
@@ -735,8 +1051,16 @@ def generate_fsm_command(ctx, transition: FSMCommandDescription, controller_name
     }
 
     # Define the mapping of gRPC argument types to their corresponding protobuf message
-    # types for default value unpacking
-    msg_map: dict(any_pb2) = {
+    # types for default value unpacking. The ProtobufScalarMsgType is a type alias for
+    # the union of the protobuf message types used for scalar values, and is used by
+    # mypy to check the types of the unpacked default values. The msg_map is the
+    # dictionary that maps the gRPC argument types to their corresponding protobuf
+    # message types, which are later handed off to click to define the click command
+    # options.
+    ProtobufScalarMsgType: TypeAlias = (
+        type[string_msg] | type[int_msg] | type[float_msg] | type[bool_msg]
+    )
+    msg_map: dict[ClickValueType, ProtobufScalarMsgType] = {
         str: string_msg,
         int: int_msg,
         float: float_msg,
@@ -748,7 +1072,7 @@ def generate_fsm_command(ctx, transition: FSMCommandDescription, controller_name
     for argument in transition.arguments:  # type: Argument
         # Map the gRPC argument type to a click type, raise an exception if the type is
         # unhandled
-        atype: Argument.Type.V = type_map.get(argument.type)
+        atype = type_map.get(argument.type)
         if not atype:
             raise Exception(f"Unhandled argument type '{argument.type}'")
 
@@ -797,20 +1121,27 @@ def generate_fsm_command(ctx, transition: FSMCommandDescription, controller_name
 @functools.lru_cache(maxsize=4096)
 def get_hostname_smart(ip_or_host: str, timeout_seconds: float = 0.2) -> str:
     """
-    Resolves an IP to a hostname, with optimizations:
+    Resolves an IP or hostname to a human-readable hostname, with optimizations:
     1. Caches all results.
-    2. Immediately skips private/internal IPs (like K8s).
-    3. Uses a short timeout for public IPs.
+    2. Replaces localhost/loopback with the machine's actual hostname.
+    3. Uses a short timeout for reverse DNS lookups on other IPs.
     """
 
     if not ip_or_host:
         return ""
 
+    if ip_or_host == "localhost":
+        return socket.getfqdn()
+
     try:
         ip_address = ipaddress.ip_address(ip_or_host)
     except ValueError:
-        return ip_or_host
-    # If public IP, try to resolve it.
+        fqdn = socket.getfqdn(ip_or_host)
+        return fqdn if fqdn else ip_or_host
+
+    if ip_address.is_loopback:
+        return socket.getfqdn()
+
     original_timeout = socket.getdefaulttimeout()
     try:
         socket.setdefaulttimeout(timeout_seconds)

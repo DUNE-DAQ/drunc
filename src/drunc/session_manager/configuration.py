@@ -4,6 +4,7 @@ from drunc.utils.configuration import ConfHandler
 
 
 class SessionManagerConfHandler(ConfHandler):
-    """TODO: Change this exception to something more useful."""
+    """Handler for session manager configuration."""
 
-    pass
+    def populate_from_dict(self, data: dict[str, object]) -> None:
+        pass

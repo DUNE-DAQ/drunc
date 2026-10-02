@@ -7,12 +7,6 @@
     "authoriser": {
         "type": "dummy"
     },
-
-    "broadcaster": {
-        "type": "kafka",
-        "kafka_address": "monkafka.cern.ch:30092",
-        "publish_timeout": 2
-    },
     "environment": {
         "DUNEDAQ_ERS_ERROR": "erstrace,throttle,lstdout,protobufstream(monkafka.cern.ch:30092)",
         "DUNEDAQ_ERS_FATAL": "erstrace,lstdout,protobufstream(monkafka.cern.ch:30092)",

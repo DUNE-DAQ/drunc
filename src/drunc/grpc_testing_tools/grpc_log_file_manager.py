@@ -25,11 +25,12 @@ class LogFileManager:
     cleanup after test completion to prevent file system clutter.
     """
 
-    def __init__(self):
+    def __init__(self) -> None:
         """Initialise log file manager with empty state."""
-        self.log_files = []
-        self.file_positions = {}
-        self.temp_dir = None
+        self.log_files: list[str] = []
+        self.file_positions: dict[str, int] = {}
+        self.temp_dir: str | None = None
+        self.detected_error: dict[str, object] | None = None
 
     def create_log_file(self, process_name: str) -> str:
         """
@@ -65,7 +66,7 @@ class LogFileManager:
         """
         return self.log_files.copy()
 
-    def cleanup(self):
+    def cleanup(self) -> None:
         """Remove all log files and temporary directory."""
         for log_file in self.log_files:
             try:
@@ -109,7 +110,7 @@ class LogFileManager:
 
         return detected_errors
 
-    def check_for_errors(self):
+    def check_for_errors(self) -> dict[str, object] | None:
         """
         Check all log files for gRPC error patterns.
 

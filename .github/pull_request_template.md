@@ -46,13 +46,13 @@ Unit tests - some tests can't be ran on the CI. This is [documented](https://git
 Integration tests - the `daqsystemtest_integtest_bundle` requires a lot of resources, and connections to the EHN1 infrastructure. Check the [cross referenced list](https://github.com/DUNE-DAQ/drunc/wiki#users-with-access-to-clusters-for-running-daqsystemtest_integtest_bundlesh) if you can't run these. The developer needs to run at least the [.](https://github.com/DUNE-DAQ/daqsystemtest/blob/develop/integtest/minimal_system_quick_test.py)
 
 - Unit tests (`pytest --marker`) passed
-  - [ ] With relevant marker
-  - [ ] Without marker
+  - [ ] With relevant marker `_INSERT MAKER NAME HERE_`
+  - [ ] Relying on the CI workflow
 - Integration tests passed
   - [ ] Only `daqsystemtest_integtest_bundle.sh -k minimal_system_quick_test.py`
   - [ ] Full `daqsystemtest_integtest_bundle.sh`
 - [ ] Testing skipped as there are no core code changes in this PR, this only relates to documentation/CI workflows
-- [ ] Drunc integration tests pass (`./scripts/drunc_integtest_bundle.sh`)
+- [ ] Drunc integration tests pass (`dunedaq_integtest_bundle.sh -r drunc`)
 
 ## Final checklist prior to marking this as "Ready for Review"
 

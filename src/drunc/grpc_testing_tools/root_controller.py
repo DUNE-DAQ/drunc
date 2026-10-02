@@ -10,10 +10,17 @@ import os
 import signal
 import threading
 
+import grpc
+
 from drunc.grpc_testing_tools.test_services_pb2 import (
+    CommandRequest,
+    CommandResponse,
+    DummyRequest,
     DummyResponse,
     KillRequest,
     KillResponse,
+    StatusRequest,
+    StatusResponse,
 )
 from drunc.grpc_testing_tools.test_services_pb2_grpc import (
     RootControllerServiceServicer,
@@ -29,11 +36,13 @@ class RootControllerServiceImpl(RootControllerServiceServicer):
     command processing, status collection, and graceful shutdown requests.
     """
 
-    def __init__(self):
+    def __init__(self) -> None:
         """Initialise the RootController service implementation."""
         pass
 
-    def MakeRequest(self, request, context):
+    def MakeRequest(
+        self, request: DummyRequest, context: grpc.ServicerContext
+    ) -> DummyResponse:
         """
         Handle incoming connectivity test requests.
 
@@ -46,7 +55,17 @@ class RootControllerServiceImpl(RootControllerServiceServicer):
         """
         return DummyResponse(reply=f"RootController server response: {request.message}")
 
-    def Kill(self, request: KillRequest, context) -> KillResponse:
+    def Kill(self, request: KillRequest, context: grpc.ServicerContext) -> KillResponse:
+        """
+        Handle shutdown requests from the Manager.
+
+        Args:
+            request: KillRequest containing reason and grace period
+            context: gRPC context object
+
+        Returns:
+            KillResponse indicating that shutdown has been initiated
+        """
         grace_period = (
             max(request.grace_period_seconds, 1)
             if request.grace_period_seconds > 0
@@ -63,7 +82,7 @@ class RootControllerServiceImpl(RootControllerServiceServicer):
             "Shutdown thread starting...",
         ]
 
-        def delayed_shutdown():
+        def delayed_shutdown() -> None:
             """Send SIGTERM to this process after a brief delay."""
             import time
 
@@ -77,4 +96,42 @@ class RootControllerServiceImpl(RootControllerServiceServicer):
 
         return KillResponse(
             shutdown_initiated=True, message=" | ".join(response_details)
+        )
+
+    def ReceiveCommand(
+        self, request: CommandRequest, context: grpc.ServicerContext
+    ) -> CommandResponse:
+        """
+        Handle incoming command requests from the Manager.
+
+        Args:
+            request: CommandRequest containing command details
+            context: gRPC context object
+
+        Returns:
+            CommandResponse indicating success or failure of command execution
+        """
+        # For demonstration, we simply echo back the command received
+        return CommandResponse(
+            success=True,
+            result=f"Command '{request}' received and processed by RootController.",
+            error_message="Not needed (yet)",
+        )
+
+    def ReceiveStatus(
+        self, request: StatusRequest, context: grpc.ServicerContext
+    ) -> StatusResponse:
+        """
+        Handle incoming status reports from ChildControllers.
+
+        Args:
+            request: DummyRequest containing status details
+            context: gRPC context object
+
+        Returns:
+            StatusResponse acknowledging receipt of the status report
+        """
+        # For demonstration, we simply acknowledge the status received
+        return StatusResponse(
+            received=True, acknowledgement=f"Status report received: {request}"
         )

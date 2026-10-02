@@ -37,6 +37,8 @@ def create_boot_request(process_name, tree_id, log_file, test_file_path):
     """
     simple_process_script = test_file_path.parent / "simple_process.py"
 
+    work_area_root = os.getenv("DBT_AREA_ROOT", "/tmp")
+
     boot_request = BootRequest(
         process_description=ProcessDescription(
             metadata=ProcessMetadata(
@@ -46,8 +48,13 @@ def create_boot_request(process_name, tree_id, log_file, test_file_path):
                 hostname="localhost",
                 tree_id=tree_id,
             ),
+            process_execution_directory=work_area_root,
             process_logs_path=log_file,
         )
+    )
+
+    boot_request.process_description.executable_and_arguments.add(
+        exec="cd", args=[work_area_root]
     )
 
     boot_request.process_description.executable_and_arguments.add(

@@ -6,13 +6,13 @@ import signal
 import sys
 import types
 from time import sleep
+from typing import cast
 from urllib.parse import ParseResult, urlparse
 
 import click
 import click_shell
 import conffwk
 from daqpytools.logging import logging_log_levels
-from druncschema.description_pb2 import Description
 from druncschema.process_manager_pb2 import ProcessQuery
 
 from drunc.connectivity_service.client import ConnectivityServiceClient
@@ -20,7 +20,6 @@ from drunc.controller.configuration import ControllerConfHandler
 from drunc.controller.interface.commands import (
     connect,
     disconnect,
-    echo,
     exclude,
     expert_command,
     include,
@@ -45,24 +44,27 @@ from drunc.exceptions import (
 from drunc.fsm.configuration import FSMConfHandler
 from drunc.fsm.utils import convert_fsm_transition
 from drunc.process_manager.configuration import (
+    ProcessManagerRunningMode,
     ProcessManagerTypes,
     get_process_manager_configuration,
     validate_pm_config,
 )
-from drunc.process_manager.interface.commands import (
+from drunc.process_manager.interface.process_manager import run_pm
+from drunc.process_manager.utils import get_pm_type_from_name, validate_k8s_session_name
+from drunc.unified_shell.commands import (
+    boot,
+    echo,
     flush,
     kill,
     logs,
     ps,
     restart,
+    start_shell,
     terminate,
 )
-from drunc.process_manager.interface.process_manager import run_pm
-from drunc.process_manager.utils import get_pm_type_from_name, validate_k8s_session_name
-from drunc.unified_shell.commands import boot, start_shell
 from drunc.unified_shell.context import UnifiedShellMode
 from drunc.unified_shell.shell_utils import generate_fsm_sequence_command
-from drunc.utils.configuration import ConfTypes, OKSKey
+from drunc.utils.configuration import OKSKey
 from drunc.utils.grpc_utils import ServerUnreachable
 from drunc.utils.utils import (
     format_name_for_cli,
@@ -114,6 +116,17 @@ from drunc.utils.utils import (
         "will be useful for hardware operations."
     ),
 )  # For production, change default to true/remove it
+@click.option(
+    "-nsb",
+    "--no-stop-error-batch-mode",
+    is_flag=True,
+    default=False,
+    help=(
+        "The default behaviour of the unified shell is to exit if the root-controller "
+        "of the sessions is in error. This option will allow the unified shell to "
+        "continue executing commands, mainly for use in testing scenarios."
+    ),
+)
 @click.pass_context
 def unified_shell(
     ctx: click.core.Context,
@@ -125,6 +138,7 @@ def unified_shell(
     override_logs: bool,
     log_path: str,
     safe_mode: bool,
+    no_stop_error_batch_mode: bool,
 ) -> None:
     """
     The unified shell is a command line interface to interact with the process manager
@@ -155,18 +169,41 @@ def unified_shell(
     # Set up the drunc and unified_shell loggers
     get_root_logger(log_level)
     ctx.obj.log = get_logger("unified_shell", rich_handler=True)
-    ctx.obj.log.debug("Setting up the [green]unified_shell[/green] logger")
+    ctx.obj.log.info(
+        f"User {getpass.getuser()} [green]starting the unified_shell[/green]"
+    )
 
     # Parse the process manager argument to determine if it's a config or an address
+    # If the process manager is already running, connect to it.
     process_manager_url: ParseResult = urlparse(process_manager)
-    internal_pm: bool = True
     if process_manager_url.scheme == "grpc":  # i.e. if it's an address
+        ctx.obj.log.info(
+            f"[green]Connecting to an existing process manager[/] at the address {process_manager_url.netloc}"
+        )
         internal_pm = False
+        running_mode = ProcessManagerRunningMode.Subprocess
+        ctx.obj.reset(address_pm=process_manager_url.netloc)
+        pm_type = ProcessManagerTypes[
+            ctx.obj.get_driver("process_manager").describe().type
+        ]
+        ctx.obj.log.info(
+            f"[green]Connected to the {pm_type.name} process manager[/] running at address {process_manager_url.netloc}"
+        )
+    else:
+        internal_pm = True
+        running_mode = ProcessManagerRunningMode.Standalone
+
+        pm_type = get_pm_type_from_name(process_manager)
+        ctx.obj.log.info(f"[green]Connected to the {pm_type.name} process manager[/]")
+
+    ctx.obj.log.debug(
+        f"Process manager argument parsed, internal_pm set to {internal_pm}"
+    )
 
     # If using a k8s process manager, validate the session name before proceeding
-    if get_pm_type_from_name(
-        process_manager
-    ) == ProcessManagerTypes.K8s and not validate_k8s_session_name(session_name):
+    if not validate_k8s_session_name(session_name) and (
+        pm_type == ProcessManagerTypes.K8s
+    ):
         ctx.obj.log.error(
             f"[red]Invalid session/namespace name [bold]({session_name})[/bold][/red]. "
             "Must match RFC1123 label: lowercase alphanumeric or '-', start/end with "
@@ -175,23 +212,27 @@ def unified_shell(
         sys.exit(1)
 
     # Setup configuration related context variables
-    ctx.obj.configuration_file = f"oksconflibs:{configuration_file}"
+    # Assume oksconflibs if no framework is defined
+    ctx.obj.configuration_file = (
+        lambda path: (
+            path if path.startswith("oksconflibs:") else f"oksconflibs:{path}"
+        )
+    )(configuration_file)
+
     ctx.obj.configuration_id = configuration_id
     ctx.obj.session_name = session_name
+    ctx.obj.no_stop_error_batch_mode = no_stop_error_batch_mode
 
     # Get the session DAL
     db = conffwk.Configuration(ctx.obj.configuration_file)
     session_dal = db.get_dal(class_name="Session", uid=ctx.obj.configuration_id)
     app_log_path = session_dal.log_path
 
-    ctx.obj.log.info(
-        f"[green]Setting up to use the process manager[/green] with configuration "
-        f"[green]{process_manager}[/green] and configuration id [green]"
-        f'"{configuration_id}"[/green] from [green]{ctx.obj.configuration_file}[/green]'
-    )
-
-    # Establish communication with the process manager, spawning it if needed
+    # Start the process manager if it's an internal one
     if internal_pm:  # Spawn the Process Manager
+        ctx.obj.log.info(
+            f"[green]Setting up the {pm_type.name} process manager[/] with configuration [green]{process_manager}[/green]"
+        )
         ctx.obj.log.debug(
             f"Spawning process_manager with configuration {process_manager}"
         )
@@ -224,6 +265,7 @@ def unified_shell(
                 "signal_handler": ignore_sigint_sighandler,
                 # sigint gets sent to the PM, so we need to ignore it, otherwise everytime the user ctrl-c on the shell, the PM goes down
                 "generated_port": port,
+                "running_mode": running_mode,
             },
         )
         ctx.obj.pm_process.start()
@@ -260,32 +302,28 @@ def unified_shell(
         process_manager_address = resolve_localhost_and_127_ip_to_network_ip(
             f"localhost:{port.value}"
         )
-
-    else:  # Connect to an existing process manager at the provided address
-        process_manager_address = process_manager.replace(
-            "grpc://", ""
-        )  # remove the grpc scheme
-        ctx.obj.log.info(
-            f"[green]unified_shell[/green] connected to the [green]process_manager"
-            f"[/green] at address [green]{process_manager_address}[/green]"
+        ctx.obj.reset(address_pm=process_manager_address)
+        ctx.obj.log.debug(
+            f"[green]process_manager[/green] started at address [green]"
+            f"{process_manager_address}[/green]"
         )
 
-    ctx.obj.log.debug(
-        f"[green]process_manager[/green] started, communicating through address [green]"
-        f"{process_manager_address}[/green]"
+    ctx.obj.log.info("Setting up the controller interface")
+
+    # Keep track of whether the session uses a local connectivity service
+    ctx.obj.session_uses_local_connectivity_service = (
+        session_dal.connectivity_service.host == "localhost"
     )
-    ctx.obj.reset(address_pm=process_manager_address)
 
     # Run a simple command (describe) to check the connection with the process manager
-    desc: Description | None = None
     try:
-        desc = ctx.obj.get_driver().describe()
+        ctx.obj.get_driver().describe()
     except Exception as e:
         ctx.obj.log.error(
             f"[red]Could not connect to the process manager at the address: [/red]"
             f"[green]{process_manager_address}[/green]"
         )
-        ctx.obj.log.debug(f"Reason: {e}")
+        ctx.obj.log.critical(f"Reason: {e}")
 
         if type(e) == ServerUnreachable:
             ctx.obj.log.error(
@@ -304,40 +342,18 @@ def unified_shell(
             ctx.obj.pm_process.join()
 
         sys.exit(1)
+    ctx.obj.log.debug("Communication with the process manager verified successfully")
 
-    # Broadcasting configuration if requested
-    if desc.HasField("broadcast"):
-        ctx.obj.log.debug("Broadcasting")
-        ctx.obj.start_listening_pm(
-            broadcaster_conf=desc.broadcast,
-        )
-
-    # Add the unified shell Click commands to the CLI
-    ctx.obj.log.debug("Adding [green]unified_shell[/green] commands")
-    ctx.command.add_command(boot, "boot")
-    ctx.obj.dynamic_commands.add("boot")
-
-    # Add the process manager Click commands to the CLI
-    ctx.obj.log.debug("Adding [green]process_manager[/green] commands")
-    process_manager_commands: list[click.Command] = [
-        kill,
-        terminate,
-        flush,
-        logs,
-        restart,
-        ps,
-    ]
-    for cmd in process_manager_commands:
-        ctx.command.add_command(cmd, format_name_for_cli(cmd.name))
-        ctx.obj.dynamic_commands.add(format_name_for_cli(cmd.name))
+    ctx.obj.get_driver("process_manager").send_log(
+        f"{getpass.getuser()} connected from unified shell"
+    )
 
     # Get all the controller commands by instantiating the stateful node defined in the
     # configuration and getting the FSM transitions from it.
     ctx.obj.log.debug("Defining the pseudo controller to get its FSM commands")
     controller_name = session_dal.segment.controller.id
-    controller_configuration = ControllerConfHandler(
-        type=ConfTypes.OKSFileName,
-        data=ctx.obj.configuration_file,
+    controller_configuration = ControllerConfHandler.from_oks(
+        url=ctx.obj.configuration_file,
         oks_key=OKSKey(
             schema_file="schema/confmodel/dunedaq.schema.xml",
             class_name="RCApplication",
@@ -346,8 +362,61 @@ def unified_shell(
         ),
         session_name=ctx.obj.session_name,
     )
+
     # Avoid setting up the ELISA logbook for the unified shell
     os.environ["DUNEDAQ_ELISA_LOGBOOK_APPARATUS"] = "unified_shell"
+
+    # Group the imported commands for adding to the click shell
+    command_group = cast(click.Group, ctx.command)
+    unified_shell_commands: list[click.Command] = [
+        boot,
+        flush,
+        kill,
+        echo,
+        logs,
+        ps,
+        restart,
+        start_shell,
+        terminate,
+    ]
+    process_manager_commands: list[click.Command] = [
+        kill,
+        flush,
+        logs,
+        restart,
+    ]
+    controller_commands: list[click.Command] = [
+        status,
+        recompute_status,
+        connect,
+        disconnect,
+        take_control,
+        surrender_control,
+        who_am_i,
+        who_is_in_charge,
+        include,
+        exclude,
+        wait,
+        expert_command,
+        to_error,
+    ]
+
+    # Click command groups
+    click_command_groups = [
+        process_manager_commands,
+        unified_shell_commands,
+        controller_commands,
+    ]
+    for click_command_group in click_command_groups:
+        ctx.obj.log.debug(
+            f"Adding [green]{click_command_group[0].name}[/green] commands to the click shell"
+        )
+        for cmd in click_command_group:
+            if cmd.name is not None:
+                command_group.add_command(cmd, format_name_for_cli(cmd.name))
+                ctx.obj.dynamic_commands.add(format_name_for_cli(cmd.name))
+            else:
+                ctx.obj.log.warning(f"Skipping nameless command: {cmd}")
 
     ctx.obj.log.debug("Initializing the [green]FSM[/green]")
 
@@ -356,7 +425,7 @@ def unified_shell(
     # live with it. At least until controller.core uses file handler instead of stream
     get_logger("controller.core.FSM", log_level="CRITICAL")
 
-    fsmch = FSMConfHandler(data=controller_configuration.data.controller.fsm)
+    fsmch = FSMConfHandler.from_pyobject(data=controller_configuration.controller.fsm)
 
     ctx.obj.log.debug("Initializing the [green]StatefulNode[/green]")
     stateful_node = StatefulNode(fsm_configuration=fsmch, top_segment_controller=False)
@@ -367,36 +436,15 @@ def unified_shell(
     # Add the FSM transitions and sequences as Click commands to the CLI
     ctx.obj.log.debug("Adding [green]controller[/green] commands to the click context")
     for transition in transitions.commands:
-        ctx.command.add_command(
+        command_group.add_command(
             *generate_fsm_command(ctx.obj, transition, controller_name)
         )
         ctx.obj.dynamic_commands.add(format_name_for_cli(transition.name))
     for sequence in session_dal.segment.controller.fsm.command_sequences:
-        ctx.command.add_command(
+        command_group.add_command(
             *generate_fsm_sequence_command(ctx, sequence, controller_name)
         )
         ctx.obj.dynamic_commands.add(format_name_for_cli(sequence.id))
-
-    # Add the controller Click commands to the CLI
-    controller_commands: list[click.Command] = [
-        status,
-        recompute_status,
-        connect,
-        disconnect,
-        take_control,
-        surrender_control,
-        who_am_i,
-        echo,
-        who_is_in_charge,
-        include,
-        exclude,
-        wait,
-        expert_command,
-        to_error,
-    ]
-    for cmd in controller_commands:
-        ctx.command.add_command(cmd, format_name_for_cli(cmd.name))
-        ctx.obj.dynamic_commands.add(format_name_for_cli(cmd.name))
 
     parser = ctx.command.make_parser(ctx)
     _, extract_batch_args, _ = parser.parse_args(sys.argv[1:])
@@ -405,7 +453,7 @@ def unified_shell(
     # If any of the commands is in the click commands, set batch mode
     if ctx.obj.batch_commands:
         ctx.obj.running_mode = UnifiedShellMode.BATCH
-        ctx.command.add_command(start_shell, "start-shell")
+        command_group.add_command(start_shell, "start-shell")
         ctx.obj.dynamic_commands.add("start-shell")
         validate_chain(ctx, extract_batch_args)
 
@@ -413,7 +461,7 @@ def unified_shell(
     if "start-shell" in ctx.obj.batch_commands:
         ctx.obj.running_mode = UnifiedShellMode.SEMIBATCH
 
-    def cleanup():
+    def cleanup() -> None:
         """
         Cleanup function to be called on exit.
 
@@ -437,8 +485,8 @@ def unified_shell(
                             ctx.obj.log.info(
                                 "Attempting graceful shutdown of the controller"
                             )
-                            stop_run_cmd = ctx.command.commands.get("stop-run")
-                            scrap_cmd = ctx.command.commands.get("scrap")
+                            stop_run_cmd = command_group.commands.get("stop-run")
+                            scrap_cmd = command_group.commands.get("scrap")
                             if stop_run_cmd is not None:
                                 ctx.invoke(stop_run_cmd)
                             else:
@@ -462,11 +510,11 @@ def unified_shell(
                 ctx.obj.log.error(
                     f"Could not retrieve the controller status, reason: {e}"
                 )
-            ctx.obj.delete_driver("controller")
 
         # Terminate any residual processes
         if ctx.obj.get_driver("process_manager"):
-            ctx.obj.get_driver("process_manager").terminate()
+            session_processes = ProcessQuery(session=ctx.obj.session_name)
+            ctx.obj.get_driver("process_manager").kill(session_processes)
 
         # Check if any processes are still running
         if (
@@ -505,6 +553,9 @@ def unified_shell(
                 )
 
         # Remove the connection to the process manager
+        ctx.obj.get_driver("process_manager").send_log(
+            f"{getpass.getuser()} disconnected from unified shell"
+        )
         ctx.obj.get_driver("process_manager").close()
         ctx.obj.delete_driver("process_manager")
 
@@ -521,14 +572,17 @@ def unified_shell(
             ctx.obj.log.debug("Process manager terminated")
 
         ctx.obj.log.info("[green]unified_shell exited successfully[/green]")
-        logging.shutdown()  # Shutdown logging
-        ctx.obj.terminate()  # Terminate the broadcasters in the context
-        ctx.exit()  # Close the click context
+        logging.shutdown()
+        ctx.obj.terminate()
+        # Only force a clean exit here if we're not already unwinding due to an
+        # exception, otherwise ctx.exit() would replace/hide that exception.
+        if sys.exc_info()[0] is None:
+            ctx.exit()
 
     ctx.call_on_close(cleanup)
 
     # Handle SIGTERM to gracefully shutdown the unified_shell
-    def signal_sigterm_handler(signum: int, frame: types.FrameType) -> None:
+    def signal_sigterm_handler(signum: int, frame: types.FrameType | None) -> None:
         """
         Handle the SIGTERM signal to gracefully shut down the unified_shell.
 
@@ -550,10 +604,16 @@ def unified_shell(
 
 @unified_shell.result_callback()
 @click.pass_context
-def _maybe_enter_shell(ctx, results, **_):
+def _maybe_enter_shell(ctx: click.core.Context, results: object, **_: object) -> None:
     # If user requested interactive mode at the end
     if ctx.obj.running_mode == UnifiedShellMode.SEMIBATCH:
-        sh = click_shell.make_click_shell(ctx, prompt=ctx.command.shell.prompt)
+        prompt_default = "drunc-unified-shell > "
+        shell_obj = getattr(ctx.command, "shell", None)
+        if shell_obj is not None:
+            candidate = getattr(shell_obj, "prompt", None)
+            if isinstance(candidate, str):
+                prompt_default = candidate
+        sh = click_shell.make_click_shell(ctx, prompt=prompt_default)
         sh.cmdloop()
 
 
@@ -594,7 +654,7 @@ def validate_chain(ctx: click.core.Context, chain_args: list[str]) -> None:
         ctx: Click context object containing the command registry.
         chain_args (list): Flattened list of tokens from extract_chain_tokens.
     """
-    command_names = set(ctx.command.commands.keys())
+    command_names = set(cast(click.Group, ctx.command).commands.keys())
 
     def command_can_consume_more_positionals(
         command: click.Command, provided_args: list[str]
@@ -622,7 +682,7 @@ def validate_chain(ctx: click.core.Context, chain_args: list[str]) -> None:
             cmd_args = cmd_args_real.copy()
             cmd_args_static = cmd_args_real.copy()
 
-            sub_cmd: click.Command = ctx.command.commands[cmd_name]
+            sub_cmd: click.Command = cast(click.Group, ctx.command).commands[cmd_name]
 
             # Validate the command as split by split_chain
             sub_cmd.make_context(
@@ -653,10 +713,10 @@ def validate_chain(ctx: click.core.Context, chain_args: list[str]) -> None:
                     raise DruncBatchShellMissingArg(prev_cmd_name, next_cmd_name) from e
 
     except click.NoSuchOption as e:
-        raise DruncBatchShellError(e) from e
+        raise DruncBatchShellError(str(e)) from e
 
     except click.UsageError as e:
-        raise DruncBatchShellArgError(cmd_args_static) from e
+        raise DruncBatchShellArgError(str(cmd_args_static)) from e
 
     except click.ClickException as e:
-        raise DruncBatchShellError(e) from e
+        raise DruncBatchShellError(str(e)) from e

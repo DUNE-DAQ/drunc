@@ -1,0 +1,719 @@
+"""Shared helpers for drunc integration tests.
+
+This module centralizes common patterns used by process-manager integration tests.
+Importantly, most of these are defined to help with processing the stdout log outputs
+of the integ tests.
+
+Common functions include:
+- searching ordered log output for marker lines,
+- requiring regex/string matches with informative assertion errors,
+- extracting process-table rows from `ps` command output,
+- asserting process presence/absence by friendly name.
+
+The helpers are intentionally lightweight and pytest-friendly: failures are
+reported through `assert` with context-rich messages.
+"""
+
+import os
+import re
+from collections.abc import Callable
+from pathlib import PosixPath
+
+import pytest
+
+ANSI_ESCAPE_RE = re.compile(r"\x1B\[[0-9;]*[A-Za-z]")
+
+# Define a regex for parsing UUIDs from the ps table in the drunc logsx
+UUID_RE = re.compile(
+    r"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+)
+
+# For the failure mode testing, reuqire drunc to be a part of DUNEDAQ_DB_PATH
+db_path_env = os.getenv("DUNEDAQ_DB_PATH", "")
+drunc_missing = not any(
+    "drunc" == segment for path in db_path_env.split(":") for segment in path.split("/")
+)
+
+# Define the exportable marker
+require_drunc = pytest.mark.skipif(
+    drunc_missing,
+    reason=(
+        "drunc is not present in DUNEDAQ_DB_PATH, skipping drunc integration tests; "
+        "you should run source $DBT_AREA_ROOT/pythoncode/drunc/scripts/setup_drunc_config_path.sh"
+    ),
+)
+
+
+def strip_ansi(text: str) -> str:
+    """Remove ANSI escape codes from a text block."""
+    return ANSI_ESCAPE_RE.sub("", text)
+
+
+def find_line_index(
+    lines: list[str],
+    predicate: Callable[[str], bool],
+    *,
+    start_idx: int = 0,
+) -> int | None:
+    """Return the first line index at or after `start_idx` matching `predicate`.
+
+    Returns `None` when no line matches.
+
+    Example:
+        >>> lines = [
+        ...     "[2026/03/17 10:48:10 UTC] INFO drunc.controller.iface Command wait running for 5 seconds.",
+        ...     "[2026/03/17 10:48:15 UTC] INFO drunc.controller.iface Command wait ran for 5 seconds.",
+        ...     "[2026/03/17 10:48:15 UTC] INFO drunc.echo test_recovery_post",
+        ... ]
+        >>> find_line_index(lines, lambda line: "Command wait ran" in line)
+        1
+        >>> find_line_index(lines, lambda line: "test_wait_done" in line) is None
+        True
+    """
+    return next(
+        (idx for idx in range(start_idx, len(lines)) if predicate(lines[idx])),
+        None,
+    )
+
+
+def require_line_index(
+    lines: list[str],
+    predicate: Callable[[str], bool],
+    *,
+    error_message: str,
+    start_idx: int = 0,
+) -> int:
+    """Like `find_line_index`, but assert a match exists and return its index.
+
+    Example:
+        >>> lines = [
+        ...     "[2026/03/17 10:47:38 UTC] INFO drunc.echo test_wait",
+        ...     "[2026/03/17 10:47:48 UTC] INFO drunc.echo test_wait_done",
+        ... ]
+        >>> require_line_index(
+        ...     lines,
+        ...     lambda line: "test_wait_done" in line,
+        ...     error_message="Could not find wait completion marker",
+        ... )
+        1
+    """
+    line_idx = find_line_index(lines, predicate, start_idx=start_idx)
+    assert line_idx is not None, error_message
+    return line_idx
+
+
+def check_file_containing(
+    lines: list[str],
+    file: PosixPath,
+) -> bool:
+    """
+    For each line in `lines`, check if the file contains the line.
+
+    Example:
+        >>> file = PosixPath("test_file.txt")
+        >>> file.write_text("Hello\\nWorld\\n")
+        >>> check_file_containing(["Hello", "World"], file)
+        True
+        >>> check_file_containing(["Hello", "Missing"], file)
+        False
+
+    Args:
+        lines: List of strings to check for presence in the file.
+        file: Path to the file to read and check against the lines.
+
+    Returns:
+        True if all lines are found in the file, False otherwise.
+
+    Raises:
+        None.
+    """
+    # Read in the file and split it by lines
+    try:
+        file_lines = file.read_text(encoding="utf-8").splitlines()
+    except FileNotFoundError:
+        print(f"Error: {file} not found.")
+        return False
+
+    # Check if the passed strings are present in the file lines
+    for target in lines:
+        if not any(target in file_line for file_line in file_lines):
+            return False
+
+    return True
+
+
+def require_line_containing(
+    lines: list[str],
+    text: str,
+    *,
+    error_message: str,
+    start_idx: int = 0,
+) -> int:
+    """Assert and return index of the first line containing `text`.
+
+    Example:
+    [2026/03/17] WARNING drunc.process_manager_driver Bad query for logs
+    ────────────────────────────── root-controller logs ──────────────────────────────
+    [2026/03/17] INFO drunc.init_controller Taking control of trg-controller
+
+    header_idx = require_line_containing(
+        lines,
+        "root-controller logs",
+        error_message="Did not find the 'root-controller logs' header line in stdout.",
+    )
+
+
+    """
+    return require_line_index(
+        lines,
+        lambda line: text in line,
+        error_message=error_message,
+        start_idx=start_idx,
+    )
+
+
+def require_echo_marker_index(
+    lines: list[str], echo_marker: str, *, start_idx: int = 0
+) -> int:
+    """Assert and return index of a `drunc.echo` line ending with `echo_marker`.
+    This is hardcoded since echo is a specific callable function with its own logger.
+
+    Example:
+        >>> lines = [
+        ...     "[2026/03/17 10:48:15 UTC] INFO drunc.echo test_recovery_post",
+        ...     "Processes running",
+        ... ]
+        >>> require_echo_marker_index(lines, "test_recovery_post")
+        0
+    """
+    return require_line_index(
+        lines,
+        lambda line: "drunc.echo" in line and line.rstrip().endswith(echo_marker),
+        error_message=(f"Could not find drunc.echo marker '{echo_marker}' in stdout."),
+        start_idx=start_idx,
+    )
+
+
+def require_pattern_match_index(
+    lines: list[str],
+    pattern: re.Pattern[str],
+    *,
+    error_message: str,
+    start_idx: int = 0,
+) -> tuple[int, re.Match[str]]:
+    """Assert and return `(index, match)` for first line matching `pattern`.
+
+    Example:
+        >>> lines = [
+        ...     "[2026/03/17] INFO drunc.iface Command wait running for 10 seconds.",
+        ...     "[2026/03/17] INFO drunc.iface Command wait ran for 10 seconds.",
+        ... ]
+        >>> pattern = re.compile(r"Command wait ran for (\\d+) seconds\\.")
+        >>> line_idx, match = require_pattern_match_index(
+        ...     lines,
+        ...     pattern,
+        ...     error_message="Did not find wait completion log line.",
+        ... )
+        >>> (line_idx, match.group(1))
+        (1, '10')
+    """
+    line_idx = require_line_index(
+        lines,
+        lambda line: pattern.search(line) is not None,
+        error_message=error_message,
+        start_idx=start_idx,
+    )
+    match = pattern.search(lines[line_idx])
+    assert match is not None
+    return line_idx, match
+
+
+def require_pattern_match(
+    text: str,
+    pattern: re.Pattern[str],
+    *,
+    error_message: str,
+) -> re.Match[str]:
+    """Assert `pattern` matches `text` and return the `re.Match` object.
+
+    Example:
+        >>> line = "[2026/03/17] INFO Command wait ran for 10 seconds."
+        >>> pattern = re.compile(r"Command wait ran for (\\d+) seconds\\.")
+        >>> match = require_pattern_match(
+        ...     line,
+        ...     pattern,
+        ...     error_message="Did not find wait completion log line.",
+        ... )
+        >>> match.group(1)
+        '10'
+    """
+    match = pattern.search(text)
+    assert match is not None, error_message
+    return match
+
+
+def get_lines_between_markers(
+    lines: list[str],
+    start_marker: str,
+    end_marker: str,
+    *,
+    start_idx: int = 0,
+) -> list[str]:
+    """Return lines found strictly between two marker lines.
+
+    Marker matching uses substring containment via `require_line_containing`.
+    """
+    start_line_idx = require_line_containing(
+        lines,
+        start_marker,
+        error_message=f"Did not find the '{start_marker}' header line in stdout.",
+        start_idx=start_idx,
+    )
+    end_line_idx = require_line_containing(
+        lines,
+        end_marker,
+        error_message=f"Did not find the '{end_marker}' footer line in stdout.",
+        start_idx=start_line_idx + 1,
+    )
+    return lines[start_line_idx + 1 : end_line_idx]
+
+
+def assert_contains_between_markers(
+    lines: list[str],
+    start_marker: str,
+    end_marker: str,
+    expected_text: str,
+    *,
+    start_idx: int = 0,
+) -> None:
+    """Assert that `expected_text` appears between two marker lines."""
+    between = get_lines_between_markers(
+        lines,
+        start_marker,
+        end_marker,
+        start_idx=start_idx,
+    )
+    assert any(expected_text in line for line in between), (
+        f"Did not find '{expected_text}' between {start_marker} and {end_marker}.\nBetween:\n"
+        + "\n".join(between)
+    )
+
+
+def get_text_between_echo_markers(
+    lines: list[str],
+    start_marker: str,
+    end_marker: str,
+    *,
+    start_idx: int = 0,
+) -> str:
+    """Return concatenated text between two `drunc.echo` markers."""
+    echo_start_idx = require_echo_marker_index(lines, start_marker, start_idx=start_idx)
+    echo_end_idx = require_echo_marker_index(
+        lines, end_marker, start_idx=echo_start_idx + 1
+    )
+    return "\n".join(lines[echo_start_idx + 1 : echo_end_idx])
+
+
+def assert_match_contains_uuid(
+    text: str,
+    pattern: re.Pattern[str],
+    *,
+    error_message: str,
+) -> str:
+    """Assert `pattern` matches and group(1) is a valid UUID; return the UUID."""
+    match = require_pattern_match(text, pattern, error_message=error_message)
+    matched_uuid = match.group(1)
+    assert UUID_RE.match(matched_uuid), (
+        f"Expected the matched log line to contain a UUID, got: {matched_uuid}"
+    )
+    return matched_uuid
+
+
+def assert_rows_have_valid_uuids(
+    rows: list[dict[str, str]],
+    *,
+    name_column: str = "friendly_name",
+    uuid_column: str = "uuid",
+) -> None:
+    """Assert each row has a valid UUID in `uuid_column`."""
+    for row in rows:
+        assert UUID_RE.match(row[uuid_column]), (
+            f"Expected a valid UUID for process '{row[name_column]}', got '{row[uuid_column]}'"
+        )
+
+
+# ── Table parsing ──────────────────────────────────────────────────────────────
+_PS_COLUMNS = [
+    "session",
+    "friendly_name",
+    "user",
+    "host",
+    "uuid",
+    "status",
+    "exit_code",
+]
+_STATUS_COLUMNS = [
+    "name",
+    "info",
+    "state",
+    "substate",
+    "in_error",
+    "included",
+    "endpoint",
+]
+_EXEC_REPORT_COLUMNS = ["name", "command_execution", "fsm_transition"]
+_RUN_INFO_COLUMNS = ["key", "value"]
+_TABLE_COLUMNS = {
+    "ps": _PS_COLUMNS,
+    "status": _STATUS_COLUMNS,
+    "exec_report": _EXEC_REPORT_COLUMNS,
+    "run_info": _RUN_INFO_COLUMNS,
+}
+
+
+def get_table_columns(table_type: str) -> list[str]:
+    """
+    Get the expected column entries based on the table type.
+
+    Args:
+        table_type: the expected type of table
+
+    Returns:
+        list of expected table entries
+
+    Raises:
+        None
+    """
+    if table_type not in _TABLE_COLUMNS:
+        raise ValueError(f"Unknown table type: {table_type}")
+    return _TABLE_COLUMNS[table_type]
+
+
+def _parse_table_from_index(
+    lines: list[str], start_idx: int, table_type: str
+) -> list[dict[str, str]]:
+    """Parse a Unicode box table starting after `start_idx`, mapping cells to `columns`.
+
+    Expects rows that start with `│` and stops at a line starting with `└`.
+    Rows with fewer cells than `columns` are silently skipped.
+    """
+    rows: list[dict[str, str]] = []
+    columns = get_table_columns(table_type)
+    column_len = len(columns)
+    header_row = True
+
+    for line in lines[start_idx + 1 :]:
+        stripped = line.strip()
+        if stripped.startswith("└"):
+            break
+        if not stripped.startswith("│"):
+            continue
+        cells = [cell.strip() for cell in stripped.strip("│").split("│")]
+
+        # ps tables can omit the exit-status column if nothing died; detect the
+        # narrower shape from the first data row.
+        if header_row and table_type == "ps" and len(cells) < column_len:
+            columns = columns[: len(cells)]
+            column_len = len(cells)
+
+        if len(cells) < column_len:
+            continue
+        header_row = False
+        rows.append(dict(zip(columns, cells)))
+
+    return rows
+
+
+def _get_table_after_echo(
+    lines: list[str],
+    echo_marker: str,
+    header_keyword: str,
+    table_type: str,
+) -> list[dict[str, str]]:
+    """Return parsed table rows found after `echo_marker`, anchored by `header_keyword`.
+
+    Args:
+        stdout:          Raw stdout string (ANSI stripping is handled internally).
+        echo_marker:     The drunc.echo marker to anchor the search.
+        header_keyword:  Substring identifying the table header line.
+        columns:         Ordered column names to map to each cell.
+
+    Returns:
+        Parsed rows as a list of dicts. Empty list if no table is found.
+    """
+    echo_idx = require_echo_marker_index(lines, echo_marker)
+
+    table_start_idx = find_line_index(
+        lines,
+        lambda line: header_keyword in line,
+        start_idx=echo_idx + 1,
+    )
+    if table_start_idx is None:
+        return []
+
+    return _parse_table_from_index(lines, table_start_idx, table_type)
+
+
+def get_ps_table_after_echo(lines: list[str], echo_marker: str) -> list[dict[str, str]]:
+    """Return parsed process-table rows found after a specific echo marker.
+
+    If no process table is found after the marker, returns an empty list.
+
+    Example:
+        >>> stdout = (
+        ...     "[2026/03/17 10:48:15 UTC] INFO drunc.echo test_recovery_post\n"
+        ...     "Processes running\n"
+        ...     "│ minimal │ root-controller │ emmuhamm │ localhost │ f201f9c7-b910-4100-bd78-11765a4d2ee1 │ True │ 0 │\n"
+        ...     "└"
+        ... )
+        >>> table = get_ps_table_after_echo(stdout, "test_recovery_post")
+        >>> table[0]["friendly_name"]
+        'root-controller'
+    """
+    return _get_table_after_echo(lines, echo_marker, "Processes running", "ps")
+
+
+def get_status_table_after_echo(
+    lines: list[str], echo_marker: str
+) -> list[dict[str, str]]:
+    """Return parsed status-table rows found after a specific echo marker.
+
+    If no status table is found after the marker, returns an empty list.
+
+    The table is structured as
+    | Name | Info | State | Substate | In error | Included | Endpoint |
+
+    Example:
+        >>> stdout = (
+        ...     "[2026/03/17 10:48:15 UTC] INFO drunc.echo test_status_marker\n"
+        ...     "unit-test status\n"
+        ...     "│ root-controller │  │ initial │ initial │ No | Yes │ grpc://np04-srv-029.cern.ch:30006 │\n"
+        ...     "└"
+        ... )
+        >>> table = get_status_table_after_echo(stdout, "test_status_marker")
+        >>> expected_row = {
+        ...     "Name": "root-controller",
+        ...     "Info": "",
+        ...     "State": "initial",
+        ...     "Substate": "initial",
+        ...     "In error": "No",
+        ...     "Included": "Yes",
+        ...     "Endpoint": "grpc://np04-srv-029.cern.ch:30006",
+        ... }
+        >>> table[0] == expected_row
+        True
+
+    Returns:
+        Parsed rows with keys: name, info, state, substate, in_error, included, endpoint.
+
+    Raises:
+        None
+    """
+    return _get_table_after_echo(lines, echo_marker, "status", "status")
+
+
+def get_execution_report_after_echo(
+    lines: list[str], echo_marker: str
+) -> list[dict[str, str]]:
+    """Return parsed execution-report rows found after a specific echo marker.
+
+    If no execution report is found after the marker, returns an empty list.
+
+    Returns:
+        Parsed rows with keys: name, command_execution, fsm_transition.
+    """
+    return _get_table_after_echo(lines, echo_marker, "execution report", "exec_report")
+
+
+# ── Process table helpers ──────────────────────────────────────────────────────
+
+
+def get_column_for_friendly_name(
+    ps_table: list[dict[str, str]], friendly_name: str, column: str
+) -> str:
+    """Return the column for `friendly_name` from a parsed process table.
+
+    Raises:
+        AssertionError: if the friendly name is absent.
+    """
+    for row in ps_table:
+        if row["friendly_name"].strip() == friendly_name:
+            return row[column]
+
+    available_names = ", ".join(row["friendly_name"].strip() for row in ps_table)
+    raise AssertionError(
+        f"Could not find friendly name '{friendly_name}' in ps table. "
+        f"Available names: {available_names}"
+    )
+
+
+#! Replace this with a generic one
+def get_rows_from_table(
+    table: list[dict[str, str]], column: str, value: str
+) -> list[dict[str, str]]:
+    """
+    Return all rows whose `column` matches `value`exactly after stripping.
+
+    Args:
+        table: List of dictionaries representing the table rows.
+        column: The column name to match against.
+        value: The value to match in the specified column.
+
+    Returns:
+        List of dictionaries representing the matching rows.
+
+    Raises:
+        KeyError: If the specified column does not exist in the table rows.
+    """
+    return [row for row in table if row[column].strip() == value]
+
+
+def get_rows_by_friendly_name_from_ps_table(
+    ps_table: list[dict[str, str]], friendly_name: str
+) -> list[dict[str, str]]:
+    """Return all rows whose `friendly_name` matches exactly after stripping."""
+    return get_rows_from_table(ps_table, "friendly_name", friendly_name)
+
+
+def get_rows_by_name_from_status_table(
+    status_table: list[dict[str, str]], name: str
+) -> list[dict[str, str]]:
+    """Return all rows whose `Name` matches exactly after stripping."""
+    return get_rows_from_table(status_table, "name", name)
+
+
+def assert_process_presence(
+    ps_table: list[dict[str, str]],
+    friendly_name: str,
+    *,
+    context: str,
+    expected_present: bool = True,
+) -> None:
+    """Assert whether a process is present/absent in a process table.
+
+    Args:
+        ps_table: Parsed process rows.
+        friendly_name: Process name to check.
+        expected_present: `True` if process should exist, `False` otherwise.
+        context: Short phrase appended to error text (e.g. "before kill").
+
+    Example:
+        >>> ps_table = [
+        ...     {
+        ...         "session": "minimal",
+        ...         "friendly_name": "root-controller",
+        ...         "user": "daq",
+        ...         "host": "localhost",
+        ...         "uuid": "f201f9c7-b910-4100-bd78-11765a4d2ee1",
+        ...         "alive": "True",
+        ...         "exit_code": "0",
+        ...     }
+        ... ]
+        >>> assert_process_presence(
+        ...     ps_table,
+        ...     "root-controller",
+        ...     context="before restart",
+        ...     expected_present=True,
+        ... )
+        >>> assert_process_presence(
+        ...     ps_table,
+        ...     "mlt",
+        ...     context="after restart",
+        ...     expected_present=False,
+        ... )
+    """
+    matching_rows = get_rows_by_friendly_name_from_ps_table(ps_table, friendly_name)
+
+    if expected_present:
+        assert matching_rows, (
+            f"Expected to find '{friendly_name}' in ps table {context}, but it was missing."
+        )
+        return
+
+    assert not matching_rows, (
+        f"Expected '{friendly_name}' to be absent from ps table {context}, but it is still present."
+    )
+
+
+# ── Status table assertion helpers ────────────────────────────────────────────
+
+
+def check_execution_report_success(report: list[dict[str, str]]) -> None:
+    """Assert every row in an execution report shows success for both columns.
+
+    Raises:
+        AssertionError: On the first row that fails either check,
+                        with the process name and actual values reported.
+    """
+    assert report, "Execution report is empty — nothing to check."
+
+    for row in report:
+        name = row["name"]
+        assert row["command_execution"] == "Executed Successfully", (
+            f"Process '{name}': expected command_execution='Executed Successfully', "
+            f"got '{row['command_execution']}'."
+        )
+        assert row["fsm_transition"] == "Fsm Executed Successfully", (
+            f"Process '{name}': expected fsm_transition='Fsm Executed Successfully', "
+            f"got '{row['fsm_transition']}'."
+        )
+
+
+def check_status_table_states(
+    status_table: list[dict[str, str]],
+    expected_state: str,
+) -> None:
+    """Assert that every row in a status table has the expected `state`.
+
+    Raises:
+        AssertionError: Lists all rows whose state does not match.
+    """
+    assert status_table, "Status table is empty — nothing to check."
+
+    failures = [
+        f"  '{row['name']}': state='{row['state']}'"
+        for row in status_table
+        if row["state"] != expected_state
+    ]
+    assert not failures, (
+        f"Expected all processes to have state='{expected_state}', "
+        f"but the following did not:\n" + "\n".join(failures)
+    )
+
+
+def check_status_table_substates(
+    status_table: list[dict[str, str]],
+    controller_substate: str,
+    non_controller_substate: str,
+) -> None:
+    """Assert substates based on whether a process name contains 'controller'.
+
+    - Rows whose `name` contains 'controller' must match `controller_substate`.
+    - All other rows must match `non_controller_substate`.
+
+    Raises:
+        AssertionError: Lists all rows whose substate does not match the rule.
+    """
+    assert status_table, "Status table is empty — nothing to check."
+
+    failures: list[str] = []
+    for row in status_table:
+        name = row["name"]
+        is_controller = "controller" in name
+        expected = controller_substate if is_controller else non_controller_substate
+        if row["substate"] != expected:
+            failures.append(
+                f"  '{name}': expected substate='{expected}', got '{row['substate']}'"
+            )
+
+    assert not failures, "Substate mismatch(es) found:\n" + "\n".join(failures)
+
+
+def get_run_info_after_echo(lines: list[str], echo_marker: str) -> dict[str, str]:
+    """Return parsed Run Info key-value pairs found after `echo_marker`.
+
+    The Run Info table is a two-column │key│value│ table anchored by 'Run Info'.
+    Returns a dict mapping stripped key → stripped value.
+    """
+    rows = _get_table_after_echo(lines, echo_marker, "Run Info", "run_info")
+    return {row["key"]: row["value"] for row in rows}

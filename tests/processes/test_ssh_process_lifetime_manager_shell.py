@@ -1,3 +1,5 @@
+import getpass
+import os
 from pathlib import Path
 
 from tests.processes.test_ssh_process_lifetime_manager_common import (
@@ -6,6 +8,26 @@ from tests.processes.test_ssh_process_lifetime_manager_common import (
     boot_processes_and_terminate_all_different_role_flat,
     boot_processes_and_terminate_all_same_role,
 )
+
+
+def test_ssh_process_execution_directory_access_check_shell(
+    tmp_path, ssh_manager_shell
+):
+    """The write-access preflight should work through the real SSH shell path."""
+
+    platform = os.uname().sysname.lower()
+    is_macos = "darwin" in platform
+    env = os.environ.copy()
+    env.pop("DISPLAY", None)
+    ssh_arguments = ssh_manager_shell._build_ssh_arguments(
+        "localhost", f"{getpass.getuser()}@localhost"
+    )
+
+    ssh_manager_shell._check_process_execution_directory_access(
+        ssh_arguments, str(tmp_path), env, is_macos
+    )
+
+    assert not (tmp_path / ".write_test").exists()
 
 
 def test_ssh_multi_process_lifecycle_shell(ssh_manager_shell):

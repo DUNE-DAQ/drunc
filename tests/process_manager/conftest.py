@@ -7,6 +7,12 @@ If the serialisation tests fail, it is likely that the fixtures need to be updat
 to be back in line with druncschema definitions.
 """
 
+import json
+import socket
+from collections.abc import Callable
+from types import SimpleNamespace
+from unittest.mock import Mock, mock_open
+
 import google.protobuf.any_pb2
 import pytest
 from druncschema.description_pb2 import Description
@@ -25,6 +31,60 @@ from druncschema.process_manager_pb2 import (
 from druncschema.request_response_pb2 import Request, ResponseFlag
 from druncschema.token_pb2 import Token
 
+ProcessManagerFromJson = Callable[
+    [dict[str, object], Mock], tuple[object, Mock, SimpleNamespace, Mock]
+]
+
+
+@pytest.fixture
+def process_manager_from_json(
+    monkeypatch: pytest.MonkeyPatch,
+) -> ProcessManagerFromJson:
+    """Build ProcessManagerConfHandler from in-memory JSON config data."""
+
+    def _factory(
+        config_data: dict[str, object],
+        logger: Mock,
+    ) -> tuple[object, Mock, SimpleNamespace, Mock]:
+        from drunc.process_manager import configuration as pm_configuration
+        from drunc.utils import configuration as utils_configuration
+
+        opmon_conf = SimpleNamespace(
+            path="/tmp/opmon.json",
+            session="test-session",
+            application="process_manager",
+            opmon_type="file",
+        )
+        publisher = Mock()
+
+        monkeypatch.setattr(pm_configuration.os.path, "exists", Mock(return_value=True))
+        monkeypatch.setattr(
+            "builtins.open", mock_open(read_data=json.dumps(config_data))
+        )
+        monkeypatch.setattr(
+            pm_configuration, "parse_opmon_conf", Mock(return_value=opmon_conf)
+        )
+        monkeypatch.setattr(
+            pm_configuration, "OpMonPublisher", Mock(return_value=publisher)
+        )
+        monkeypatch.setattr(pm_configuration, "KafkaOpMonPublisher", Mock())
+        monkeypatch.setattr(pm_configuration, "touch_and_chmod", Mock())
+        monkeypatch.setattr(pm_configuration, "get_logger", Mock(return_value=logger))
+        monkeypatch.setattr(
+            utils_configuration, "get_logger", Mock(return_value=logger)
+        )
+
+        handler = pm_configuration.ProcessManagerConfHandler.from_json(
+            "/tmp/process-manager.json",
+            session_name="session-from-fixture",
+            log_path="/tmp/logs",
+        )
+
+        return handler, logger, opmon_conf, publisher
+
+    return _factory
+
+
 # ============================================================================
 #  `boot` Fixtures
 # ============================================================================
@@ -36,7 +96,7 @@ def app_data():
     Provides a mock application dictionary with required keys.
     """
     return {
-        "restriction": "localhost",
+        "restriction": socket.gethostname(),
         "name": "TestApp",
         "type": "binary",
         "args": ["--arg1"],
@@ -55,7 +115,7 @@ def bootrequest(app_data):
                 user="test_user",
                 session="session1",
                 name=app_data["name"],
-                hostname="localhost",
+                hostname=socket.gethostname(),
                 tree_id=app_data["tree_id"],
             ),
             executable_and_arguments=[{"exec": "binary", "args": ["--arg1"]}],
@@ -63,6 +123,7 @@ def bootrequest(app_data):
                 **app_data["env"],
                 "DUNE_DAQ_BASE_RELEASE": "release1",
                 "SPACK_RELEASES_DIR": "spack_release",
+                "DRUNC_HOST_NAME": socket.gethostname(),
             },
             process_execution_directory="/pwd",
             process_logs_path=app_data["log_path"],
@@ -196,12 +257,21 @@ def restart_response():
     Provide a standard restart response indicating successful process restart.
 
     Returns:
-        ProcessInstanceList: Empty response indicating processes were restarted
+    ProcessInstanceList: Response with one restarted process
     """
     return ProcessInstanceList(
         name="restart_endpoint",
         token=Token(),
-        values=[],
+        values=[
+            ProcessInstance(
+                uuid=ProcessUUID(uuid="test-restart-uuid"),
+                process_description=ProcessDescription(
+                    metadata=ProcessMetadata(hostname="test-host")
+                ),
+                status_code=ProcessInstance.StatusCode.RUNNING,
+                return_code=0,
+            )
+        ],
         flag=ResponseFlag.EXECUTED_SUCCESSFULLY,
     )
 
