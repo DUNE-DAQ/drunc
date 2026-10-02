@@ -1,14 +1,13 @@
+import logging
 import os
 from typing import TYPE_CHECKING, Any, Dict, List
-
-import confmodel_dal
 
 from drunc.exceptions import DruncException, DruncSetupException
 from drunc.process_manager.configuration import get_commandline_parameters
 from drunc.utils.utils import file_is_read_only, get_logger
 
 if TYPE_CHECKING:
-    import conffwk
+    from confmodel_dal.dal_protocols import Application, Segment, Session
 
 
 def get_full_db_path(db_path: str) -> str:
@@ -32,8 +31,8 @@ def get_full_db_path(db_path: str) -> str:
 
     # Get the env var that points to the configuration files. If it doesn't exist, raise
     # an exception
-    search_path_str: str = os.environ.get("DUNEDAQ_DB_PATH", None)
-    if not search_path_str:
+    search_path_str: str = os.environ.get("DUNEDAQ_DB_PATH", "")
+    if search_path_str == "":
         err_str = "DUNEDAQ_DB_PATH not set, exiting."
         raise DruncSetupException(err_str)
 
@@ -106,7 +105,7 @@ class EnvironmentVariableCannotBeSet(DruncException):
 
 
 def entity_excluded_from_session_dal(
-    session_dal_obj: "conffwk.dal.Session", entity_id: str
+    session_dal_obj: "Session", entity_id: str
 ) -> bool:
     """
     Replaces the following without any db dependence
@@ -147,8 +146,8 @@ def entity_excluded_from_session_dal(
 def collect_apps(
     config_filename: str,
     session_name: str,
-    session_dal_obj: "conffwk.dal.Session",
-    segment_obj: "conffwk.dal.Segment",
+    session_dal_obj: "Session",
+    segment_obj: "Segment",
     env: Dict[str, str],
     tree_prefix: List[int] = [
         0,
@@ -224,8 +223,7 @@ def collect_apps(
         except Exception as e:
             log.exception(e)
             raise e
-        for app in sub_apps:
-            apps.append(app)
+        apps.extend(sub_apps)
 
     # Get all the included applications of this segment
     # Start app_index after sub-segment indices to avoid tree_id collisions
@@ -282,7 +280,7 @@ def collect_apps(
     return apps
 
 
-def get_writer_directory_path(app, log) -> str | None:
+def get_writer_directory_path(app: "Application", log: logging.Logger) -> str | None:
     # Map known OKS types to their specific writer attribute
     APP_TYPE_TO_WRITER_ATTR = {
         "DFApplication": "data_writers",
@@ -311,8 +309,8 @@ def get_writer_directory_path(app, log) -> str | None:
 
     writer = writers[0]
     params = getattr(writer, "data_store_params", None)
-    if params and getattr(params, "directory_path", None):
-        directory_path = params.directory_path
+    directory_path = getattr(params, "directory_path", None)
+    if isinstance(directory_path, str) and directory_path:
         log.debug(f"data path for app {app.id}: {directory_path}")
         return directory_path
 
@@ -320,7 +318,7 @@ def get_writer_directory_path(app, log) -> str | None:
 
 
 def collect_infra_apps(
-    session: "conffwk.dal.Session",
+    session: "Session",
     env: Dict[str, str],
     tree_prefix: List[int],
 ) -> List[Dict[str, Any]]:
@@ -371,23 +369,3 @@ def collect_infra_apps(
         )
 
     return apps
-
-
-# Search segment and all contained segments for apps controlled by
-# given controller. Return separate lists of apps and sub-controllers
-def find_controlled_apps(db, session, mycontroller, segment):
-    apps = []
-    controllers = []
-    if segment.controller.id == mycontroller:
-        for app in segment.applications:
-            apps.append(app.id)
-        for seg in segment.segments:
-            if not confmodel_dal.entity_excluded(db._obj, session.id, seg.id):
-                controllers.append(seg.controller.id)
-    else:
-        for seg in segment.segments:
-            if not confmodel_dal.entity_excluded(db._obj, session.id, seg.id):
-                aps, controllers = find_controlled_apps(db, session, mycontroller, seg)
-                if len(apps) > 0:
-                    break
-    return apps, controllers
