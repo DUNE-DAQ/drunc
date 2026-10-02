@@ -36,5 +36,13 @@ If are developing a user interface for `drunc`, you can get help here:
 
 There is more developer information in the [drunc wiki](https://github.com/DUNE-DAQ/drunc/wiki).
 
+## Pull request reviewer routing
+
+Reviewer pools are configured in `.github/reviewer-routing.yml` and use the exact labels from `.github/labeler.yml`. Each matching label selects one weighted reviewer. Weights are deterministic selection slots, not a workload guarantee. The selector is isolated behind `ReviewerSelector`; its context includes the PR, label, exclusions, and a read-only GitHub client for a future history-based selector. Changing the strategy requires replacing the selector construction in `.github/scripts/reviewer_routing.py`.
+
+Draft pull requests show a proposed route in the Actions summary only. Review requests and the notification comment are considered only when a draft is marked ready for review. The configuration starts with `dry_run: true`; replace the placeholder `alice_fake` and `bob_fake` accounts with eligible GitHub collaborators and set `dry_run: false` to enable live routing. Reviewers are never removed by this workflow, and existing requests or submitted reviews are preserved on reruns. Labels are added by the existing labeler and are not automatically removed.
+
+The privileged routing workflow uses trusted repository code and configuration, not the pull request's head branch. Changes to routing configuration and workflow code take effect after they are merged into the repository's default branch.
+
 # Release notes
 ... are [here](https://dune-daq-sw.readthedocs.io/en/latest/packages/drunc/Release-notes)
