@@ -87,9 +87,10 @@ class ProcessManagerDriver:
         except Exception as e:
             self.log.error(f"Error closing gRPC channel: {e}", exc_info=True)
 
-    def update_controller_logs(self, ctrl_dal, level):
+    def update_controller_logs(self, ctrl_dal: "conffwk.dal.Session", level: str):
         """
         Update the log level of the controller in the DAL.
+        Will automatically capitalise any string to match the configuration schema.
 
         Args:
             ctrl_dal: The controller DAL object.
@@ -101,7 +102,7 @@ class ProcessManagerDriver:
         Raises:
             None
         """
-        ctrl_dal.controller_log_level = level
+        ctrl_dal.controller_log_level = level.upper()
         return ctrl_dal
 
     # ----- Boot workflow -----
