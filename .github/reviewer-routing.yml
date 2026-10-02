@@ -2,9 +2,9 @@ dry_run: true
 labels:
   "Architecture/Design":
     reviewers:
-      - username: alice_fake_1
-        weight: 3
-      - username: bob_fake
+      - username: henry-wallace-phys
+        weight: 1
+      - username: PawelPlesniak
         weight: 1
   Controller:
     reviewers:
@@ -14,9 +14,9 @@ labels:
         weight: 1
   documentation:
     reviewers:
-      - username: alice_fake_3
-        weight: 3
-      - username: bob_fake
+      - username: henry-wallace-phys
+        weight: 10
+      - username: PawelPlesniak
         weight: 1
   gRPC:
     reviewers:
@@ -32,10 +32,10 @@ labels:
         weight: 1
   "Process Manager":
     reviewers:
-      - username: alice_fake_6
-        weight: 3
-      - username: bob_fake
+      - username: henry-wallace-phys
         weight: 1
+      - username: PawelPlesniak
+        weight: 10
   "Resource Manager":
     reviewers:
       - username: alice_fake_7
