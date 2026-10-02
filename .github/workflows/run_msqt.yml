@@ -1,0 +1,77 @@
+name: Run MSQT
+
+on:
+  pull_request:
+
+jobs:
+  install_and_test:
+
+    runs-on: ubuntu-latest
+
+    defaults:
+      run:
+        shell: bash
+
+    container:
+      image: ghcr.io/dune-daq/nightly-release-alma9:development_v5
+
+    steps:
+      - name: Check URLs
+        run: |
+          echo https://github.com/${{ github.event.pull_request.head.repo.owner.login }}/druncschema.git
+          echo https://github.com/${{ github.event.pull_request.head.repo.owner.login }}/drunc.git
+
+      - name: Checkout workflow repository
+        uses: actions/checkout@v4
+
+      - name: Setup SSH daemon
+        uses: ./.github/actions/setup-ssh-daemon
+
+      - name: Set up dev nightly
+        if: ${{ !cancelled() }}
+        uses: ./.github/actions/setup-dev-nightly
+
+      - name: Install druncschema and drunc
+        if: success()
+        run: |
+          cd nightly/NFD_DEV* || true
+          source env.sh
+          python -m pip install --upgrade pip
+          cd sourcecode
+          git clone https://github.com/${{ github.event.pull_request.head.repo.owner.login }}/druncschema.git -b ${{ github.head_ref }} || git clone https://github.com/DUNE-DAQ/druncschema.git
+          git clone https://github.com/${{ github.event.pull_request.head.repo.owner.login }}/drunc.git -b ${{ github.head_ref }} || git clone https://github.com/DUNE-DAQ/drunc.git
+          cd druncschema
+          pip install .[test]
+          cd -
+          cd drunc
+          pip install -e .[dev]
+          echo "DRUNC_DIR=$(pwd)" >> $GITHUB_ENV
+
+      - name: Test with MSQT
+        if: success()
+        run: |
+          cd nightly/NFD_DEV* || true
+          source env.sh
+          daqsystemtest_integtest_bundle.sh --stop-on-failure --pytest-options "--tb=long" -k small_footprint_quick_test.py 2>&1
+
+      - name: Print test log
+        if: always()
+        run: |
+          log=$(find /tmp -name "dunedaq_integtest_bundle_*.log" 2>/dev/null | sort | tail -1)
+          if [[ -n "$log" ]]; then
+            echo "=== Test log: $log ==="
+            cat "$log"
+          else
+            echo "No integtest bundle log file found under /tmp"
+          fi
+
+      - name: Direct pytest on failure (for diagnostics)
+        if: failure()
+        run: |
+          cd nightly/NFD_DEV* || true
+          source env.sh
+          echo "=== Relevant environment ==="
+          env | grep -E 'DAQSYSTEMTEST|DRUNC|DBT|DUNEDAQ|PYTHONPATH|PATH|USER' | sort
+          echo "=== Direct pytest run ==="
+          python -m pytest -s -v --tb=long \
+            "${DAQSYSTEMTEST_SHARE}/integtest/small_footprint_quick_test.py" 2>&1 || true

@@ -1,0 +1,18 @@
+name: Setup dev nightly
+description: Create and initialize a dev nightly DBT area
+
+runs:
+  using: composite
+  steps:
+    - name: Set up dev nightly
+      shell: bash
+      run: |
+        mkdir nightly
+        cd nightly
+        source /cvmfs/dunedaq.opensciencegrid.org/setup_dunedaq.sh
+        setup_dbt latest_v5
+        dbt-create -n last_fddaq
+        cd NFD_DEV*
+        source env.sh
+        dbt-build
+        dbt-workarea-env
