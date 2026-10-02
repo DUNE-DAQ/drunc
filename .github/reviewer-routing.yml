@@ -1,0 +1,62 @@
+dry_run: true
+labels:
+  "Architecture/Design":
+    reviewers:
+      - username: alice_fake_1
+        weight: 3
+      - username: bob_fake
+        weight: 1
+  Controller:
+    reviewers:
+      - username: alice_fake_2
+        weight: 3
+      - username: bob_fake
+        weight: 1
+  documentation:
+    reviewers:
+      - username: alice_fake_3
+        weight: 3
+      - username: bob_fake
+        weight: 1
+  gRPC:
+    reviewers:
+      - username: alice_fake_4
+        weight: 3
+      - username: bob_fake
+        weight: 1
+  K8s:
+    reviewers:
+      - username: alice_fake_5
+        weight: 3
+      - username: bob_fake
+        weight: 1
+  "Process Manager":
+    reviewers:
+      - username: alice_fake_6
+        weight: 3
+      - username: bob_fake
+        weight: 1
+  "Resource Manager":
+    reviewers:
+      - username: alice_fake_7
+        weight: 3
+      - username: bob_fake
+        weight: 1
+  "Session Manager":
+    reviewers:
+      - username: alice_fake_8
+        weight: 3
+      - username: bob_fake
+        weight: 1
+  Testing:
+    reviewers:
+      - username: alice_fake_9
+        weight: 3
+      - username: bob_fake
+        weight: 1
+  Utilities:
+    reviewers:
+      - username: alice_fake_10
+        weight: 3
+      - username: bob_fake
+        weight: 1
