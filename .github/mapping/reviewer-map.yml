@@ -1,61 +1,41 @@
 labels:
   "Architecture/Design":
     reviewers:
-      - username: henry-wallace-phys
-        weight: 1
-      - username: PawelPlesniak
+      - username: emmuhamm
         weight: 1
   Controller:
     reviewers:
-      - username: alice_fake_2
+      - username: emmuhamm
         weight: 3
-      - username: bob_fake
-        weight: 1
   documentation:
     reviewers:
-      - username: henry-wallace-phys
+      - username: emmuhamm
         weight: 10
-      - username: PawelPlesniak
-        weight: 1
   gRPC:
     reviewers:
-      - username: alice_fake_4
+      - username: emmuhamm
         weight: 3
-      - username: bob_fake
-        weight: 1
   K8s:
     reviewers:
-      - username: alice_fake_5
+      - username: emmuhamm
         weight: 3
-      - username: bob_fake
-        weight: 1
   "Process Manager":
     reviewers:
-      - username: henry-wallace-phys
+      - username: emmuhamm
         weight: 1
-      - username: PawelPlesniak
-        weight: 10
   "Resource Manager":
     reviewers:
-      - username: alice_fake_7
+      - username: emmuhamm
         weight: 3
-      - username: bob_fake
-        weight: 1
   "Session Manager":
     reviewers:
-      - username: alice_fake_8
+      - username: emmuhamm
         weight: 3
-      - username: bob_fake
-        weight: 1
   Testing:
     reviewers:
-      - username: alice_fake_9
+      - username: emmuhamm
         weight: 3
-      - username: bob_fake
-        weight: 1
   Utilities:
     reviewers:
-      - username: alice_fake_10
+      - username: emmuhamm
         weight: 3
-      - username: bob_fake
-        weight: 1
