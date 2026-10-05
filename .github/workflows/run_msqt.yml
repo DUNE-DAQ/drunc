@@ -52,16 +52,19 @@ jobs:
           cd nightly/NFD_DEV* || true
           source env.sh
           python -m pip install --upgrade pip
+          
           cd sourcecode
-          echo "Current directory: $(pwd)"
-          # Use safe bash variables enclosed in quotes
           git clone "https://github.com/${REPO_OWNER}/druncschema.git" -b "$HEAD_REF" || git clone https://github.com/DUNE-DAQ/druncschema.git
+          
           cd ../pythoncode
           git clone "https://github.com/${REPO_OWNER}/drunc.git" -b "$HEAD_REF" || git clone https://github.com/DUNE-DAQ/drunc.git
 
+          # Go back to the nightly/NFD_DEV* root folder before building
+          cd .. 
           dbt-build
           dbt-workarea-env
-          echo "Current directory after installing drunc: $(pwd)"
+          
+          echo "Current directory after building: $(pwd)"
           echo "DRUNC_DIR=$(pwd)" >> "$GITHUB_ENV"
 
       - name: Test with MSQT
@@ -91,8 +94,11 @@ jobs:
         run: |
           cd nightly/NFD_DEV* || true
           source env.sh
+          export USER=$(whoami)
+          
           echo "=== Relevant environment ==="
           env | grep -E 'DAQSYSTEMTEST|DRUNC|DBT|DUNEDAQ|PYTHONPATH|PATH|USER' | sort
           echo "=== Direct pytest run ==="
-          python -m pytest -s -v --tb=long \
-            "${DAQSYSTEMTEST_SHARE}/integtest/small_footprint_quick_test.py" 2>&1 || true
+          
+          # CRITICAL: Use a subfolder for --basetemp so pytest doesn't delete the logs generated in the previous step
+          python -m pytest -s -v --tb=long --basetemp="$TEST_DIR/direct_pytest" --skip-resource-checks "${DAQSYSTEMTEST_SHARE}/integtest/small_footprint_quick_test.py" || true
