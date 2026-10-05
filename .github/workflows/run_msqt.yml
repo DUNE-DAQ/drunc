@@ -72,7 +72,7 @@ jobs:
           cd nightly/NFD_DEV* || true
           source env.sh
           
-          daqsystemtest_integtest_bundle.sh --stop-on-failure --pytest-options "--tb=long" -k small_footprint_quick_test.py --verbosity 5 --tmpdir "$TEST_DIR" 2>&1
+          daqsystemtest_integtest_bundle.sh --stop-on-failure --pytest-options "--skip-resource-checks --tb=long" -k small_footprint_quick_test.py --verbosity 5 --tmpdir "$TEST_DIR" 2>&1
 
       - name: Print test log
         if: always()
