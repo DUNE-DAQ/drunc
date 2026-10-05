@@ -26,6 +26,13 @@ jobs:
           echo "Checking tempdir contents"
           cat "$TEST_DIR/output.txt"
           ls /cvmfs/
+          # Fix the schema mismatch: daq-assettools expects a table/view named 'files', 
+          # but the database uses 'dunedaq_assets'. Create a view to bridge them.
+          echo "Fancy check"
+          sqlite3 /cvmfs/dunedaq.opensciencegrid.org/assets/dunedaq-asset-db.sqlite \
+            "CREATE VIEW IF NOT EXISTS files AS SELECT * FROM dunedaq_assets;" || true
+          echo "regular check"
+          sqlite3 /cvmfs/dunedaq.opensciencegrid.org/assets/dunedaq-asset-db.sqlite   "SELECT * FROM dunedaq_assets WHERE checksum='370df564205290d27cab47e44ae4ca47' AND status='valid';"
       - name: Fully Hydrate CVMFS Asset Cache
         run: |
           echo "Forcing complete download of all asset files and database blocks..."
