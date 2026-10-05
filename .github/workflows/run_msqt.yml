@@ -96,9 +96,69 @@ jobs:
           source env.sh
           export USER=$(whoami)
           
-          echo "=== Relevant environment ==="
-          env | grep -E 'DAQSYSTEMTEST|DRUNC|DBT|DUNEDAQ|PYTHONPATH|PATH|USER' | sort
-          echo "=== Direct pytest run ==="
+          echo "=== Copying test script for dynamic patching ==="
+          LOCAL_TEST_SCRIPT="$TEST_DIR/small_footprint_quick_test.py"
+          cp "${DAQSYSTEMTEST_SHARE}/integtest/small_footprint_quick_test.py" "$LOCAL_TEST_SCRIPT"
           
-          # Use a subfolder for --basetemp so it does not delete previous logs
-          python -m pytest -s -v --tb=long --basetemp="$TEST_DIR/direct_pytest" --skip-resource-checks "${DAQSYSTEMTEST_SHARE}/integtest/small_footprint_quick_test.py" || true
+          echo "=== Generating Dynamic Asset Resolver ==="
+          # Use a heredoc to safely write the Python script without YAML quoting issues
+          cat << 'EOF' > resolve_assets.py
+          import sqlite3, re, sys
+          
+          script_path = sys.argv[1]
+          with open(script_path, 'r') as f:
+              content = f.read()
+              
+          # Find all requested checksums dynamically
+          checksums = set(re.findall(r'asset://\?checksum=([a-f0-9]+)', content))
+          
+          if checksums:
+              print(f"Found required assets in test script: {checksums}")
+              db_path = '/cvmfs/dunedaq.opensciencegrid.org/assets/dunedaq-asset-db.sqlite'
+              conn = sqlite3.connect(db_path)
+              conn.row_factory = sqlite3.Row
+              c = conn.cursor()
+              
+              # Retrieve all table names to avoid hardcoded schema mismatch bugs
+              c.execute("SELECT name FROM sqlite_master WHERE type='table';")
+              tables = [row['name'] for row in c.fetchall()]
+              
+              for checksum in checksums:
+                  file_path = None
+                  for table in tables:
+                      try:
+                          c.execute(f"SELECT * FROM {table} WHERE checksum=?", (checksum,))
+                          row = c.fetchone()
+                          if row:
+                              keys = row.keys()
+                              # Robustly extract path and filename regardless of exact column names
+                              subpath = row['path'] if 'path' in keys else row['subpath'] if 'subpath' in keys else None
+                              name = row['name'] if 'name' in keys else row['filename'] if 'filename' in keys else row['file_name'] if 'file_name' in keys else None
+                              
+                              if subpath and name:
+                                  file_path = f"/cvmfs/dunedaq.opensciencegrid.org/assets/{subpath}/{name}"
+                                  break
+                      except Exception:
+                          continue
+                          
+                  if file_path:
+                      print(f"Success: Resolved {checksum} -> {file_path}")
+                      content = content.replace(f"asset://?checksum={checksum}", f"file://{file_path}")
+                  else:
+                      print(f"WARNING: Checksum {checksum} not found in any CVMFS DB table.")
+                      
+              # Overwrite the script with the newly resolved file:// URIs
+              with open(script_path, 'w') as f:
+                  f.write(content)
+          else:
+              print("No asset checksums found. Proceeding without patching.")
+          EOF
+          
+          echo "=== Executing Dynamic Asset Resolver ==="
+          python resolve_assets.py "$LOCAL_TEST_SCRIPT"
+          
+          echo "=== Direct pytest run ==="
+          python -m pytest -s -v --tb=long \
+            --basetemp="$TEST_DIR/direct_pytest" \
+            --skip-resource-checks \
+            "$LOCAL_TEST_SCRIPT" || true
