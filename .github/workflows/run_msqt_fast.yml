@@ -6,15 +6,24 @@ on:
 jobs:
   install_and_test:
     runs-on: ubuntu-latest
-
     defaults:
       run:
         shell: bash
 
-    container:
-      image: ghcr.io/dune-daq/nightly-release-alma9:development_v5
-
     steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      # 1. Mount the LIVE network CVMFS on the GitHub runner host
+      - name: Mount CVMFS
+        uses: cvmfs-contrib/github-action-cvmfs@72f2a8d366043978d6aebee154bc9ed321c2f2a8
+        with:
+          cvmfs_repositories: 'dunedaq.opensciencegrid.org,dunedaq-development.opensciencegrid.org'
+
+      # 2. Pull the latest image explicitly
+      - name: Pull container image
+        run: docker pull ghcr.io/dune-daq/nightly-release-alma9:development_v5
+
       - name: Setup Temp Directory
         run: |
           TEST_DIR="$RUNNER_TEMP/my_integration_test"
