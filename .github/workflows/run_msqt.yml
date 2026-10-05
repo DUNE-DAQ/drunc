@@ -71,6 +71,8 @@ jobs:
         run: |
           cd nightly/NFD_DEV* || true
           source env.sh
+          export USER=$(whoami)
+          echo "Running test as user: $USER"
           
           daqsystemtest_integtest_bundle.sh --stop-on-failure --pytest-options "--skip-resource-checks --tb=long" -k small_footprint_quick_test.py --verbosity 5 --tmpdir "$TEST_DIR" 2>&1
 
