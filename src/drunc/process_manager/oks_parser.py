@@ -259,8 +259,9 @@ def collect_apps(
         log.debug(f"Collecting app {app.id} with args {args}")
 
         data_path = get_writer_directory_path(app, log)
-        if not data_path:
+        if data_path is None:
             log.debug(f"No data path found for app {app.id}")
+            data_path = ""
 
         apps.append(
             {
