@@ -10,84 +10,54 @@ jobs:
       run:
         shell: bash
 
+    # CRITICAL: Do not use the 'container:' directive here. 
+    # We must mount CVMFS on the host first.
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      # 1. Mount the LIVE network CVMFS on the GitHub runner host
+      # 1. Mount the LIVE network CVMFS on the Ubuntu host
       - name: Mount CVMFS
         uses: cvmfs-contrib/github-action-cvmfs@72f2a8d366043978d6aebee154bc9ed321c2f2a8
         with:
           cvmfs_repositories: 'dunedaq.opensciencegrid.org,dunedaq-development.opensciencegrid.org'
 
-      # 2. Pull the latest image explicitly
+      # 2. Pull the container (the software is fresh, but its internal CVMFS is from 2023)
       - name: Pull container image
         run: docker pull ghcr.io/dune-daq/nightly-release-alma9:development_v5
 
-      - name: Setup Temp Directory
+      # 3. Create a wrapper script to run inside the container
+      - name: Run Integration Tests
         run: |
-          TEST_DIR="$RUNNER_TEMP/my_integration_test"
-          mkdir -p "$TEST_DIR"
-          echo "TEST_DIR=$TEST_DIR" >> "$GITHUB_ENV"
+          cat << 'EOF' > run_test.sh
+          #!/bin/bash
+          set -eo pipefail
           
-          # Check the output is valid
-          echo "Test output" > "$TEST_DIR/output.txt"
-          echo "Checking tempdir contents"
-          cat "$TEST_DIR/output.txt"
-          ls /cvmfs/
-          # Fix the schema mismatch: daq-assettools expects a table/view named 'files', 
-          # but the database uses 'dunedaq_assets'. Create a view to bridge them.
-      - name: Fully Hydrate CVMFS Asset Cache
-        run: |
-          echo "Forcing complete download of all asset files and database blocks..."
-          # Recursively read every file in the assets directory to populate the local CVMFS block cache
-          find /cvmfs/dunedaq.opensciencegrid.org/assets -type f -exec cat {} > /dev/null \;
-          echo "Asset cache fully hydrated."
-      - name: Check URLs
-        env:
-          REPO_OWNER: ${{ github.event.pull_request.head.repo.owner.login }}
-        run: |
-          echo "https://github.com/${REPO_OWNER}/druncschema.git"
-          echo "https://github.com/${REPO_OWNER}/drunc.git"
-
-      - name: Checkout workflow repository
-        uses: actions/checkout@v4
-
-      - name: Setup SSH daemon
-        uses: ./.github/actions/setup-ssh-daemon
-
-      - name: Debug CVMFS Asset Database Divergence
-        if: always()
-        run: |
-          mkdir nightly || true
+          mkdir -p nightly
           cd nightly
+          
+          # Because of the bind mount, this now accesses the LIVE Alma9 CVMFS environment
           source /cvmfs/dunedaq.opensciencegrid.org/setup_dunedaq.sh
           setup_dbt latest
           dbt-setup-release -n last_fddaq
           
+          # Let's prove the database is now up to date
           DB_PATH="/cvmfs/dunedaq.opensciencegrid.org/assets/dunedaq-asset-db.sqlite"
-          
-          echo "=== 1. CVMFS Repository Revision ==="
-          # Determines if the CI runner is looking at the same filesystem snapshot as np04
-          attr -qg revision /cvmfs/dunedaq.opensciencegrid.org 2>/dev/null || echo "attr command unavailable"
-          cat /cvmfs/dunedaq.opensciencegrid.org/.cvmfs_status 2>/dev/null || echo ".cvmfs_status unavailable"
-          
-          echo "=== 2. Database File Checksum & Metadata ==="
-          # Run 'md5sum /cvmfs/.../dunedaq-asset-db.sqlite' on np04 and compare it to this output
-          md5sum "$DB_PATH"
+          echo "=== PROOF OF LIVE DATABASE ==="
           ls -l --time-style=full-iso "$DB_PATH"
-          
-          echo "=== 3. Inspect Schema and Total Rows ==="
-          # Confirms the table exists and shows how many total assets the CI database knows about
-          sqlite3 "$DB_PATH" ".tables"
           sqlite3 "$DB_PATH" "SELECT COUNT(*) FROM dunedaq_assets;"
           
-          echo "=== 4. Check for Any Matching Substring ==="
-          # Verifies if the checksum exists but has whitespace or hidden characters in CI
-          sqlite3 "$DB_PATH" "SELECT * FROM dunedaq_assets WHERE checksum LIKE '%370df564205290d27cab47e44ae4ca47%';"
+          echo "=== Executing Tests ==="
+          daqsystemtest_integtest_bundle.sh --stop-on-failure --pytest-options "--skip-resource-checks --tb=long" -k small_footprint_quick_test.py --verbosity 5
+          EOF
           
-          echo "=== 5. Sample Valid WIBEth Assets in CI ==="
-          # Prints the first 5 WIBEth checksums that the CI database ACTUALLY contains
-          sqlite3 "$DB_PATH" "SELECT checksum FROM dunedaq_assets WHERE subsystem='readout' AND label='WIBEth' AND status='valid' LIMIT 5;"
+          chmod +x run_test.sh
           
-          daqsystemtest_integtest_bundle.sh --stop-on-failure --pytest-options "--skip-resource-checks --tb=long" -k small_footprint_quick_test.py --verbosity 5 --tmpdir "$TEST_DIR" 2>&1
+          # 4. Launch Docker and INJECT the live CVMFS over the dead snapshot
+          docker run --rm \
+            -v /cvmfs:/cvmfs:shared \
+            -v "${GITHUB_WORKSPACE}:/ghw" \
+            -w /ghw \
+            ghcr.io/dune-daq/nightly-release-alma9:development_v5 \
+            /ghw/run_test.sh
