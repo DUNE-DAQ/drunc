@@ -56,13 +56,11 @@ jobs:
           echo "Current directory: $(pwd)"
           # Use safe bash variables enclosed in quotes
           git clone "https://github.com/${REPO_OWNER}/druncschema.git" -b "$HEAD_REF" || git clone https://github.com/DUNE-DAQ/druncschema.git
+          cd ../pythoncode
           git clone "https://github.com/${REPO_OWNER}/drunc.git" -b "$HEAD_REF" || git clone https://github.com/DUNE-DAQ/drunc.git
-          
-          cd druncschema
-          pip install .[test]
-          cd -
-          cd drunc
-          pip install -e .[dev]
+
+          dbt-build
+          dbt-workarea-env
           echo "Current directory after installing drunc: $(pwd)"
           echo "DRUNC_DIR=$(pwd)" >> "$GITHUB_ENV"
 
