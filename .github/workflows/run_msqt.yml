@@ -5,7 +5,6 @@ on:
 
 jobs:
   install_and_test:
-
     runs-on: ubuntu-latest
 
     defaults:
@@ -16,10 +15,23 @@ jobs:
       image: ghcr.io/dune-daq/nightly-release-alma9:development_v5
 
     steps:
-      - name: Check URLs
+      - name: Setup Temp Directory
         run: |
-          echo https://github.com/${{ github.event.pull_request.head.repo.owner.login }}/druncschema.git
-          echo https://github.com/${{ github.event.pull_request.head.repo.owner.login }}/drunc.git
+          TEST_DIR="$RUNNER_TEMP/my_integration_test"
+          mkdir -p "$TEST_DIR"
+          echo "TEST_DIR=$TEST_DIR" >> "$GITHUB_ENV"
+          
+          # Check the output is valid
+          echo "Test output" > "$TEST_DIR/output.txt"
+          echo "Checking tempdir contents"
+          cat "$TEST_DIR/output.txt"
+
+      - name: Check URLs
+        env:
+          REPO_OWNER: ${{ github.event.pull_request.head.repo.owner.login }}
+        run: |
+          echo "https://github.com/${REPO_OWNER}/druncschema.git"
+          echo "https://github.com/${REPO_OWNER}/drunc.git"
 
       - name: Checkout workflow repository
         uses: actions/checkout@v4
@@ -33,36 +45,45 @@ jobs:
 
       - name: Install druncschema and drunc
         if: success()
+        env:
+          REPO_OWNER: ${{ github.event.pull_request.head.repo.owner.login }}
+          HEAD_REF: ${{ github.head_ref }}
         run: |
           cd nightly/NFD_DEV* || true
           source env.sh
           python -m pip install --upgrade pip
           cd sourcecode
-          git clone https://github.com/${{ github.event.pull_request.head.repo.owner.login }}/druncschema.git -b ${{ github.head_ref }} || git clone https://github.com/DUNE-DAQ/druncschema.git
-          git clone https://github.com/${{ github.event.pull_request.head.repo.owner.login }}/drunc.git -b ${{ github.head_ref }} || git clone https://github.com/DUNE-DAQ/drunc.git
+          echo "Current directory: $(pwd)"
+          # Use safe bash variables enclosed in quotes
+          git clone "https://github.com/${REPO_OWNER}/druncschema.git" -b "$HEAD_REF" || git clone https://github.com/DUNE-DAQ/druncschema.git
+          git clone "https://github.com/${REPO_OWNER}/drunc.git" -b "$HEAD_REF" || git clone https://github.com/DUNE-DAQ/drunc.git
+          
           cd druncschema
           pip install .[test]
           cd -
           cd drunc
           pip install -e .[dev]
-          echo "DRUNC_DIR=$(pwd)" >> $GITHUB_ENV
+          echo "Current directory after installing drunc: $(pwd)"
+          echo "DRUNC_DIR=$(pwd)" >> "$GITHUB_ENV"
 
       - name: Test with MSQT
         if: success()
         run: |
           cd nightly/NFD_DEV* || true
           source env.sh
-          daqsystemtest_integtest_bundle.sh --stop-on-failure --pytest-options "--tb=long" -k small_footprint_quick_test.py 2>&1
+          
+          daqsystemtest_integtest_bundle.sh --stop-on-failure --pytest-options "--tb=long" -k small_footprint_quick_test.py --verbosity 5 --tmpdir "$TEST_DIR" 2>&1
 
       - name: Print test log
         if: always()
         run: |
-          log=$(find /tmp -name "dunedaq_integtest_bundle_*.log" 2>/dev/null | sort | tail -1)
+          # Ensure it looks in TEST_DIR instead of hardcoded /tmp if that's where logs go
+          log=$(find "$TEST_DIR" /tmp -name "dunedaq_integtest_bundle_*.log" 2>/dev/null | sort | tail -1)
           if [[ -n "$log" ]]; then
             echo "=== Test log: $log ==="
             cat "$log"
           else
-            echo "No integtest bundle log file found under /tmp"
+            echo "No integtest bundle log file found."
           fi
 
       - name: Direct pytest on failure (for diagnostics)
