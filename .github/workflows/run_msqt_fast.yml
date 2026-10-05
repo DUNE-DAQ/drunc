@@ -1,4 +1,4 @@
-name: Run MSQT
+name: Run MSQT FAST
 
 on:
   pull_request:
