@@ -90,7 +90,7 @@ jobs:
           fi
 
       - name: Direct pytest on failure (for diagnostics)
-        if: failure()
+        if: always()
         run: |
           cd nightly/NFD_DEV* || true
           source env.sh
@@ -100,5 +100,5 @@ jobs:
           env | grep -E 'DAQSYSTEMTEST|DRUNC|DBT|DUNEDAQ|PYTHONPATH|PATH|USER' | sort
           echo "=== Direct pytest run ==="
           
-          # CRITICAL: Use a subfolder for --basetemp so pytest doesn't delete the logs generated in the previous step
+          # Use a subfolder for --basetemp so it does not delete previous logs
           python -m pytest -s -v --tb=long --basetemp="$TEST_DIR/direct_pytest" --skip-resource-checks "${DAQSYSTEMTEST_SHARE}/integtest/small_footprint_quick_test.py" || true
