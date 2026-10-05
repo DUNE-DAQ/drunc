@@ -47,19 +47,38 @@ jobs:
       - name: Setup SSH daemon
         uses: ./.github/actions/setup-ssh-daemon
 
-      - name: Set up dev nightly and run test
+      - name: Debug CVMFS Asset Database Divergence
         if: always()
         run: |
-          mkdir nightly
+          mkdir nightly || true
           cd nightly
           source /cvmfs/dunedaq.opensciencegrid.org/setup_dunedaq.sh
           setup_dbt latest
           dbt-setup-release -n last_fddaq
-          echo "Fancy check"
-          sqlite3 /cvmfs/dunedaq.opensciencegrid.org/assets/dunedaq-asset-db.sqlite \
-            "CREATE VIEW IF NOT EXISTS files AS SELECT * FROM dunedaq_assets;" || true
-          echo "regular check"
-          sqlite3 /cvmfs/dunedaq.opensciencegrid.org/assets/dunedaq-asset-db.sqlite   "SELECT * FROM dunedaq_assets WHERE checksum='370df564205290d27cab47e44ae4ca47' AND status='valid';"
-          echo "regular check without validity check"
-          sqlite3 /cvmfs/dunedaq.opensciencegrid.org/assets/dunedaq-asset-db.sqlite   "SELECT * FROM dunedaq_assets WHERE checksum='370df564205290d27cab47e44ae4ca47';"
+          
+          DB_PATH="/cvmfs/dunedaq.opensciencegrid.org/assets/dunedaq-asset-db.sqlite"
+          
+          echo "=== 1. CVMFS Repository Revision ==="
+          # Determines if the CI runner is looking at the same filesystem snapshot as np04
+          attr -qg revision /cvmfs/dunedaq.opensciencegrid.org 2>/dev/null || echo "attr command unavailable"
+          cat /cvmfs/dunedaq.opensciencegrid.org/.cvmfs_status 2>/dev/null || echo ".cvmfs_status unavailable"
+          
+          echo "=== 2. Database File Checksum & Metadata ==="
+          # Run 'md5sum /cvmfs/.../dunedaq-asset-db.sqlite' on np04 and compare it to this output
+          md5sum "$DB_PATH"
+          ls -l --time-style=full-iso "$DB_PATH"
+          
+          echo "=== 3. Inspect Schema and Total Rows ==="
+          # Confirms the table exists and shows how many total assets the CI database knows about
+          sqlite3 "$DB_PATH" ".tables"
+          sqlite3 "$DB_PATH" "SELECT COUNT(*) FROM dunedaq_assets;"
+          
+          echo "=== 4. Check for Any Matching Substring ==="
+          # Verifies if the checksum exists but has whitespace or hidden characters in CI
+          sqlite3 "$DB_PATH" "SELECT * FROM dunedaq_assets WHERE checksum LIKE '%370df564205290d27cab47e44ae4ca47%';"
+          
+          echo "=== 5. Sample Valid WIBEth Assets in CI ==="
+          # Prints the first 5 WIBEth checksums that the CI database ACTUALLY contains
+          sqlite3 "$DB_PATH" "SELECT checksum FROM dunedaq_assets WHERE subsystem='readout' AND label='WIBEth' AND status='valid' LIMIT 5;"
+          
           daqsystemtest_integtest_bundle.sh --stop-on-failure --pytest-options "--skip-resource-checks --tb=long" -k small_footprint_quick_test.py --verbosity 5 --tmpdir "$TEST_DIR" 2>&1
