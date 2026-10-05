@@ -95,18 +95,22 @@ jobs:
           cd nightly/NFD_DEV* || true
           source env.sh
           export USER=$(whoami)
-          assets-list --subsystem readout
+          
+          # Create a dedicated directory for the test execution
+          export TEST_DIR="$RUNNER_TEMP/pytest_run"
+          mkdir -p "$TEST_DIR"
           
           LOCAL_TEST_SCRIPT="$TEST_DIR/small_footprint_quick_test.py"
           
-          # CRITICAL FIX: Use -L to copy the actual file contents, not the Spack symlink
+          # 1. Copy the actual file contents (-L dereferences the Spack CVMFS symlink)
           cp -L "${DAQSYSTEMTEST_SHARE}/integtest/small_footprint_quick_test.py" "$LOCAL_TEST_SCRIPT"
           
-          # Regex replacement: safely overrides the asset checksum with the physical file
-          sed -i -E 's|asset://\?checksum=[a-f0-9]+|file:///cvmfs/dunedaq.opensciencegrid.org/assets/files/3/7/0/wib_link_67.bin|g' "$LOCAL_TEST_SCRIPT"
+          # 2. Update the test to use the valid WIBEth asset checksum you discovered
+          sed -i 's/370df564205290d27cab47e44ae4ca47/c1410bf267da088153c41c3471e7f98e/g' "$LOCAL_TEST_SCRIPT"
           
-          echo "=== Direct pytest run on PATCHED script ==="
+          echo "=== Running updated test ==="
+          # 3. Run pytest directly on the updated script
           python -m pytest -s -v --tb=long \
-            --basetemp="$TEST_DIR/direct_pytest" \
+            --basetemp="$TEST_DIR/basetemp" \
             --skip-resource-checks \
-            "$LOCAL_TEST_SCRIPT" || true
+            "$LOCAL_TEST_SCRIPT"

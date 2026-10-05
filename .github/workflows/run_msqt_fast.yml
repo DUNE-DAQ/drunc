@@ -1,0 +1,50 @@
+name: Run MSQT
+
+on:
+  pull_request:
+
+jobs:
+  install_and_test:
+    runs-on: ubuntu-latest
+
+    defaults:
+      run:
+        shell: bash
+
+    container:
+      image: ghcr.io/dune-daq/nightly-release-alma9:development_v5
+
+    steps:
+      - name: Setup Temp Directory
+        run: |
+          TEST_DIR="$RUNNER_TEMP/my_integration_test"
+          mkdir -p "$TEST_DIR"
+          echo "TEST_DIR=$TEST_DIR" >> "$GITHUB_ENV"
+          
+          # Check the output is valid
+          echo "Test output" > "$TEST_DIR/output.txt"
+          echo "Checking tempdir contents"
+          cat "$TEST_DIR/output.txt"
+
+      - name: Check URLs
+        env:
+          REPO_OWNER: ${{ github.event.pull_request.head.repo.owner.login }}
+        run: |
+          echo "https://github.com/${REPO_OWNER}/druncschema.git"
+          echo "https://github.com/${REPO_OWNER}/drunc.git"
+
+      - name: Checkout workflow repository
+        uses: actions/checkout@v4
+
+      - name: Setup SSH daemon
+        uses: ./.github/actions/setup-ssh-daemon
+
+      - name: Set up dev nightly and run test
+        if: always()
+        run: |
+          mkdir nightly
+          cd nightly
+          source /cvmfs/dunedaq.opensciencegrid.org/setup_dunedaq.sh
+          setup_dbt latest
+          dbt-setup-release -n last_fddaq
+          daqsystemtest_integtest_bundle.sh --stop-on-failure --pytest-options "--skip-resource-checks --tb=long" -k small_footprint_quick_test.py --verbosity 5 --tmpdir "$TEST_DIR" 2>&1
