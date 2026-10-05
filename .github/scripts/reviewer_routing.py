@@ -15,6 +15,17 @@ from urllib.parse import quote
 from urllib.request import Request, urlopen
 
 import yaml
+from reviewer_checklist import (
+    CHECKLIST_END_MARKER,
+    CHECKLIST_START_MARKER,
+    ROUTING_MARKER,
+    ROUTING_STATE_PREFIX,
+    ChecklistError,
+    authoritative_comments,
+    merge_with_required_items,
+    parse_checklist_states,
+    render_checklist,
+)
 
 
 class RoutingError(Exception):
@@ -271,6 +282,8 @@ def append_summary(text: str) -> None:
 
 def visible_notification_body(routes: dict[str, list[str]]) -> str:
     """Render the human-visible PR comment without routing metadata."""
+    if not routes:
+        return "No reviewers were selected for this pull request."
     lines = ["Review requested for:"]
     lines.extend(
         f"- @{username}: {', '.join(f'`{label}`' for label in areas)}"
@@ -321,17 +334,11 @@ def apply_routes(
 ) -> tuple[dict[str, list[str]], list[str], dict[str, list[str]]]:
     """Request one eligible reviewer per label without replacing existing reviews."""
     comments = api.paginated(f"issues/{pull_number}/comments")
-    marker = "<!-- reviewer-routing:v1 -->"
-    state_prefix = "<!-- reviewer-routing-state:"
-    bot_comment = next(
-        (
-            comment
-            for comment in comments
-            if marker in comment.get("body", "")
-            and comment.get("user", {}).get("type") == "Bot"
-        ),
-        None,
-    )
+    bot_comments = authoritative_comments(comments)
+    if len(bot_comments) > 1:
+        raise RoutingError("Multiple authoritative reviewer routing comments found")
+    bot_comment = bot_comments[0] if bot_comments else None
+    state_prefix = ROUTING_STATE_PREFIX
     history: dict[str, list[str]] = {}
     if bot_comment:
         state_line = next(
@@ -440,7 +447,25 @@ def upsert_notification(
     history: dict[str, list[str]],
 ) -> None:
     """Create or update the single routing comment owned by GitHub Actions."""
-    marker = "<!-- reviewer-routing:v1 -->"
+    comments = api.paginated(f"issues/{pull_number}/comments")
+    bot_comments = authoritative_comments(comments)
+    if len(bot_comments) > 1:
+        raise RoutingError("Multiple authoritative reviewer routing comments found")
+    bot_comment = bot_comments[0] if bot_comments else None
+    checklist_states: dict[str, bool] = {}
+    if bot_comment:
+        existing_body = bot_comment.get("body", "")
+        if (
+            CHECKLIST_START_MARKER in existing_body
+            or CHECKLIST_END_MARKER in existing_body
+        ):
+            try:
+                checklist_states = parse_checklist_states(existing_body).states
+            except ChecklistError as error:
+                raise RoutingError(
+                    f"Existing reviewer checklist is malformed: {error}"
+                ) from error
+
     persisted_history = {username: list(areas) for username, areas in history.items()}
     for username, areas in routes.items():
         persisted_history.setdefault(username, [])
@@ -448,20 +473,18 @@ def upsert_notification(
             dict.fromkeys(persisted_history[username] + areas)
         )
     state = (
-        "<!-- reviewer-routing-state:"
+        ROUTING_STATE_PREFIX
         + json.dumps(persisted_history, sort_keys=True, separators=(",", ":"))
         + " -->"
     )
-    body = "\n".join([marker, state, visible_notification_body(routes)])
-    comments = api.paginated(f"issues/{pull_number}/comments")
-    bot_comment = next(
-        (
-            comment
-            for comment in comments
-            if marker in comment.get("body", "")
-            and comment.get("user", {}).get("type") == "Bot"
-        ),
-        None,
+    body = "\n".join(
+        [
+            ROUTING_MARKER,
+            state,
+            visible_notification_body(routes),
+            "",
+            render_checklist(merge_with_required_items(checklist_states)),
+        ]
     )
     if bot_comment:
         if bot_comment.get("body") != body:
@@ -500,14 +523,6 @@ def main() -> int:
     routes = plan_routes(
         current_labels, config, selector, pull_number, pull_author, api
     )
-
-    if not routes:
-        append_summary(
-            markdown_summary(
-                "Reviewer routing", {}, ["No matching labels; no reviewers requested."]
-            )
-        )
-        return 0
 
     if event_action != "ready_for_review":
         if event_draft or pull.get("draft"):
@@ -558,8 +573,7 @@ def main() -> int:
     applied_routes, notes, history = apply_routes(
         api, pull_number, current_labels, config, selector, pull_author
     )
-    if applied_routes:
-        upsert_notification(api, pull_number, applied_routes, history)
+    upsert_notification(api, pull_number, applied_routes, history)
     append_summary(markdown_summary("Reviewer routing", applied_routes, notes))
     return 0
 
