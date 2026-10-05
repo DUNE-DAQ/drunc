@@ -60,4 +60,6 @@ jobs:
             "CREATE VIEW IF NOT EXISTS files AS SELECT * FROM dunedaq_assets;" || true
           echo "regular check"
           sqlite3 /cvmfs/dunedaq.opensciencegrid.org/assets/dunedaq-asset-db.sqlite   "SELECT * FROM dunedaq_assets WHERE checksum='370df564205290d27cab47e44ae4ca47' AND status='valid';"
+          echo "regular check without validity check"
+          sqlite3 /cvmfs/dunedaq.opensciencegrid.org/assets/dunedaq-asset-db.sqlite   "SELECT * FROM dunedaq_assets WHERE checksum='370df564205290d27cab47e44ae4ca47';"
           daqsystemtest_integtest_bundle.sh --stop-on-failure --pytest-options "--skip-resource-checks --tb=long" -k small_footprint_quick_test.py --verbosity 5 --tmpdir "$TEST_DIR" 2>&1
