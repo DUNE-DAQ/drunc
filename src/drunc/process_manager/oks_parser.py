@@ -1,13 +1,21 @@
 import logging
 import os
-from typing import TYPE_CHECKING, Any, Dict, List
+from collections.abc import Sequence
+from typing import TYPE_CHECKING, Dict, List, NotRequired, TypedDict, cast
 
 from drunc.exceptions import DruncException, DruncSetupException
 from drunc.process_manager.configuration import get_commandline_parameters
 from drunc.utils.utils import file_is_read_only, get_logger
 
 if TYPE_CHECKING:
-    from confmodel_dal.dal_protocols import Application, Segment, Session
+    from confmodel_dal.dal_protocols import (
+        Application,
+        Segment,
+        Session,
+        Variable,
+        VariableBase,
+        VariableSet,
+    )
 
 
 def get_full_db_path(db_path: str) -> str:
@@ -85,7 +93,9 @@ def get_full_db_path(db_path: str) -> str:
     return resolved_path
 
 
-def collect_variables(variables, env_dict: Dict[str, str]) -> None:
+def collect_variables(
+    variables: Sequence["VariableBase"], env_dict: Dict[str, str]
+) -> None:
     """!Process a dal::Variable object, placing key/value pairs in a dictionary
 
     @param variables  A Variable/VariableSet object
@@ -94,10 +104,10 @@ def collect_variables(variables, env_dict: Dict[str, str]) -> None:
     """
     for item in variables:
         if item.className() == "VariableSet":
-            collect_variables(item.contains, env_dict)
-        else:
-            if item.className() == "Variable":
-                env_dict[item.name] = item.value
+            collect_variables(cast("VariableSet", item).contains, env_dict)
+        elif item.className() == "Variable":
+            var = cast("Variable", item)
+            env_dict[var.name] = var.value
 
 
 class EnvironmentVariableCannotBeSet(DruncException):
@@ -142,6 +152,21 @@ def entity_excluded_from_session_dal(
     return False
 
 
+class AppInfo(TypedDict):
+    """Launch description of one application, as built by collect_apps/collect_infra_apps."""
+
+    name: str
+    type: str
+    args: list[str]
+    restriction: str
+    host: str
+    env: dict[str, str]
+    tree_id: str
+    log_path: str
+    # Only set for DAQ applications, not controllers or infrastructure apps
+    data_path: NotRequired[str]
+
+
 # Recursively process all Segments in given Segment extracting Applications
 def collect_apps(
     config_filename: str,
@@ -152,7 +177,7 @@ def collect_apps(
     tree_prefix: List[int] = [
         0,
     ],
-) -> List[Dict]:
+) -> list[AppInfo]:
     """! Recustively collect (daq) application belonging to segment and its subsegments
 
     @param session_dal_obj  The session the segment belongs to
@@ -174,7 +199,7 @@ def collect_apps(
 
     collect_variables(session_dal_obj.environment, defenv)
 
-    apps = []
+    apps: list[AppInfo] = []
 
     # Add controller for this segment to list of apps
     controller = segment_obj.controller
@@ -322,7 +347,7 @@ def collect_infra_apps(
     session: "Session",
     env: Dict[str, str],
     tree_prefix: List[int],
-) -> List[Dict[str, Any]]:
+) -> list[AppInfo]:
     """! Collect infrastructure applications
 
     @param session  The session
@@ -341,7 +366,7 @@ def collect_infra_apps(
 
     collect_variables(session.environment, defenv)
 
-    apps = []
+    apps: list[AppInfo] = []
 
     for app_index, app in enumerate(session.infrastructure_applications):
         # Skip applications that do not define an application name
