@@ -3,6 +3,7 @@
 import abc
 import getpass
 from collections.abc import MutableMapping
+from time import sleep
 
 import click
 from druncschema.token_pb2 import Token
@@ -331,6 +332,27 @@ def format_table_width(
         table.width = Measurement.get(console, options, table).maximum
 
     return table
+
+
+def wait(log, sleep_time: int, progress_steps: int | None = None):
+    extra_info = "" if not progress_steps else f" with {progress_steps} steps printed"
+
+    log.info(
+        f"Command [green]wait[/green] running for {sleep_time} seconds{extra_info}."
+    )
+
+    if not progress_steps or progress_steps <= 0:
+        sleep(sleep_time)
+    else:
+        interval = sleep_time / max(progress_steps, 1)
+        elapsed = 0.0
+        while elapsed < sleep_time:
+            chunk = min(interval, sleep_time - elapsed)
+            sleep(chunk)
+            elapsed += chunk
+            log.info(f"Progress: {elapsed:g} / {sleep_time} seconds")
+
+    log.info(f"Command [green]wait[/green] ran for {sleep_time} seconds.")
 
 
 def log_pm_cmd(obj: ShellContext) -> None:
