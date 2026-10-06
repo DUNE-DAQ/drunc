@@ -27,8 +27,6 @@ jobs:
       - name: Pull container image
         run: docker pull ghcr.io/dune-daq/nightly-release-alma9:development_v5
 
-      - name: Setup SSH daemon
-        uses: ./.github/actions/setup-ssh-daemon
       # 3. Create a wrapper script to run inside the container
       - name: Run Integration Tests
         run: |
@@ -37,6 +35,28 @@ jobs:
 
           cat << 'EOF' > run_test.sh
           #!/bin/bash
+          echo "=== Configuring SSH for drunc Process Manager ==="
+
+          # 1. Generate system host keys required by the SSH daemon
+          ssh-keygen -A
+
+          # 2. Start the SSH daemon in the background
+          /usr/sbin/sshd
+
+          # 3. Generate a local SSH keypair for the test user (with no passphrase)
+          mkdir -p ~/.ssh
+          chmod 700 ~/.ssh
+          ssh-keygen -t rsa -b 4096 -f ~/.ssh/id_rsa -N ""
+
+          # 4. Authorize the local key for passwordless login
+          cat ~/.ssh/id_rsa.pub >> ~/.ssh/authorized_keys
+          chmod 600 ~/.ssh/authorized_keys
+
+          # 5. Add localhost and the container's dynamic hostname to known_hosts
+          # This prevents the interactive "Are you sure you want to continue connecting?" prompt
+          ssh-keyscan -H localhost 127.0.0.1 $(hostname) >> ~/.ssh/known_hosts
+
+          echo "=== SSH Configuration Complete ==="
           set -eo pipefail
           
           mkdir -p nightly
