@@ -22,3 +22,33 @@ jobs:
           ls -l --time-style=full-iso /
           echo "Check /cvmfs"
           ls -l --time-style=full-iso /cvmfs/
+          echo "Check DB path"
+          ls -l --time-style=full-iso /cvmfs/dunedaq.opensciencegrid.org/assets/dunedaq-asset-db.sqlite
+          echo "=== End of Base Path and DB Check ==="
+          
+      - name: Check the asset files
+        run: |
+          echo "=== Check the asset files in /cvmfs ==="
+          DB_PATH="/cvmfs/dunedaq.opensciencegrid.org/assets/dunedaq-asset-db.sqlite"
+          
+          echo "=== PROOF OF DATABASE LAYER TIMESTAMP ==="
+          ls -l --time-style=full-iso "$DB_PATH"
+          
+          echo "Total rows in DB:"
+          sqlite3 "$DB_PATH" "SELECT COUNT(*) FROM dunedaq_assets;"
+          
+          echo "=== NATIVE ASSETS LIST (subsystem=readout) ==="
+          # Use SQLite string concatenation (||) to build the absolute file path, 
+          # and -column -header to format it like the Python tool.
+          sqlite3 -header -column "$DB_PATH" "
+            SELECT 
+              checksum, 
+              subsystem, 
+              label, 
+              status, 
+              '/cvmfs/dunedaq.opensciencegrid.org/assets/' || path || '/' || name AS file_path 
+            FROM dunedaq_assets 
+            WHERE subsystem='readout';
+          "
+          
+          echo "=== End of Asset Files Check ==="
