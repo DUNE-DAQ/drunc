@@ -1,4 +1,4 @@
-name: Run MSQT
+name: Run CVMFS check
 
 on:
   never-ever:
