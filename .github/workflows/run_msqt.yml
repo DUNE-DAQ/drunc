@@ -25,7 +25,7 @@ jobs:
           echo "Test output" > "$TEST_DIR/output.txt"
           echo "Checking tempdir contents"
           cat "$TEST_DIR/output.txt"
-          ls /cvmfs/
+          ls -l --time-style=full-iso /cvmfs/
       - name: Fully Hydrate CVMFS Asset Cache
         run: |
           echo "Forcing complete download of all asset files and database blocks..."

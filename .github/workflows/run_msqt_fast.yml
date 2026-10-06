@@ -10,9 +10,6 @@ jobs:
       run:
         shell: bash
 
-    # CRITICAL: Do not use the 'container:' directive here. 
-    # We must mount CVMFS on the host first.
-
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
