@@ -1,0 +1,90 @@
+name: PR review
+
+'on':
+  pull_request:
+    types: [opened, reopened, synchronize, converted_to_draft, ready_for_review]
+
+permissions:
+  contents: read
+  issues: write
+  pull-requests: write
+
+jobs:
+  enforce-draft-if-new:
+    if: github.event.action == 'opened' && !github.event.pull_request.draft
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+
+      - name: Convert to draft
+        uses: voiceflow/draft-pr@v1.1
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: ./.github/actions/setup-scripts
+
+      - name: Explain the conversion
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: python .github/scripts/post_draft_notice.py
+
+  label:
+    needs: enforce-draft-if-new
+    # Run whether enforce-draft-if-new was skipped or succeeded.
+    if: ${{ !cancelled() && needs.enforce-draft-if-new.result != 'failure' && github.event.action != 'converted_to_draft' }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+
+      - uses: actions/labeler@v6
+        with:
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+          configuration-path: .github/mapping/label-map.yml
+          sync-labels: false
+
+  route-reviewers:
+    needs: [enforce-draft-if-new, label]
+    # Also runs on converted_to_draft, when label is skipped.
+    if: ${{ !cancelled() && !contains(needs.*.result, 'failure') }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+
+      - uses: ./.github/actions/setup-scripts
+
+      - name: Preview or route reviewers
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          PR_AUTHOR: ${{ github.event.pull_request.user.login }}
+          PR_ACTION: ${{ github.event.action }}
+          PR_DRAFT: ${{ github.event.pull_request.draft }}
+        run: python .github/scripts/assign_reviewers.py
+
+  reviewer-checklist:
+    name: reviewer-checklist
+    needs: route-reviewers
+    if: ${{ !cancelled() && needs.route-reviewers.result == 'success' && !github.event.pull_request.draft }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+
+      - uses: ./.github/actions/setup-scripts
+
+      - name: Validate reviewer checklist
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: python .github/scripts/verify_checklist.py
