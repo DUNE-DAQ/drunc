@@ -1,0 +1,24 @@
+name: Run MSQT
+
+on:
+  never-ever:
+
+jobs:
+  install_and_test:
+    runs-on: ubuntu-latest
+
+    defaults:
+      run:
+        shell: bash
+
+    container:
+      image: ghcr.io/dune-daq/nightly-release-alma9:development_v5
+
+    steps:
+      - name: Check Base Path and Creation Date
+        run: |
+          echo "=== Check the base path and its creation date ==="
+          echo "Check root"
+          ls -l --time-style=full-iso /
+          echo "Check /cvmfs"
+          ls -l --time-style=full-iso /cvmfs/

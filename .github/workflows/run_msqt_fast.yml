@@ -24,12 +24,18 @@ jobs:
       - name: Pull container image
         run: docker pull ghcr.io/dune-daq/nightly-release-alma9:development_v5
 
+      # 4. Check the base path and its creation date
+      - name: Check Base Path and Creation Date
+        run: |
+          echo "=== Check the base path and its creation date ==="
+          echo "Check root"
+          ls -l --time-style=full-iso /
+          echo "Check /cvmfs"
+          ls -l --time-style=full-iso /cvmfs/
+
       # 3. Create a wrapper script to run inside the container
       - name: Run Integration Tests
         run: |
-          echo "=== Check the base path and its creation date ==="
-          ls -l --time-style=full-iso
-
           cat << 'EOF' > run_test.sh
           #!/bin/bash
           echo "=== Configuring SSH for drunc Process Manager ==="
@@ -54,6 +60,12 @@ jobs:
           ssh-keyscan -H localhost 127.0.0.1 $(hostname) >> ~/.ssh/known_hosts
 
           echo "=== SSH Configuration Complete ==="
+          echo "=== Check the base path and its creation date INSIDE THE CONTAINER ==="
+          echo "Check root"
+          ls -l --time-style=full-iso /
+          echo "Check /cvmfs"
+          ls -l --time-style=full-iso /cvmfs/
+          echo "=== End of Base Path Check ==="
           set -eo pipefail
           
           mkdir -p nightly
