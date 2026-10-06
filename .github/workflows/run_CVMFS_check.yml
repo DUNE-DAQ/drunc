@@ -1,7 +1,7 @@
 name: Run CVMFS check
 
 on:
-  never-ever:
+  pull_request:
 
 jobs:
   install_and_test:
