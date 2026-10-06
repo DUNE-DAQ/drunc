@@ -1,0 +1,21 @@
+# Items reviewers must tick in the routing comment before the checklist status passes.
+# IDs are stored in the comment, so renaming one resets its state on open PRs.
+items:
+  - id: rebased
+    text: This branch has been rebased with develop prior to testing.
+  - id: manual-tests
+    text: Suggested manual tests show changes.
+  - id: ci-failures
+    text: CI workflow failures documented (if present).
+  - id: integration-tests
+    text: Integration tests passed (see note)
+  - id: integration-test-report
+    text: If the full integration test bundle was run, a PR comment states the host and optionally the test summary.
+  - id: drunc-integration-tests
+    text: Drunc integration tests pass (`scripts/drunc_integtest_bundle.sh`).
+
+# Optional freeform markdown rendered below the checklist in the routing comment.
+footer: |
+  This checklist **must** be ticked off for the actions workflow to pass. When everything is checked, manually rerun the reviewer-checklist action.
+
+  Note on the CI: This should be done either on np0x or the Imperial cluster. This will soon be ported over to the CI. 
