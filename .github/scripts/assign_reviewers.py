@@ -22,14 +22,14 @@ class Reviewer:
 
 
 class ReviewerSelector(Protocol):
-    """Strategy interface for choosing one reviewer from a label pool."""
+    """Strategy interface for choosing reviewers from a label pool."""
 
     def select(
         self,
         reviewers: list[Reviewer],
         context: SelectionContext,
-    ) -> Reviewer | None:
-        """Select one eligible reviewer or return None when the pool is empty."""
+    ) -> list[Reviewer]:
+        """Select eligible reviewers or return an empty list when none remain."""
         ...
 
 
@@ -78,7 +78,7 @@ class DeterministicSelector:
         self,
         reviewers: list[Reviewer],
         context: SelectionContext,
-    ) -> Reviewer | None:
+    ) -> list[Reviewer]:
         """Select by a weighted draw seeded with the PR and label, skipping exclusions."""
         # Remove the author (and any other exclusions) before summing weights so
         # excluded reviewers have zero probability of selection.
@@ -89,16 +89,35 @@ class DeterministicSelector:
         ]
         total_weight = sum(reviewer.weight for reviewer in eligible)
         if not total_weight:
-            return None
+            return []
 
         # Per-label seed keeps reruns reproducible while decorrelating labels on one PR.
         seed = f"{context.pull_number}:{context.label}"
         draw = random.Random(seed).randrange(total_weight)
         for reviewer in eligible:
             if draw < reviewer.weight:
-                return reviewer
+                return [reviewer]
             draw -= reviewer.weight
         raise AssertionError("Weighted selection did not resolve")
+
+
+class AllReviewersSelector:
+    """Select every eligible reviewer in a label's pool, like CODEOWNERS.
+
+    Weights are ignored; only exclusions (such as the PR author) apply.
+    """
+
+    def select(
+        self,
+        reviewers: list[Reviewer],
+        context: SelectionContext,
+    ) -> list[Reviewer]:
+        """Return all reviewers not in ``context.excluded``, in configuration order."""
+        return [
+            reviewer
+            for reviewer in reviewers
+            if reviewer.username.casefold() not in context.excluded
+        ]
 
 
 @dataclass(frozen=True)
@@ -178,11 +197,10 @@ def plan_routes(
     for label, pool in config.labels.items():
         if label not in labels:
             continue
-        reviewer = selector.select(
+        for reviewer in selector.select(
             pool,
             SelectionContext(pull_number, label, {author.casefold()}, github),
-        )
-        if reviewer is not None:
+        ):
             planned.setdefault(reviewer.username, []).append(label)
     return planned
 
@@ -267,39 +285,46 @@ def apply_routes(
             continue
 
         excluded = {author.casefold(), *invalid_reviewers}
-        while reviewer := selector.select(
+        while candidates := selector.select(
             pool,
             SelectionContext(pull_number, label, excluded, api),
         ):
-            username = reviewer.username
-            folded_username = username.casefold()
-            if folded_username in reviewed:
-                notes.append(
-                    f"{username} has already reviewed for {label}; no replacement selected."
-                )
-                break
-            if folded_username in requested:
-                routes.setdefault(username, []).append(label)
-                break
-            try:
-                api.request(
-                    "POST",
-                    f"pulls/{pull_number}/requested_reviewers",
-                    {"reviewers": [username]},
-                )
-            except GitHubApiError as error:
-                detail = error.detail.casefold()
-                if error.status == 422 and "collaborator" in detail:
+            # Retry selection only when every candidate was rejected by GitHub.
+            settled = False
+            for reviewer in candidates:
+                username = reviewer.username
+                folded_username = username.casefold()
+                if folded_username in reviewed:
                     notes.append(
-                        f"{username} cannot be requested for {label}; trying the next eligible reviewer."
+                        f"{username} has already reviewed for {label}; no replacement selected."
                     )
-                    excluded.add(folded_username)
-                    invalid_reviewers.add(folded_username)
+                    settled = True
                     continue
-                raise
-            requested.add(folded_username)
-            routes.setdefault(username, []).append(label)
-            break
+                if folded_username in requested:
+                    routes.setdefault(username, []).append(label)
+                    settled = True
+                    continue
+                try:
+                    api.request(
+                        "POST",
+                        f"pulls/{pull_number}/requested_reviewers",
+                        {"reviewers": [username]},
+                    )
+                except GitHubApiError as error:
+                    detail = error.detail.casefold()
+                    if error.status == 422 and "collaborator" in detail:
+                        notes.append(
+                            f"{username} cannot be requested for {label}; skipping."
+                        )
+                        excluded.add(folded_username)
+                        invalid_reviewers.add(folded_username)
+                        continue
+                    raise
+                requested.add(folded_username)
+                routes.setdefault(username, []).append(label)
+                settled = True
+            if settled:
+                break
         else:
             notes.append(f"No eligible reviewer remains for {label}.")
 
@@ -308,6 +333,11 @@ def apply_routes(
 
 def main() -> int:
     """Run preview or apply routing based on the pull request event."""
+
+    # Swap this strategy to change reviewer selection
+    # (DeterministicSelector or AllReviewersSelector).
+    selector = AllReviewersSelector()
+
     repo_root = Path(__file__).resolve().parents[2]
     config = load_config(
         Path(
@@ -332,9 +362,7 @@ def main() -> int:
         raise RoutingError("GitHub did not return pull request metadata")
     current_labels = {label["name"] for label in pull.get("labels", [])}
     pull_author = pull.get("user", {}).get("login", author)
-    selector = (
-        DeterministicSelector()
-    )  # Swap this strategy to change reviewer selection.
+
     routes = plan_routes(
         current_labels, config, selector, pull_number, pull_author, api
     )
