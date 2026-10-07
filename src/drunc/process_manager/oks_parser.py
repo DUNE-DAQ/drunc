@@ -21,7 +21,7 @@ def get_full_db_path(db_path: str) -> str:
     Raise an error if multiple values match the parameter.
 
     Args:
-        db_path - path to the configuration
+        db_path - path to the configuration.
     """
 
     log = get_logger("utils.get_full_db_path")
