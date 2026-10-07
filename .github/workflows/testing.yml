@@ -1,4 +1,4 @@
-name: Run Tests (MSQT & Pytest)
+name: Run Tests
 
 on:
   pull_request:
@@ -22,8 +22,8 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  msqt-test:
-    if: github.event.pull_request.draft == false
+  run-tests:
+    # if: github.event.pull_request.draft == false
     runs-on: ubuntu-latest
     
     defaults:
@@ -58,7 +58,7 @@ jobs:
         if: ${{ !cancelled() }}
         uses: ./.github/actions/setup-dev-nightly
 
-      - name: Install druncschema and drunc
+      - name: Install drunc and druncschema
         if: success()
         env:
           REPO_OWNER: ${{ github.event.pull_request.head.repo.owner.login || github.repository_owner }}
@@ -81,19 +81,58 @@ jobs:
           
           echo "Current directory after building: $(pwd)"
           echo "DRUNC_DIR=$(pwd)" >> "$GITHUB_ENV"
-
-      - name: Test with MSQT
+          
+      - name: Run unit tests
         if: success()
         run: |
           cd nightly/NFD_DEV* || true
           source env.sh
-          export USER=$(whoami)
-          echo "Running test as user: $USER"
-          
-          daqsystemtest_integtest_bundle.sh --stop-on-failure --pytest-options "--skip-resource-checks --tb=long" -k small_footprint_quick_test.py --verbosity 5 --tmpdir "$TEST_DIR" 2>&1
+          cd sourcecode/drunc || true
+          pip install pytest pytest-cov
+          # pytest --junitxml=junit/test-results.xml --cov=drunc --cov-report=html
+          pytest
 
-      - name: Print test log
-        if: always()
-        run: |
-          # Ensure it looks in TEST_DIR instead of hardcoded /tmp if that's where logs go
-          log=$(find "$TEST_DIR" /tmp -name "dunedaq_integtest_
+      # - name: Publish JUnit test report
+      #   uses: mikepenz/action-junit-report@v5
+      #   if: ${{ !cancelled() }}
+      #   with:
+      #     report_paths: '${{ env.DRUNC_DIR }}/junit/test-results.xml'
+
+      # - name: Deploy HTML coverage to GitHub Pages
+      #   if: ${{ !cancelled() }}
+      #   uses: peaceiris/actions-gh-pages@v3
+      #   with:
+      #     github_token: ${{ secrets.GITHUB_TOKEN }}
+      #     publish_dir: ${{ env.DRUNC_DIR }}/htmlcov/
+      #     destination_dir: coverage/${{ github.ref_name }}  # This adds the branch name to the URL
+      #     publish_branch: gh-pages
+
+      # - name: Comment on PR
+      #   if: ${{ !cancelled() }}
+      #   uses: actions/github-script@v7
+      #   with:
+      #     script: |
+      #       github.rest.issues.createComment({
+      #         issue_number: context.issue.number,
+      #         owner: context.repo.owner,
+      #         repo: context.repo.repo,
+      #         body: 'Coverage report: https://dune-daq.github.io/drunc/coverage/${{ github.ref_name }}/index.html'
+      #       })
+
+      # - name: Upload JUnit test report
+      #   if: ${{ !cancelled() }}
+      #   uses: actions/upload-artifact@v4
+      #   with:
+      #     name: junit-report
+      #     path: ${{ env.DRUNC_DIR }}/junit/test-results.xml
+      #     if-no-files-found: error
+      #     retention-days: 7
+
+      # - name: Upload coverage report (HTML)
+      #   if: ${{ !cancelled() }}
+      #   uses: actions/upload-artifact@v4
+      #   with:
+      #     name: html-coverage-report
+      #     path: ${{ env.DRUNC_DIR }}/htmlcov/
+      #     if-no-files-found: error
+      #     retention-days: 7
