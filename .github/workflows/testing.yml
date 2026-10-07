@@ -106,14 +106,14 @@ jobs:
 
       - name: Publish JUnit test report
         uses: mikepenz/action-junit-report@v5
-        if: !cancelled() && (steps.run_unit_tests.outcome == 'success' || steps.run_unit_tests.outcome == 'failure') && github.event_name == 'push'
+        if: !cancelled() && ((steps.run_unit_tests.outcome == 'success' || steps.run_unit_tests.outcome == 'failure') && github.event_name == 'push')
         with:
           check_name: "Pytest Results"
           report_paths: '${{ env.DRUNC_DIR }}/pythoncode/drunc/junit/test-results.xml'
 
       - name: Deploy HTML coverage to GitHub Pages
         uses: peaceiris/actions-gh-pages@v3
-        if: !cancelled() && (steps.run_unit_tests.outcome == 'success' || steps.run_unit_tests.outcome == 'failure') && github.event_name == 'push'
+        if: !cancelled() && ((steps.run_unit_tests.outcome == 'success' || steps.run_unit_tests.outcome == 'failure') && github.event_name == 'push')
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           publish_dir: ${{ env.DRUNC_DIR }}/pythoncode/drunc/htmlcov/
