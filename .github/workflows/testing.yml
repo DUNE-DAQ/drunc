@@ -63,7 +63,7 @@ jobs:
           REPO_OWNER: ${{ github.event.pull_request.head.repo.owner.login || github.repository_owner }}
           HEAD_REF: ${{ github.head_ref || github.ref_name }}
         run: |
-          cd nightly/NFD_DEV* || true
+          cd nightly/NFD_DEV*
           source env.sh
           python -m pip install --upgrade pip
           
@@ -90,7 +90,7 @@ jobs:
         run: |
           cd nightly/NFD_DEV*
           source env.sh
-          cd sourcecode/drunc
+          cd pythoncode/drunc
           # pytest --junitxml=junit/test-results.xml --cov=drunc --cov-report=html
           pytest
 
