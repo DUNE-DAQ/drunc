@@ -20,18 +20,6 @@ jobs:
           TEST_DIR="$RUNNER_TEMP/my_integration_test"
           mkdir -p "$TEST_DIR"
           echo "TEST_DIR=$TEST_DIR" >> "$GITHUB_ENV"
-          
-          # Check the output is valid
-          echo "Test output" > "$TEST_DIR/output.txt"
-          echo "Checking tempdir contents"
-          cat "$TEST_DIR/output.txt"
-          ls -l --time-style=full-iso /cvmfs/
-      - name: Fully Hydrate CVMFS Asset Cache
-        run: |
-          echo "Forcing complete download of all asset files and database blocks..."
-          # Recursively read every file in the assets directory to populate the local CVMFS block cache
-          find /cvmfs/dunedaq.opensciencegrid.org/assets -type f -exec cat {} > /dev/null \;
-          echo "Asset cache fully hydrated."
 
       - name: Check URLs
         env:

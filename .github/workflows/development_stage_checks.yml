@@ -1,0 +1,74 @@
+name: Run checks at the development stage
+
+on:
+  pull_request:
+
+concurrency:
+    group: ${{ github.workflow }}-${{ github.head_ref || github.run_id }}
+    cancel-in-progress: true
+
+jobs:
+  lint-with-ruff:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/ruff-action@v3
+      - name: Run Ruff Linter
+        run: ruff check
+      - name: Run Ruff Formatter Check
+        run: ruff format --check
+
+  # This workflow checks for __init__.py files in directories and subdirectories.
+  # Directories missing __init__.py files are needed by mkdocstrings to generate
+  # documentation from python docstrings
+  check-init:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Look for __init__ files
+        run: |
+          if [ ! -d "src" ]; then
+            echo "Directory 'src' not found; skipping check."
+            exit 0
+          fi
+
+          missing=$(find src -mindepth 1 \
+            \( -path "src/.git*" -o \
+               -path "src/.github*" -o \
+               -path "src/tests*" -o \
+               -path "src/docs*" -o \
+               -path "src/config*" -o \
+               -path "src/drunc/integtest*" -o \
+               -path "src/drunc/data*" \) -prune -o \
+            -type d -exec sh -c '[ ! -e "$1/__init__.py" ] && echo "$1"' _ {} \;)
+
+          if [ -n "$missing" ]; then
+            echo "These directories are missing __init__.py:"
+            echo "$missing"
+            exit 1
+          else
+            echo "All directories contain __init__.py"
+          fi
+
+  # Check the links in the documentation are valid and accessible
+  check-links:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Run Lychee link checker
+        uses: lycheeverse/lychee-action@v2
+        with:
+          args: >
+            --exclude-path '(^|/)docs/graph/README\.md$'
+            --accept 200,403
+            --exclude '^https://twiki\.cern\.ch/.*' 
+            --exclude '^https://indico\..*' 
+            --exclude '^https://wiki\.dunescience\.org/.*'
+            --exclude '^https://github\.com/DUNE-DAQ/drunc/wiki/Archive:.*'
+            docs/
