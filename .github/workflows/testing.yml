@@ -86,13 +86,29 @@ jobs:
           echo "DRUNC_DIR=$(pwd)" >> "$GITHUB_ENV"
           
       - name: Run unit tests
-        if: success()
         run: |
           cd nightly/NFD_DEV*
           source env.sh
           cd pythoncode/drunc
           # pytest --junitxml=junit/test-results.xml --cov=drunc --cov-report=html
           pytest
+
+      - name: Run integration test
+        run: |
+          cd nightly/NFD_DEV*
+          source env.sh
+          export USER=$(whoami)
+          echo "Running test as user: $USER"
+          daqsystemtest_integtest_bundle.sh --pytest-options "--skip-resource-checks --tb=long" -k small_footprint_quick_test.py --verbosity 5 --tmpdir "$TEST_DIR" 2>&1
+
+      - name: Run drunc integration tests
+        run: |
+          cd nightly/NFD_DEV*
+          source env.sh
+          cd pythoncode/drunc
+          source scripts/setup_drunc_config_path.sh
+          source scripts/drunc_integtest_bundle.sh --verbosity 5
+          
 
       # - name: Publish JUnit test report
       #   uses: mikepenz/action-junit-report@v5
