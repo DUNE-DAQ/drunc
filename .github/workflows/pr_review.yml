@@ -11,7 +11,7 @@ permissions:
 
 jobs:
   enforce-draft-if-new:
-    if: github.event.action == 'opened' && !github.event.pull_request.draft
+    if: ( github.event.action == 'opened' || github.event.action == 'reopened' ) && !github.event.pull_request.draft
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -19,12 +19,13 @@ jobs:
           ref: ${{ github.sha }}
           persist-credentials: false
 
-      - name: Convert to draft
-        uses: voiceflow/draft-pr@v1.1
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}
-
       - uses: ./.github/actions/setup-scripts
+
+      - name: Convert to draft
+        env:
+          GITHUB_TOKEN: ${{ secrets.DRUNC_DRAFTER }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: python .github/scripts/convert_to_draft.py
 
       - name: Explain the conversion
         env:

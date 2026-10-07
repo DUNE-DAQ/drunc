@@ -50,18 +50,14 @@ def verify(api: GitHubApi, pull_number: int) -> tuple[str, str]:
 
 def main() -> int:
     """Validate the checklist for the event's pull request using fresh API data."""
-    token = os.environ.get("GITHUB_TOKEN")
-    repository = os.environ.get("GITHUB_REPOSITORY")
+    api = GitHubApi.from_environment()
     event_path = os.environ.get("GITHUB_EVENT_PATH")
-    if not token or not repository or not event_path:
-        raise RoutingError(
-            "GITHUB_TOKEN, GITHUB_REPOSITORY, and GITHUB_EVENT_PATH are required"
-        )
+    if not event_path:
+        raise RoutingError("GITHUB_EVENT_PATH is required")
 
     event = json.loads(Path(event_path).read_text(encoding="utf-8"))
     if not isinstance(event, dict):
         raise RoutingError("GitHub event payload must be a JSON object")
-    api = GitHubApi(repository, token)
     pull_number = resolve_pull_number(event)
     state, description = verify(api, pull_number)
     print(f"PR #{pull_number}: {state}: {description}")
