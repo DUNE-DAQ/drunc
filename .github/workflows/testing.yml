@@ -33,6 +33,11 @@ jobs:
     container:
       image: ghcr.io/dune-daq/nightly-release-alma9:development_v5
 
+    permissions:
+      contents: write       # Allows actions-gh-pages to push HTML to the gh-pages branch
+      checks: write         # Allows action-junit-report to add visual annotations to the PR
+      pull-requests: write  # Allows github-script to post the comment with the live link
+
     steps:
       - name: Setup Temp Directory
         run: |
@@ -91,69 +96,60 @@ jobs:
           sqlite3 "$DB_PATH" "SELECT COUNT(*) FROM dunedaq_assets;"
           
       - name: Run unit tests
+        id: run_unit_tests
         if: steps.install_env.outcome == 'success' && !cancelled()
         run: |
           cd nightly/NFD_DEV*
           source env.sh
           cd pythoncode/drunc
-          # pytest --junitxml=junit/test-results.xml --cov=drunc --cov-report=html
-          pytest
+          pytest --junitxml=junit/test-results.xml --cov=drunc --cov-report=html
 
-      - name: Run daqsystemtest integration test(s)
-        if: steps.install_env.outcome == 'success' && !cancelled()
-        run: |
-          cd nightly/NFD_DEV*
-          source env.sh
-          export USER=$(whoami)
-          echo "Running test as user: $USER"
-          daqsystemtest_integtest_bundle.sh --pytest-options "--skip-resource-checks --tb=long" -k small_footprint_quick_test.py --verbosity 5 --tmpdir "$TEST_DIR" 2>&1
+      # 1. VISUAL TEST SUMMARY
+      - name: Publish JUnit test report
+        uses: mikepenz/action-junit-report@v5
+        if: !cancelled() && (steps.run_unit_tests.outcome == 'success' || steps.run_unit_tests.outcome == 'failure') && github.event_name == 'push'
+        with:
+          check_name: "Pytest Results"
+          report_paths: '${{ env.DRUNC_DIR }}/pythoncode/drunc/junit/test-results.xml'
 
-      - name: Run drunc integration tests
-        if: steps.install_env.outcome == 'success' && !cancelled()
-        run: |
-          cd nightly/NFD_DEV*
-          source env.sh
-          cd pythoncode/drunc
-          source scripts/setup_drunc_config_path.sh
-          source scripts/drunc_integtest_bundle.sh --verbosity 5
-          
+      # 2. LIVE WEBSITE DEPLOYMENT
+      - name: Deploy HTML coverage to GitHub Pages
+        uses: peaceiris/actions-gh-pages@v3
+        if: !cancelled() && (steps.run_unit_tests.outcome == 'success' || steps.run_unit_tests.outcome == 'failure') && github.event_name == 'push'
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ${{ env.DRUNC_DIR }}/pythoncode/drunc/htmlcov/
+          destination_dir: coverage/${{ github.ref_name }}
+          publish_branch: gh-pages
 
-      # - name: Publish JUnit test report
-      #   uses: mikepenz/action-junit-report@v5
-      #   with:
-      #     report_paths: '${{ env.DRUNC_DIR }}/junit/test-results.xml'
+      # 3. AUTOMATED PR NOTIFICATION
+      - name: Comment on PR
+        uses: actions/github-script@v7
+        # Also includes the pull_request check to prevent crashing on push events
+        if: !cancelled() && (steps.run_unit_tests.outcome == 'success' || steps.run_unit_tests.outcome == 'failure') && github.event_name == 'pull_request'
+        with:
+          script: |
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: 'Coverage report: https://dune-daq.github.io/drunc/coverage/${{ github.ref_name }}/index.html'
+            })
 
-      # - name: Deploy HTML coverage to GitHub Pages
-      #   uses: peaceiris/actions-gh-pages@v3
-      #   with:
-      #     github_token: ${{ secrets.GITHUB_TOKEN }}
-      #     publish_dir: ${{ env.DRUNC_DIR }}/htmlcov/
-      #     destination_dir: coverage/${{ github.ref_name }}  # This adds the branch name to the URL
-      #     publish_branch: gh-pages
+      # - name: Run daqsystemtest integration test(s)
+      #   if: steps.install_env.outcome == 'success' && !cancelled()
+      #   run: |
+      #     cd nightly/NFD_DEV*
+      #     source env.sh
+      #     export USER=$(whoami)
+      #     echo "Running test as user: $USER"
+      #     daqsystemtest_integtest_bundle.sh --pytest-options "--skip-resource-checks --tb=long" -k small_footprint_quick_test.py --verbosity 5 --tmpdir "$TEST_DIR" 2>&1
 
-      # - name: Comment on PR
-      #   uses: actions/github-script@v7
-      #   with:
-      #     script: |
-      #       github.rest.issues.createComment({
-      #         issue_number: context.issue.number,
-      #         owner: context.repo.owner,
-      #         repo: context.repo.repo,
-      #         body: 'Coverage report: https://dune-daq.github.io/drunc/coverage/${{ github.ref_name }}/index.html'
-      #       })
-
-      # - name: Upload JUnit test report
-      #   uses: actions/upload-artifact@v4
-      #   with:
-      #     name: junit-report
-      #     path: ${{ env.DRUNC_DIR }}/junit/test-results.xml
-      #     if-no-files-found: error
-      #     retention-days: 7
-
-      # - name: Upload coverage report (HTML)
-      #   uses: actions/upload-artifact@v4
-      #   with:
-      #     name: html-coverage-report
-      #     path: ${{ env.DRUNC_DIR }}/htmlcov/
-      #     if-no-files-found: error
-      #     retention-days: 7
+      # - name: Run drunc integration tests
+      #   if: steps.install_env.outcome == 'success' && !cancelled()
+      #   run: |
+      #     cd nightly/NFD_DEV*
+      #     source env.sh
+      #     cd pythoncode/drunc
+      #     source scripts/setup_drunc_config_path.sh
+      #     source scripts/drunc_integtest_bundle.sh --verbosity 5
