@@ -321,16 +321,12 @@ def main() -> int:
             )
         ),
     )
-    token = os.environ.get("GITHUB_TOKEN")
-    repository = os.environ.get("GITHUB_REPOSITORY")
-    pull_number = int(os.environ["PR_NUMBER"])
+    api = GitHubApi.from_environment()
+    pull_number = api.pull_number_from_environment()
     author = os.environ["PR_AUTHOR"]
     event_action = os.environ["PR_ACTION"]
     event_draft = os.environ["PR_DRAFT"].lower() == "true"
-    if not token or not repository:
-        raise RoutingError("GITHUB_TOKEN and GITHUB_REPOSITORY are required")
 
-    api = GitHubApi(repository, token)
     pull = api.request("GET", f"pulls/{pull_number}")
     if not isinstance(pull, dict):
         raise RoutingError("GitHub did not return pull request metadata")

@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import os
 import sys
 from pathlib import Path
 
@@ -11,15 +10,11 @@ from lib_github_api import GitHubApi, RoutingError, append_summary, bot_config
 
 def main() -> int:
     """Post the approval template unless the bot has already posted it."""
-    token = os.environ.get("GITHUB_TOKEN")
-    repository = os.environ.get("GITHUB_REPOSITORY")
-    if not token or not repository:
-        raise RoutingError("GITHUB_TOKEN and GITHUB_REPOSITORY are required")
-    pull_number = int(os.environ["PR_NUMBER"])
+    api = GitHubApi.from_environment()
+    pull_number = api.pull_number_from_environment()
     marker = bot_config()["markers"]["approval"]
     bot_login = bot_config()["bot_login"]
 
-    api = GitHubApi(repository, token)
     comments = api.paginated(f"issues/{pull_number}/comments")
     if any(
         isinstance(comment.get("body"), str)
