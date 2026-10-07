@@ -1,14 +1,21 @@
+import logging
 import os
-from typing import TYPE_CHECKING, Any, Dict, List
-
-import confmodel_dal
+from collections.abc import Sequence
+from typing import TYPE_CHECKING, Dict, List, NotRequired, TypedDict, cast
 
 from drunc.exceptions import DruncException, DruncSetupException
 from drunc.process_manager.configuration import get_commandline_parameters
 from drunc.utils.utils import file_is_read_only, get_logger
 
 if TYPE_CHECKING:
-    import conffwk
+    from confmodel_dal.dal_protocols import (
+        Application,
+        Segment,
+        Session,
+        Variable,
+        VariableBase,
+        VariableSet,
+    )
 
 
 def get_full_db_path(db_path: str) -> str:
@@ -32,8 +39,8 @@ def get_full_db_path(db_path: str) -> str:
 
     # Get the env var that points to the configuration files. If it doesn't exist, raise
     # an exception
-    search_path_str: str = os.environ.get("DUNEDAQ_DB_PATH", None)
-    if not search_path_str:
+    search_path_str: str = os.environ.get("DUNEDAQ_DB_PATH", "")
+    if search_path_str == "":
         err_str = "DUNEDAQ_DB_PATH not set, exiting."
         raise DruncSetupException(err_str)
 
@@ -86,7 +93,9 @@ def get_full_db_path(db_path: str) -> str:
     return resolved_path
 
 
-def collect_variables(variables, env_dict: Dict[str, str]) -> None:
+def collect_variables(
+    variables: Sequence["VariableBase"], env_dict: Dict[str, str]
+) -> None:
     """!Process a dal::Variable object, placing key/value pairs in a dictionary
 
     @param variables  A Variable/VariableSet object
@@ -95,10 +104,10 @@ def collect_variables(variables, env_dict: Dict[str, str]) -> None:
     """
     for item in variables:
         if item.className() == "VariableSet":
-            collect_variables(item.contains, env_dict)
-        else:
-            if item.className() == "Variable":
-                env_dict[item.name] = item.value
+            collect_variables(cast("VariableSet", item).contains, env_dict)
+        elif item.className() == "Variable":
+            var = cast("Variable", item)
+            env_dict[var.name] = var.value
 
 
 class EnvironmentVariableCannotBeSet(DruncException):
@@ -106,7 +115,7 @@ class EnvironmentVariableCannotBeSet(DruncException):
 
 
 def entity_excluded_from_session_dal(
-    session_dal_obj: "conffwk.dal.Session", entity_id: str
+    session_dal_obj: "Session", entity_id: str
 ) -> bool:
     """
     Replaces the following without any db dependence
@@ -143,17 +152,32 @@ def entity_excluded_from_session_dal(
     return False
 
 
+class AppInfo(TypedDict):
+    """Launch description of one application, as built by collect_apps/collect_infra_apps."""
+
+    name: str
+    type: str
+    args: list[str]
+    restriction: str
+    host: str
+    env: dict[str, str]
+    tree_id: str
+    log_path: str
+    # Only set for DAQ applications, not controllers or infrastructure apps
+    data_path: NotRequired[str]
+
+
 # Recursively process all Segments in given Segment extracting Applications
 def collect_apps(
     config_filename: str,
     session_name: str,
-    session_dal_obj: "conffwk.dal.Session",
-    segment_obj: "conffwk.dal.Segment",
+    session_dal_obj: "Session",
+    segment_obj: "Segment",
     env: Dict[str, str],
     tree_prefix: List[int] = [
         0,
     ],
-) -> List[Dict]:
+) -> list[AppInfo]:
     """! Recustively collect (daq) application belonging to segment and its subsegments
 
     @param session_dal_obj  The session the segment belongs to
@@ -175,7 +199,7 @@ def collect_apps(
 
     collect_variables(session_dal_obj.environment, defenv)
 
-    apps = []
+    apps: list[AppInfo] = []
 
     # Add controller for this segment to list of apps
     controller = segment_obj.controller
@@ -224,8 +248,7 @@ def collect_apps(
         except Exception as e:
             log.exception(e)
             raise e
-        for app in sub_apps:
-            apps.append(app)
+        apps.extend(sub_apps)
 
     # Get all the included applications of this segment
     # Start app_index after sub-segment indices to avoid tree_id collisions
@@ -261,8 +284,9 @@ def collect_apps(
         log.debug(f"Collecting app {app.id} with args {args}")
 
         data_path = get_writer_directory_path(app, log)
-        if not data_path:
+        if data_path is None:
             log.debug(f"No data path found for app {app.id}")
+            data_path = ""
 
         apps.append(
             {
@@ -282,7 +306,7 @@ def collect_apps(
     return apps
 
 
-def get_writer_directory_path(app, log) -> str | None:
+def get_writer_directory_path(app: "Application", log: logging.Logger) -> str | None:
     # Map known OKS types to their specific writer attribute
     APP_TYPE_TO_WRITER_ATTR = {
         "DFApplication": "data_writers",
@@ -311,8 +335,8 @@ def get_writer_directory_path(app, log) -> str | None:
 
     writer = writers[0]
     params = getattr(writer, "data_store_params", None)
-    if params and getattr(params, "directory_path", None):
-        directory_path = params.directory_path
+    directory_path = getattr(params, "directory_path", None)
+    if isinstance(directory_path, str) and directory_path:
         log.debug(f"data path for app {app.id}: {directory_path}")
         return directory_path
 
@@ -320,10 +344,10 @@ def get_writer_directory_path(app, log) -> str | None:
 
 
 def collect_infra_apps(
-    session: "conffwk.dal.Session",
+    session: "Session",
     env: Dict[str, str],
     tree_prefix: List[int],
-) -> List[Dict[str, Any]]:
+) -> list[AppInfo]:
     """! Collect infrastructure applications
 
     @param session  The session
@@ -342,7 +366,7 @@ def collect_infra_apps(
 
     collect_variables(session.environment, defenv)
 
-    apps = []
+    apps: list[AppInfo] = []
 
     for app_index, app in enumerate(session.infrastructure_applications):
         # Skip applications that do not define an application name
@@ -371,23 +395,3 @@ def collect_infra_apps(
         )
 
     return apps
-
-
-# Search segment and all contained segments for apps controlled by
-# given controller. Return separate lists of apps and sub-controllers
-def find_controlled_apps(db, session, mycontroller, segment):
-    apps = []
-    controllers = []
-    if segment.controller.id == mycontroller:
-        for app in segment.applications:
-            apps.append(app.id)
-        for seg in segment.segments:
-            if not confmodel_dal.entity_excluded(db._obj, session.id, seg.id):
-                controllers.append(seg.controller.id)
-    else:
-        for seg in segment.segments:
-            if not confmodel_dal.entity_excluded(db._obj, session.id, seg.id):
-                aps, controllers = find_controlled_apps(db, session, mycontroller, seg)
-                if len(apps) > 0:
-                    break
-    return apps, controllers
