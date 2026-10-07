@@ -1,7 +1,7 @@
 name: Run MSQT FAST
 
 on:
-  pull_request:
+  never-ever:
 
 jobs:
   install_and_test:

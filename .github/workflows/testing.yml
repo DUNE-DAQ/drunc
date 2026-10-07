@@ -1,12 +1,30 @@
-name: Run MSQT
+name: Run Tests (MSQT & Pytest)
 
 on:
-  never-ever:
+  # Run on any pushes to the main branch which releases are generated from
+  push:
+    branches:
+      - develop
+      - 'prep-release/**'
+
+  pull_request:
+    branches:
+      - develop
+      - 'prep-release/**'
+    # If taking a PR out of draft mode, run the workflow on the PR event as well
+    types: [opened, synchronize, reopened, ready_for_review]
+
+# Cancel any running jobs for this same branch if a new commit is pushed
+concurrency:
+  # Uses head_ref for PRs, and ref for pushes
+  group: ${{ github.workflow }}-${{ github.head_ref || github.ref }}
+  cancel-in-progress: true
 
 jobs:
-  install_and_test:
+  msqt-test:
+    if: github.event.pull_request.draft == false
     runs-on: ubuntu-latest
-
+    
     defaults:
       run:
         shell: bash
@@ -23,7 +41,8 @@ jobs:
 
       - name: Check URLs
         env:
-          REPO_OWNER: ${{ github.event.pull_request.head.repo.owner.login }}
+          # Fallback ensures this doesn't break on 'push' events where PR payload is null
+          REPO_OWNER: ${{ github.event.pull_request.head.repo.owner.login || github.repository_owner }}
         run: |
           echo "https://github.com/${REPO_OWNER}/druncschema.git"
           echo "https://github.com/${REPO_OWNER}/drunc.git"
@@ -41,8 +60,8 @@ jobs:
       - name: Install druncschema and drunc
         if: success()
         env:
-          REPO_OWNER: ${{ github.event.pull_request.head.repo.owner.login }}
-          HEAD_REF: ${{ github.head_ref }}
+          REPO_OWNER: ${{ github.event.pull_request.head.repo.owner.login || github.repository_owner }}
+          HEAD_REF: ${{ github.head_ref || github.ref_name }}
         run: |
           cd nightly/NFD_DEV* || true
           source env.sh
@@ -76,36 +95,4 @@ jobs:
         if: always()
         run: |
           # Ensure it looks in TEST_DIR instead of hardcoded /tmp if that's where logs go
-          log=$(find "$TEST_DIR" /tmp -name "dunedaq_integtest_bundle_*.log" 2>/dev/null | sort | tail -1)
-          if [[ -n "$log" ]]; then
-            echo "=== Test log: $log ==="
-            cat "$log"
-          else
-            echo "No integtest bundle log file found."
-          fi
-
-      - name: Direct pytest on failure (for diagnostics)
-        if: always()
-        run: |
-          cd nightly/NFD_DEV* || true
-          source env.sh
-          export USER=$(whoami)
-          
-          # Create a dedicated directory for the test execution
-          export TEST_DIR="$RUNNER_TEMP/pytest_run"
-          mkdir -p "$TEST_DIR"
-          
-          LOCAL_TEST_SCRIPT="$TEST_DIR/small_footprint_quick_test.py"
-          
-          # 1. Copy the actual file contents (-L dereferences the Spack CVMFS symlink)
-          cp -L "${DAQSYSTEMTEST_SHARE}/integtest/small_footprint_quick_test.py" "$LOCAL_TEST_SCRIPT"
-          
-          # 2. Update the test to use the valid WIBEth asset checksum you discovered
-          sed -i 's/370df564205290d27cab47e44ae4ca47/c1410bf267da088153c41c3471e7f98e/g' "$LOCAL_TEST_SCRIPT"
-          
-          echo "=== Running updated test ==="
-          # 3. Run pytest directly on the updated script
-          python -m pytest -s -v --tb=long \
-            --basetemp="$TEST_DIR/basetemp" \
-            --skip-resource-checks \
-            "$LOCAL_TEST_SCRIPT"
+          log=$(find "$TEST_DIR" /tmp -name "dunedaq_integtest_

@@ -1,4 +1,4 @@
-name: Run checks at the development stage
+name: Run development checks
 
 on:
   pull_request:
