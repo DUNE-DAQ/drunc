@@ -72,7 +72,7 @@ jobs:
           cd druncschema
           pip install -e .[test]
           
-          cd ../pythoncode
+          cd ../../pythoncode
           git clone "https://github.com/${REPO_OWNER}/drunc.git" -b "$HEAD_REF" || git clone https://github.com/DUNE-DAQ/drunc.git
           cd drunc
           pip install -e .[test]
