@@ -10,7 +10,7 @@ runs:
         mkdir nightly
         cd nightly
         source /cvmfs/dunedaq.opensciencegrid.org/setup_dunedaq.sh
-        setup_dbt latest_v5
+        setup_dbt latest
         dbt-create -n last_fddaq
         cd NFD_DEV*
         source env.sh
