@@ -6,7 +6,7 @@ from typing import Any, Callable, Optional
 from druncschema.controller_pb2 import FSMCommand
 from druncschema.opmon.FSM_pb2 import FSMStatus
 
-from drunc.exceptions import DruncCommandException
+from drunc.exceptions import DruncCommandNonTerminalException
 from drunc.fsm.core import FSM
 from drunc.fsm.exceptions import InvalidTransition
 from drunc.fsm.utils import decode_fsm_arguments
@@ -48,7 +48,7 @@ class InclusionState(Observed):
         super(InclusionState, self).__init__(name="inclusion_state", **kwargs)
 
 
-class StatefulNodeException(DruncCommandException):
+class StatefulNodeException(DruncCommandNonTerminalException):
     pass
 
 
