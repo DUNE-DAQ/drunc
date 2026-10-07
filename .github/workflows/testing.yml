@@ -58,7 +58,7 @@ jobs:
         uses: ./.github/actions/setup-dev-nightly
 
       - name: Install drunc and druncschema
-        if: success()
+        id: install_env
         env:
           REPO_OWNER: ${{ github.event.pull_request.head.repo.owner.login || github.repository_owner }}
           HEAD_REF: ${{ github.head_ref || github.ref_name }}
@@ -70,12 +70,12 @@ jobs:
           cd sourcecode
           git clone "https://github.com/${REPO_OWNER}/druncschema.git" -b "$HEAD_REF" || git clone https://github.com/DUNE-DAQ/druncschema.git
           cd druncschema
-          pip install -e .[test]
+          pip install .[test]
           
           cd ../../pythoncode
           git clone "https://github.com/${REPO_OWNER}/drunc.git" -b "$HEAD_REF" || git clone https://github.com/DUNE-DAQ/drunc.git
           cd drunc
-          pip install -e .[test]
+          pip install .[test]
 
           # Go back to the nightly/NFD_DEV* root folder before building
           cd ../..
@@ -84,8 +84,14 @@ jobs:
           
           echo "Current directory after building: $(pwd)"
           echo "DRUNC_DIR=$(pwd)" >> "$GITHUB_ENV"
+
+          echo "Validate that the asset files required for integration tests are resolved"
+          DB_PATH="/cvmfs/dunedaq.opensciencegrid.org/assets/dunedaq-asset-db.sqlite"
+          ls -l --time-style=full-iso "$DB_PATH"
+          sqlite3 "$DB_PATH" "SELECT COUNT(*) FROM dunedaq_assets;"
           
       - name: Run unit tests
+        if: steps.install_env.outcome == 'success' && !cancelled()
         run: |
           cd nightly/NFD_DEV*
           source env.sh
@@ -93,7 +99,8 @@ jobs:
           # pytest --junitxml=junit/test-results.xml --cov=drunc --cov-report=html
           pytest
 
-      - name: Run integration test
+      - name: Run daqsystemtest integration test(s)
+        if: steps.install_env.outcome == 'success' && !cancelled()
         run: |
           cd nightly/NFD_DEV*
           source env.sh
@@ -102,6 +109,7 @@ jobs:
           daqsystemtest_integtest_bundle.sh --pytest-options "--skip-resource-checks --tb=long" -k small_footprint_quick_test.py --verbosity 5 --tmpdir "$TEST_DIR" 2>&1
 
       - name: Run drunc integration tests
+        if: steps.install_env.outcome == 'success' && !cancelled()
         run: |
           cd nightly/NFD_DEV*
           source env.sh

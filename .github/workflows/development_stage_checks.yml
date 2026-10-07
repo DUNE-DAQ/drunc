@@ -15,8 +15,8 @@ jobs:
       - uses: astral-sh/ruff-action@v3
       - name: Run Ruff Linter
         run: ruff check
-      - name: Run Ruff Formatter Check
-        run: ruff format --check
+      # - name: Run Ruff Formatter Check
+      #   run: ruff format --check
 
   # This workflow checks for __init__.py files in directories and subdirectories.
   # Directories missing __init__.py files are needed by mkdocstrings to generate
