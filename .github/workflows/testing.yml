@@ -55,7 +55,6 @@ jobs:
         uses: ./.github/actions/setup-ssh-daemon
 
       - name: Set up dev nightly
-        if: ${{ !cancelled() }}
         uses: ./.github/actions/setup-dev-nightly
 
       - name: Install drunc and druncschema
@@ -70,13 +69,17 @@ jobs:
           
           cd sourcecode
           git clone "https://github.com/${REPO_OWNER}/druncschema.git" -b "$HEAD_REF" || git clone https://github.com/DUNE-DAQ/druncschema.git
+          cd druncschema
+          pip install -e .[test]
           
           cd ../pythoncode
           git clone "https://github.com/${REPO_OWNER}/drunc.git" -b "$HEAD_REF" || git clone https://github.com/DUNE-DAQ/drunc.git
+          cd drunc
+          pip install -e .[test]
 
           # Go back to the nightly/NFD_DEV* root folder before building
-          cd .. 
-          dbt-build
+          cd ../..
+          dbt-build --skip-python-install
           dbt-workarea-env
           
           echo "Current directory after building: $(pwd)"
@@ -85,21 +88,18 @@ jobs:
       - name: Run unit tests
         if: success()
         run: |
-          cd nightly/NFD_DEV* || true
+          cd nightly/NFD_DEV*
           source env.sh
-          cd sourcecode/drunc || true
-          pip install pytest pytest-cov
+          cd sourcecode/drunc
           # pytest --junitxml=junit/test-results.xml --cov=drunc --cov-report=html
           pytest
 
       # - name: Publish JUnit test report
       #   uses: mikepenz/action-junit-report@v5
-      #   if: ${{ !cancelled() }}
       #   with:
       #     report_paths: '${{ env.DRUNC_DIR }}/junit/test-results.xml'
 
       # - name: Deploy HTML coverage to GitHub Pages
-      #   if: ${{ !cancelled() }}
       #   uses: peaceiris/actions-gh-pages@v3
       #   with:
       #     github_token: ${{ secrets.GITHUB_TOKEN }}
@@ -108,7 +108,6 @@ jobs:
       #     publish_branch: gh-pages
 
       # - name: Comment on PR
-      #   if: ${{ !cancelled() }}
       #   uses: actions/github-script@v7
       #   with:
       #     script: |
@@ -120,7 +119,6 @@ jobs:
       #       })
 
       # - name: Upload JUnit test report
-      #   if: ${{ !cancelled() }}
       #   uses: actions/upload-artifact@v4
       #   with:
       #     name: junit-report
@@ -129,7 +127,6 @@ jobs:
       #     retention-days: 7
 
       # - name: Upload coverage report (HTML)
-      #   if: ${{ !cancelled() }}
       #   uses: actions/upload-artifact@v4
       #   with:
       #     name: html-coverage-report
