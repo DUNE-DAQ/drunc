@@ -34,6 +34,9 @@ jobs:
       - name: Checkout workflow repository
         uses: actions/checkout@v4
 
+      - name: Setup SSH daemon
+        uses: ./.github/actions/setup-ssh-daemon
+
       - name: Set up dev nightly
         uses: ./.github/actions/setup-dev-nightly
 
@@ -58,7 +61,7 @@ jobs:
           dbt-workarea-env
 
       - name: Install zstd
-        run: sudo dnf install -y zstd || dnf install -y zstd
+        run: dnf install -y zstd
 
       - name: Pack workarea
         run: tar --zstd -cf /tmp/nightly.tar.zst nightly
@@ -86,6 +89,9 @@ jobs:
       - uses: actions/download-artifact@v4
         with:
           name: nightly-env
+
+      - name: Install zstd
+        run: dnf install -y zstd
           
       - name: Unpack workarea
         run: tar --zstd -xf nightly.tar.zst
@@ -112,9 +118,18 @@ jobs:
           path: nightly/NFD_DEV*/pythoncode/drunc/htmlcov/
           retention-days: 1
 
-  daqsystemtest-integration-tests:
+
+  daqsystemtest-integration:
     needs: setup
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false # Prevents cancelling all tests if one fails
+      matrix:
+        test_script: 
+          - small_footprint_quick_test.py
+          - fake_data_producer_test.py
+          - minimal_system_quick_test.py
+    
     defaults:
       run:
         shell: bash
@@ -131,6 +146,9 @@ jobs:
       - uses: actions/download-artifact@v4
         with:
           name: nightly-env
+
+      - name: Install zstd
+        run: dnf install -y zstd
           
       - name: Unpack workarea
         run: tar --zstd -xf nightly.tar.zst
@@ -141,12 +159,13 @@ jobs:
           mkdir -p "$TEST_DIR"
           echo "TEST_DIR=$TEST_DIR" >> "$GITHUB_ENV"
 
-      - name: Run daqsystemtest integration test(s)
+      - name: Run daqsystemtest (${{ matrix.test_script }})
         run: |
           cd nightly/NFD_DEV*
           source env.sh
           export USER=$(whoami)
-          daqsystemtest_integtest_bundle.sh --pytest-options "--skip-resource-checks --tb=long" -k small_footprint_quick_test.py --verbosity 5 --tmpdir "$TEST_DIR" 2>&1
+          daqsystemtest_integtest_bundle.sh -k ${{ matrix.test_script }} --verbosity 5 --tmpdir "$TEST_DIR" 2>&1
+
 
   drunc-integration:
     needs: setup
@@ -164,6 +183,9 @@ jobs:
       - uses: actions/download-artifact@v4
         with:
           name: nightly-env
+
+      - name: Install zstd
+        run: dnf install -y zstd
           
       - name: Unpack workarea
         run: tar --zstd -xf nightly.tar.zst
@@ -175,6 +197,7 @@ jobs:
           cd pythoncode/drunc
           source scripts/setup_drunc_config_path.sh
           source scripts/drunc_integtest_bundle.sh --verbosity 5
+
 
   publish-coverage:
     # Depends only on unit-tests so it triggers without waiting for integration tests
