@@ -1,70 +1,43 @@
 name: Run Tests
 
 on:
-  # Run on any pushes to the main branch which releases are generated from
   push:
     branches:
       - develop
       - 'prep-release/**'
-
   pull_request:
     branches:
       - develop
       - 'prep-release/**'
-    # If taking a PR out of draft mode, run the workflow on the PR event as well
     types: [opened, synchronize, reopened, ready_for_review]
 
-# Cancel any running jobs for this same branch if a new commit is pushed
 concurrency:
   group: ${{ github.workflow }}-${{ github.head_ref || github.ref }}
   cancel-in-progress: true
 
+# Define globals used across multiple jobs
+env:
+  REPO_OWNER: ${{ github.event.pull_request.head.repo.owner.login || github.repository_owner }}
+  HEAD_REF: ${{ github.head_ref || github.ref_name }}
+
 jobs:
-  run-tests:
+  setup:
     if: github.event.pull_request.draft == false
     runs-on: ubuntu-latest
-    
     defaults:
       run:
         shell: bash
-
     container:
       image: ghcr.io/dune-daq/nightly-release-alma9:development_v5
 
-    permissions:
-      contents: write       # Allows actions-gh-pages to push HTML to the gh-pages branch
-      checks: write         # Allows action-junit-report to add visual annotations to the PR
-      pull-requests: write  # Allows github-script to post the comment with the live link
-
     steps:
-      - name: Setup Temp Directory
-        run: |
-          TEST_DIR="$RUNNER_TEMP/my_integration_test"
-          mkdir -p "$TEST_DIR"
-          echo "TEST_DIR=$TEST_DIR" >> "$GITHUB_ENV"
-
-      - name: Check URLs
-        env:
-          # Fallback ensures this doesn't break on 'push' events where PR payload is null
-          REPO_OWNER: ${{ github.event.pull_request.head.repo.owner.login || github.repository_owner }}
-        run: |
-          echo "https://github.com/${REPO_OWNER}/druncschema.git"
-          echo "https://github.com/${REPO_OWNER}/drunc.git"
-
       - name: Checkout workflow repository
         uses: actions/checkout@v4
-
-      - name: Setup SSH daemon
-        uses: ./.github/actions/setup-ssh-daemon
 
       - name: Set up dev nightly
         uses: ./.github/actions/setup-dev-nightly
 
       - name: Install drunc and druncschema
-        id: install_env
-        env:
-          REPO_OWNER: ${{ github.event.pull_request.head.repo.owner.login || github.repository_owner }}
-          HEAD_REF: ${{ github.head_ref || github.ref_name }}
         run: |
           cd nightly/NFD_DEV*
           source env.sh
@@ -80,22 +53,41 @@ jobs:
           cd drunc
           pip install .[test]
 
-          # Go back to the nightly/NFD_DEV* root folder before building
           cd ../..
           dbt-build --skip-python-install
           dbt-workarea-env
-          
-          echo "Current directory after building: $(pwd)"
-          echo "DRUNC_DIR=$(pwd)" >> "$GITHUB_ENV"
 
-          echo "Validate that the asset files required for integration tests are resolved"
-          DB_PATH="/cvmfs/dunedaq.opensciencegrid.org/assets/dunedaq-asset-db.sqlite"
-          ls -l --time-style=full-iso "$DB_PATH"
-          sqlite3 "$DB_PATH" "SELECT COUNT(*) FROM dunedaq_assets;"
+      - name: Pack workarea
+        run: tar --zstd -cf /tmp/nightly.tar.zst nightly
+
+      - name: Upload environment artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: nightly-env
+          path: /tmp/nightly.tar.zst
+          compression-level: 0 # Fast transfer, already compressed
+          retention-days: 1
+
+  unit-tests:
+    needs: setup
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        shell: bash
+    container:
+      image: ghcr.io/dune-daq/nightly-release-alma9:development_v5
+    permissions:
+      checks: write # Required for action-junit-report
+
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: nightly-env
           
+      - name: Unpack workarea
+        run: tar --zstd -xf nightly.tar.zst
+
       - name: Run unit tests
-        id: run_unit_tests
-        if: steps.install_env.outcome == 'success' && !cancelled()
         run: |
           cd nightly/NFD_DEV*
           source env.sh
@@ -104,44 +96,104 @@ jobs:
 
       - name: Publish JUnit test report
         uses: mikepenz/action-junit-report@v5
-        if: ${{ !cancelled() && (steps.run_unit_tests.outcome == 'success' || steps.run_unit_tests.outcome == 'failure') }}
+        if: ${{ !cancelled() }}
         with:
           check_name: "Pytest Results"
-          report_paths: '${{ env.DRUNC_DIR }}/pythoncode/drunc/junit/test-results.xml'
-
-      - name: Deploy HTML coverage to GitHub Pages
-        uses: peaceiris/actions-gh-pages@v3
-        if: ${{ !cancelled() && (steps.run_unit_tests.outcome == 'success' || steps.run_unit_tests.outcome == 'failure') && github.event_name == 'push' }}
-        with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-          publish_dir: ${{ env.DRUNC_DIR }}/pythoncode/drunc/htmlcov/
-          destination_dir: coverage/${{ github.ref_name }}
-          publish_branch: gh-pages
-          keep_files: true  # Prevents wiping the Saturday documentation
+          report_paths: 'nightly/NFD_DEV*/pythoncode/drunc/junit/test-results.xml'
       
       - name: Upload coverage report (HTML)
         uses: actions/upload-artifact@v4
-        if: ${{ !cancelled() && (steps.run_unit_tests.outcome == 'success' || steps.run_unit_tests.outcome == 'failure') }}
+        if: ${{ !cancelled() && github.event_name == 'push' }}
         with:
           name: html-coverage-report
-          path: ${{ env.DRUNC_DIR }}/pythoncode/drunc/htmlcov/
-          if-no-files-found: error
-          retention-days: 7
+          path: nightly/NFD_DEV*/pythoncode/drunc/htmlcov/
+          retention-days: 1
+
+  daqsystemtest-integration-tests:
+    needs: setup
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        shell: bash
+    container:
+      image: ghcr.io/dune-daq/nightly-release-alma9:development_v5
+
+    steps:
+      - name: Checkout workflow repository
+        uses: actions/checkout@v4
+
+      - name: Setup SSH daemon
+        uses: ./.github/actions/setup-ssh-daemon
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: nightly-env
+          
+      - name: Unpack workarea
+        run: tar --zstd -xf nightly.tar.zst
+
+      - name: Setup Temp Directory
+        run: |
+          TEST_DIR="$RUNNER_TEMP/my_integration_test"
+          mkdir -p "$TEST_DIR"
+          echo "TEST_DIR=$TEST_DIR" >> "$GITHUB_ENV"
 
       - name: Run daqsystemtest integration test(s)
-        if: steps.install_env.outcome == 'success' && !cancelled()
         run: |
           cd nightly/NFD_DEV*
           source env.sh
           export USER=$(whoami)
-          echo "Running test as user: $USER"
           daqsystemtest_integtest_bundle.sh --pytest-options "--skip-resource-checks --tb=long" -k small_footprint_quick_test.py --verbosity 5 --tmpdir "$TEST_DIR" 2>&1
 
+  drunc-integration:
+    needs: setup
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        shell: bash
+    container:
+      image: ghcr.io/dune-daq/nightly-release-alma9:development_v5
+
+    steps:
+      - name: Checkout workflow repository
+        uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: nightly-env
+          
+      - name: Unpack workarea
+        run: tar --zstd -xf nightly.tar.zst
+
       - name: Run drunc integration tests
-        if: steps.install_env.outcome == 'success' && !cancelled()
         run: |
           cd nightly/NFD_DEV*
           source env.sh
           cd pythoncode/drunc
           source scripts/setup_drunc_config_path.sh
           source scripts/drunc_integtest_bundle.sh --verbosity 5
+
+  publish-coverage:
+    # Depends only on unit-tests so it triggers without waiting for integration tests
+    needs: unit-tests
+    # always() ensures it runs even if unit tests failed, but only for pushes
+    if: always() && github.event_name == 'push' && !contains(needs.unit-tests.result, 'cancelled')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write # Allows actions-gh-pages to push HTML to gh-pages branch
+      
+    steps:
+      - name: Download HTML coverage artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: html-coverage-report
+          path: htmlcov
+          
+      - name: Deploy HTML coverage to GitHub Pages
+        uses: peaceiris/actions-gh-pages@v3
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: htmlcov
+          destination_dir: coverage/${{ github.ref_name }}
+          publish_branch: gh-pages
+          keep_files: true
