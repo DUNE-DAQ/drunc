@@ -67,8 +67,6 @@ class ProcessManager(abc.ABC, ProcessManagerServicer):
         self.log.debug(pid_info_str())
         self.log.debug("Initialized ProcessManager")
 
-        return
-
         # Validate that the ERS configuration is valid
         try:
             self.handlerconf = LogHandlerConf(init_ers=True)
