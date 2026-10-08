@@ -1,4 +1,3 @@
-import copy as cp
 import os
 import re
 from collections.abc import Callable
@@ -140,9 +139,9 @@ def order_process_by_name(processes: list[ProcessInstance]) -> list[ProcessInsta
             tree_id = process.process_description.metadata.tree_id or ""
             node_by_id.setdefault(tree_id, []).append(process)
 
-        for tree_id, processes in node_by_id.items():
+        for tree_id, node_processes in node_by_id.items():
             node_by_id[tree_id] = sorted(
-                processes,
+                node_processes,
                 key=lambda p: (
                     p.process_description.metadata.name,
                     p.uuid.uuid,
@@ -251,23 +250,6 @@ def _get_process_exit_status(process: ProcessInstance, process_status: str) -> s
         return str(process.return_code)
 
     return "Not available"
-
-
-def strip_env_for_rte(env: dict[str, str]) -> dict[str, str]:
-    env_stripped = cp.deepcopy(env)
-    for key in env.keys():
-        if key in [
-            "PATH",
-            "CET_PLUGIN_PATH",
-            "DUNEDAQ_SHARE_PATH",
-            "LD_LIBRARY_PATH",
-            "LIBRARY_PATH",
-            "PYTHONPATH",
-        ]:
-            del env_stripped[key]
-        if re.search(".*_SHARE", key) and key in env_stripped:
-            del env_stripped[key]
-    return env_stripped
 
 
 def get_version() -> str:
@@ -415,7 +397,7 @@ def get_pm_type_from_name(pm_name: str) -> ProcessManagerTypes:
         # OKS or other types - fallback to from_pyobject
         pmch = ProcessManagerConfHandler.from_pyobject(data=path_or_url)
 
-    return getattr(pmch, "pm_type", pmch.type)
+    return pmch.pm_type
 
 
 def format_hostname(hostname: str) -> str:
