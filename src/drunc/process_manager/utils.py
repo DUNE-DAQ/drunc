@@ -131,7 +131,7 @@ def order_process_by_name(processes: list[ProcessInstance]):
     ordered = []
     for session in sorted(by_session.keys()):
         session_processes = by_session[session]
-        node_by_id = {}
+        node_by_id: dict[str, list[ProcessInstance]] = {}
         children = {}
         roots = []
 
