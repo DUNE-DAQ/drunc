@@ -57,6 +57,9 @@ jobs:
           dbt-build --skip-python-install
           dbt-workarea-env
 
+      - name: Install zstd
+        run: sudo dnf install -y zstd || dnf install -y zstd
+
       - name: Pack workarea
         run: tar --zstd -cf /tmp/nightly.tar.zst nightly
 
