@@ -1,0 +1,1 @@
+dunedaq_integtest_bundle.sh -k 3ru_1df_multirun_test.py|3ru_3df_multirun_test.py|disabled_tpg_test.py|example_system_test.py|long_window_readout_test.py|readout_type_scan_test.py|sample_ehn1_multihost_test.py|tpg_state_collection_test.py|tpreplay_test.py|tpstream_writing_test.py|trigger_bitwords_test.py

@@ -34,31 +34,8 @@ jobs:
       - name: Checkout workflow repository
         uses: actions/checkout@v4
 
-      - name: Setup SSH daemon
-        uses: ./.github/actions/setup-ssh-daemon
-
       - name: Set up dev nightly
-        uses: ./.github/actions/setup-dev-nightly
-
-      - name: Install drunc and druncschema
-        run: |
-          cd nightly/NFD_DEV*
-          source env.sh
-          python -m pip install --upgrade pip
-          
-          cd sourcecode
-          git clone "https://github.com/${REPO_OWNER}/druncschema.git" -b "$HEAD_REF" || git clone https://github.com/DUNE-DAQ/druncschema.git
-          cd druncschema
-          pip install .[test]
-          
-          cd ../../pythoncode
-          git clone "https://github.com/${REPO_OWNER}/drunc.git" -b "$HEAD_REF" || git clone https://github.com/DUNE-DAQ/drunc.git
-          cd drunc
-          pip install .[test]
-
-          cd ../..
-          dbt-build --skip-python-install
-          dbt-workarea-env
+        uses: ./.github/actions/setup-dev-nightly-with-drunc
 
       - name: Install zstd
         run: dnf install -y zstd
@@ -71,7 +48,7 @@ jobs:
         with:
           name: nightly-env
           path: /tmp/nightly.tar.zst
-          compression-level: 0 # Fast transfer, already compressed
+          compression-level: 0
           retention-days: 1
 
   unit-tests:
@@ -86,6 +63,12 @@ jobs:
       checks: write # Required for action-junit-report
 
     steps:
+      - name: Checkout workflow repository
+        uses: actions/checkout@v4
+
+      - name: Setup SSH daemon
+        uses: ./.github/actions/setup-ssh-daemon
+
       - uses: actions/download-artifact@v4
         with:
           name: nightly-env
@@ -167,9 +150,30 @@ jobs:
           daqsystemtest_integtest_bundle.sh -k ${{ matrix.test_script }} --verbosity 5 --tmpdir "$TEST_DIR" 2>&1
 
 
-  drunc-integration:
-    needs: setup
+  prepare-drunc-matrix:
     runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.set-matrix.outputs.matrix }}
+    steps:
+      - name: Generate test list
+        id: set-matrix
+        run: |
+          # Clone just the drunc repository to read the file list
+          git clone "https://github.com/${REPO_OWNER}/drunc.git" -b "$HEAD_REF" || git clone https://github.com/DUNE-DAQ/drunc.git
+          cd drunc/src/drunc/integtest
+          
+          # Find all python files, build a JSON array, and set it as an output variable
+          FILES_JSON=$(ls -1 *.py | jq -R -s -c 'split("\n")[:-1]')
+          echo "matrix=$FILES_JSON" >> "$GITHUB_OUTPUT"
+
+
+  drunc-integration:
+    needs: [setup, prepare-drunc-matrix]
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        test_script: ${{ fromJSON(needs.prepare-drunc-matrix.outputs.matrix) }}
     defaults:
       run:
         shell: bash
@@ -179,6 +183,9 @@ jobs:
     steps:
       - name: Checkout workflow repository
         uses: actions/checkout@v4
+
+      - name: Setup SSH daemon
+        uses: ./.github/actions/setup-ssh-daemon
 
       - uses: actions/download-artifact@v4
         with:
@@ -190,13 +197,19 @@ jobs:
       - name: Unpack workarea
         run: tar --zstd -xf nightly.tar.zst
 
-      - name: Run drunc integration tests
+      - name: Setup Temp Directory
+        run: |
+          TEST_DIR="$RUNNER_TEMP/my_integration_test"
+          mkdir -p "$TEST_DIR"
+          echo "TEST_DIR=$TEST_DIR" >> "$GITHUB_ENV"
+
+      - name: Run drunc (${{ matrix.test_script }})
         run: |
           cd nightly/NFD_DEV*
           source env.sh
           cd pythoncode/drunc
           source scripts/setup_drunc_config_path.sh
-          source scripts/drunc_integtest_bundle.sh --verbosity 5
+          source scripts/drunc_integtest_bundle.sh -k ${{ matrix.test_script }} --verbosity 5 --tmpdir "$TEST_DIR" 2>&1
 
 
   publish-coverage:
