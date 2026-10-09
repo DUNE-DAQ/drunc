@@ -44,7 +44,7 @@ jobs:
         run: tar --zstd -cf /tmp/nightly.tar.zst nightly
 
       - name: Upload environment artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: nightly-env
           path: /tmp/nightly.tar.zst
@@ -84,7 +84,7 @@ jobs:
   #         report_paths: 'nightly/NFD_DEV*/pythoncode/drunc/junit/test-results.xml'
       
   #     - name: Upload coverage report (HTML)
-  #       uses: actions/upload-artifact@v4
+  #       uses: actions/upload-artifact@v7
   #       if: ${{ !cancelled() && github.event_name == 'push' }}
   #       with:
   #         name: html-coverage-report

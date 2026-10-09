@@ -10,6 +10,24 @@ inputs:
 runs:
   using: composite
   steps:
+    - name: Install Docker CLI prerequisites
+      shell: bash
+      run: |
+        # Remove conflicting podman packages if present
+        dnf remove -y podman-docker || true
+
+        # Add Docker CE repository
+        dnf install -y dnf-plugins-core
+        dnf config-manager --add-repo https://download.docker.com/linux/centos/docker-ce.repo
+
+        # Install Docker CE CLI
+        dnf install -y --allowerasing docker-ce-cli
+
+        # Verify docker binary is found and can talk to the mounted daemon socket
+        which docker
+        docker info
+
+
     - name: Install and configure Kind cluster
       shell: bash
       run: |
