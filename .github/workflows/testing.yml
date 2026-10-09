@@ -232,6 +232,8 @@ jobs:
 
       - name: Setup Kind and Kubectl
         uses: ./.github/actions/setup-kind
+        with:
+          cluster_name: daq-k8s-cluster
 
       - name: Run daqsystemtest (k8s)
         run: |
@@ -266,6 +268,11 @@ jobs:
 
   #     - name: Initialize Test Environment
   #       uses: ./.github/actions/setup-test-runner
+
+        # - name: Setup Kind and Kubectl
+        #   uses: ./.github/actions/setup-kind
+        #   with:
+        #     cluster_name: daq-k8s-cluster
 
   #     - name: Setup Kind and Kubectl
   #       uses: ./.github/actions/setup-kind
