@@ -128,8 +128,8 @@ jobs:
         id: set-matrix
         run: |
           # Output the shared list of test scripts as a JSON array
-          # echo 'matrix=["small_footprint_quick_test.py", "fake_data_producer_test.py", "minimal_system_quick_test.py"]' >> "$GITHUB_OUTPUT"
-          echo 'matrix=["minimal_system_quick_test.py"]' >> "$GITHUB_OUTPUT"
+          # echo 'matrix=["small_footprint_quick_test.py", "fake_data_producer_test.py"]' >> "$GITHUB_OUTPUT"
+          echo 'matrix=["small_footprint_quick_test.py"]' >> "$GITHUB_OUTPUT"
 
 
   # select-drunc-integtests:
