@@ -220,7 +220,6 @@ jobs:
         shell: bash
     container:
       image: ghcr.io/dune-daq/nightly-release-alma9:development_v5
-      options: --hostname daq-k8s-cluster-control-plane
       volumes:
         - /var/run/docker.sock:/var/run/docker.sock
 
@@ -241,7 +240,14 @@ jobs:
           cd nightly/NFD_DEV*
           source env.sh
           export USER=$(whoami)
-          
+
+          # Fetch the actual node name in the Kind cluster
+          NODE_NAME=$(kubectl get nodes -o jsonpath='{.items[0].metadata.name}')
+
+          # Pass node name to drunc so target host validation succeeds
+          export HOSTNAME="$NODE_NAME"
+          export DRUNC_HOST="$NODE_NAME"
+
           daqsystemtest_integtest_bundle.sh \
             -k "${{ matrix.test_script }}" \
             --pytest-options "--process-manager-type k8s" \
