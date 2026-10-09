@@ -40,14 +40,11 @@ runs:
         # Detect the host runner's real path backing /__w
         HOST_WORKSPACE_PATH=$(docker inspect "$HOSTNAME" --format '{{range .Mounts}}{{if eq .Destination "/__w"}}{{.Source}}{{end}}{{end}}')
         HOST_WORKSPACE_PATH="${HOST_WORKSPACE_PATH:-/__w}"
-        echo "Detected host workspace backing path: $HOST_WORKSPACE_PATH"
         
         # Detect the nightly path in the container and translate to host backing path
         NIGHTLY_CONTAINER_PATH=$(find /__w -maxdepth 4 -type d -name "NFD_DEV*" | head -n 1)
         NIGHTLY_DIRNAME=$(basename "$NIGHTLY_CONTAINER_PATH")
         NIGHTLY_HOST_PATH="${NIGHTLY_CONTAINER_PATH//\/__w/$HOST_WORKSPACE_PATH}"
-        echo "Found container nightly release at: $NIGHTLY_CONTAINER_PATH"
-        echo "Mapped to host nightly release at: $NIGHTLY_HOST_PATH ($NIGHTLY_DIRNAME)"
 
         cat <<EOF > /tmp/kind-config.yaml
         kind: Cluster
@@ -62,6 +59,8 @@ runs:
           extraMounts:
           - hostPath: ${HOST_WORKSPACE_PATH}
             containerPath: /__w
+          - hostPath: ${HOST_WORKSPACE_PATH}
+            containerPath: /nfs
           - hostPath: ${NIGHTLY_HOST_PATH}
             containerPath: /cvmfs/dunedaq-development.opensciencegrid.org/nightly/${NIGHTLY_DIRNAME}
         EOF
@@ -84,15 +83,11 @@ runs:
         kubectl label node "$NODE_NAME" "drunc.host=$HOSTNAME" --overwrite || true
         kubectl label node "$NODE_NAME" "host=$HOSTNAME" --overwrite || true
 
-        # Wait for the node to become Ready (clears the NoSchedule taint)
-        echo "Waiting for node ${NODE_NAME} to reach Ready status..."
+        # Wait for the node to become Ready
         kubectl wait --for=condition=Ready "node/${NODE_NAME}" --timeout=90s
 
-        # Verify cluster nodes
-        kubectl get nodes -o wide
-
         # Create dummy mount directories required by drunc's pod hostPath volumes
-        docker exec "$KIND_CONTAINER" mkdir -p /nfs /cvmfs
+        docker exec "$KIND_CONTAINER" mkdir -p /cvmfs
 
         # Map container hostname to Kind node IP so NodePort polling reaches the Kind node
         sed -i "/${HOSTNAME}/d" /etc/hosts 2>/dev/null || true
@@ -108,15 +103,13 @@ runs:
         CLUSTER_NAME="${{ inputs.cluster_name }}"
         IMAGE="ghcr.io/dune-daq/nightly-release-alma9:development_v5"
 
-        docker tag "$IMAGE" "ghcr.io/dune-daq/alma9:latest" || true
+        # Bake workspace symlinks into the image so the pod finds drunc-controller
+        cat <<EOF > Dockerfile.ci
+        FROM $IMAGE
+        USER root
+        RUN mkdir -p /__w && ln -s /nfs/drunc /__w/drunc && ln -s /nfs/_temp /__w/_temp
+        EOF
+        
+        docker build -t "ghcr.io/dune-daq/alma9:latest" -f Dockerfile.ci .
 
-        kind load docker-image "$IMAGE" --name "$CLUSTER_NAME"
         kind load docker-image "ghcr.io/dune-daq/alma9:latest" --name "$CLUSTER_NAME"
-
-        KIND_NODE=$(docker ps --filter "label=io.x-k8s.kind.cluster=${CLUSTER_NAME}" --format '{{.Names}}' | head -n 1)
-        echo "=Checking CVMFS mount="
-        docker exec "$KIND_NODE" ls -la /cvmfs/ || true
-        docker exec "$KIND_NODE" ls -la /cvmfs/dunedaq-development.opensciencegrid.org/ || true
-        docker exec "$KIND_NODE" ls -la /cvmfs/dunedaq-development.opensciencegrid.org/nightly/ || true
-        echo "=Checking NFS mount="
-        docker exec "$KIND_NODE" ls -la /nfs/ || true
