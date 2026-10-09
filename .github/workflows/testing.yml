@@ -118,7 +118,7 @@ jobs:
   #         keep_files: true
 
 
-  prepare-daqsystemtest-matrix:
+  select-daqsystemtest-integtests:
     # Select integration tests that can run on the default 4 core runner
     runs-on: ubuntu-latest
     outputs:
@@ -132,7 +132,7 @@ jobs:
           echo 'matrix=["minimal_system_quick_test.py"]' >> "$GITHUB_OUTPUT"
 
 
-  # prepare-drunc-matrix:
+  # select-drunc-integtests:
   #   runs-on: ubuntu-latest
   #   outputs:
   #     matrix: ${{ steps.set-matrix.outputs.matrix }}
@@ -150,12 +150,12 @@ jobs:
 
 
   # daqsystemtest-integration:
-  #   needs: [setup, prepare-daqsystemtest-matrix]
+  #   needs: [setup, select-daqsystemtest-integtests]
   #   runs-on: ubuntu-latest
   #   strategy:
   #     fail-fast: false 
   #     matrix:
-  #       test_script: ${{ fromJSON(needs.prepare-daqsystemtest-matrix.outputs.matrix) }}
+  #       test_script: ${{ fromJSON(needs.select-daqsystemtest-integtests.outputs.matrix) }}
     
   #   defaults:
   #     run:
@@ -179,12 +179,12 @@ jobs:
 
 
   # drunc-integration:
-  #   needs: [setup, prepare-drunc-matrix]
+  #   needs: [setup, select-drunc-integtests]
   #   runs-on: ubuntu-latest
   #   strategy:
   #     fail-fast: false
   #     matrix:
-  #       test_script: ${{ fromJSON(needs.prepare-drunc-matrix.outputs.matrix) }}
+  #       test_script: ${{ fromJSON(needs.select-drunc-integtests.outputs.matrix) }}
   #   defaults:
   #     run:
   #       shell: bash
@@ -208,12 +208,12 @@ jobs:
 
 
   daqsystemtest-integration-k8s:
-    needs: [setup, prepare-daqsystemtest-matrix]
+    needs: [setup, select-daqsystemtest-integtests]
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false 
       matrix:
-        test_script: ${{ fromJSON(needs.prepare-daqsystemtest-matrix.outputs.matrix) }}
+        test_script: ${{ fromJSON(needs.select-daqsystemtest-integtests.outputs.matrix) }}
     
     defaults:
       run:
@@ -247,12 +247,12 @@ jobs:
 
 
   # drunc-integration-k8s:
-  #   needs: [setup, prepare-drunc-matrix]
+  #   needs: [setup, select-drunc-integtests]
   #   runs-on: ubuntu-latest
   #   strategy:
   #     fail-fast: false
   #     matrix:
-  #       test_script: ${{ fromJSON(needs.prepare-drunc-matrix.outputs.matrix) }}
+  #       test_script: ${{ fromJSON(needs.select-drunc-integtests.outputs.matrix) }}
 
   #   defaults:
   #     run:
@@ -269,10 +269,10 @@ jobs:
   #     - name: Initialize Test Environment
   #       uses: ./.github/actions/setup-test-runner
 
-        # - name: Setup Kind and Kubectl
-        #   uses: ./.github/actions/setup-kind
-        #   with:
-        #     cluster_name: daq-k8s-cluster
+  #     - name: Setup Kind and Kubectl
+  #       uses: ./.github/actions/setup-kind
+  #       with:
+  #         cluster_name: daq-k8s-cluster
 
   #     - name: Setup Kind and Kubectl
   #       uses: ./.github/actions/setup-kind
