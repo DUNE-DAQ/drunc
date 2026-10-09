@@ -163,7 +163,7 @@ jobs:
           cd drunc/src/drunc/integtest
           
           # Find all python files, build a JSON array, and set it as an output variable
-          FILES_JSON=$(ls -1 *.py | jq -R -s -c 'split("\n")[:-1]')
+          FILES_JSON=$(ls -1 *_test.py | jq -R -s -c 'split("\n")[:-1]')
           echo "matrix=$FILES_JSON" >> "$GITHUB_OUTPUT"
 
 
