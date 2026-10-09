@@ -103,13 +103,18 @@ runs:
         CLUSTER_NAME="${{ inputs.cluster_name }}"
         IMAGE="ghcr.io/dune-daq/nightly-release-alma9:development_v5"
 
-        # Bake workspace symlinks into the image so the pod finds drunc-controller
+        # 1. Bake workspace symlinks into the image so the pod finds drunc-controller
         cat <<EOF > Dockerfile.ci
         FROM $IMAGE
         USER root
         RUN mkdir -p /__w && ln -s /nfs/drunc /__w/drunc && ln -s /nfs/_temp /__w/_temp
         EOF
         
-        docker build -t "ghcr.io/dune-daq/alma9:latest" -f Dockerfile.ci .
+        # 2. Tag with :ci-local instead of :latest to prevent 'imagePullPolicy: Always'
+        docker build -t "ghcr.io/dune-daq/alma9:ci-local" -f Dockerfile.ci .
 
-        kind load docker-image "ghcr.io/dune-daq/alma9:latest" --name "$CLUSTER_NAME"
+        # 3. Load the shim into Kind
+        kind load docker-image "ghcr.io/dune-daq/alma9:ci-local" --name "$CLUSTER_NAME"
+
+        # 4. Patch drunc to request the local tag so Kubernetes uses the cached 10GB image
+        find /__w -type f \( -name "*.py" -o -name "*.yaml" -o -name "*.json" \) -exec sed -i 's|ghcr.io/dune-daq/alma9:latest|ghcr.io/dune-daq/alma9:ci-local|g' {} + 2>/dev/null || true
