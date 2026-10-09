@@ -41,8 +41,14 @@ runs:
         HOST_WORKSPACE_PATH=$(docker inspect "$HOSTNAME" --format '{{range .Mounts}}{{if eq .Destination "/__w"}}{{.Source}}{{end}}{{end}}')
         HOST_WORKSPACE_PATH="${HOST_WORKSPACE_PATH:-/__w}"
         echo "Detected host workspace backing path: $HOST_WORKSPACE_PATH"
+        
+        # Detect the nightly path in the container and translate to host backing path
+        NIGHTLY_CONTAINER_PATH=$(find /__w -maxdepth 4 -type d -name "NFD_DEV*" | head -n 1)
+        NIGHTLY_DIRNAME=$(basename "$NIGHTLY_CONTAINER_PATH")
+        NIGHTLY_HOST_PATH="${NIGHTLY_CONTAINER_PATH//\/__w/$HOST_WORKSPACE_PATH}"
+        echo "Found container nightly release at: $NIGHTLY_CONTAINER_PATH"
+        echo "Mapped to host nightly release at: $NIGHTLY_HOST_PATH ($NIGHTLY_DIRNAME)"
 
-        # Write Kind config ensuring exact spacing inside the heredoc
         cat <<EOF > /tmp/kind-config.yaml
         kind: Cluster
         apiVersion: kind.x-k8s.io/v1alpha4
@@ -56,8 +62,9 @@ runs:
           extraMounts:
           - hostPath: ${HOST_WORKSPACE_PATH}
             containerPath: /__w
+          - hostPath: ${NIGHTLY_HOST_PATH}
+            containerPath: /cvmfs/dunedaq-development.opensciencegrid.org/nightly/${NIGHTLY_DIRNAME}
         EOF
-
         # Strip the leading 8 spaces from the heredoc so Kind receives clean YAML
         sed -i 's/^[ ]\{8\}//' /tmp/kind-config.yaml
 
@@ -105,3 +112,9 @@ runs:
 
         kind load docker-image "$IMAGE" --name "$CLUSTER_NAME"
         kind load docker-image "ghcr.io/dune-daq/alma9:latest" --name "$CLUSTER_NAME"
+
+        KIND_NODE=$(docker ps --filter "label=io.x-k8s.kind.cluster=${CLUSTER_NAME}" --format '{{.Names}}' | head -n 1)
+        echo "=Checking CVMFS mount="
+        docker exec "$KIND_NODE" ls -la /cvmfs/dunedaq-development.opensciencegrid.org/nightly/ || true
+        echo "=Checking NFS mount="
+        docker exec "$KIND_NODE" ls -la /nfs/ || true

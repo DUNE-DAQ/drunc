@@ -251,6 +251,16 @@ jobs:
         if: always()
         uses: ./.github/actions/validate-test-pass
 
+      - name: Inspect Kubernetes Pod State & Failure
+        if: failure()
+        run: |
+          KIND_NODE=$(docker ps --filter "label=io.x-k8s.kind.cluster=${{ inputs.cluster_name || 'daq-k8s-cluster' }}" --format '{{.Names}}' | head -n 1)
+
+          echo "==================== CONTAINERS LOGS FROM KIND DISK ===================="
+          docker exec "$KIND_NODE" bash -c '
+            find /var/log/pods -name "*.log" -exec echo "=== Log file: {} ===" \; -exec cat {} \;
+          '
+
       - name: Debug Kubernetes Pod State
         if: failure()
         run: |
