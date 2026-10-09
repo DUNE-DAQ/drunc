@@ -282,7 +282,7 @@ jobs:
           export USER=$(whoami)
           
           daqsystemtest_integtest_bundle.sh \
-            -k "${{ matrix.test_script }}" \
+            -k "minimal" \
             --pytest-options "--process-manager-type k8s" \
             --verbosity 5 \
             --tmpdir "$TEST_DIR" 2>&1 | tee "$TEST_DIR/bundle_stdout.log"

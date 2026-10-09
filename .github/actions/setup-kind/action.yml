@@ -10,18 +10,11 @@ inputs:
 runs:
   using: composite
   steps:
-    - name: Install K8s prerequisites (Docker CLI)
-      shell: bash
-      run: |
-        dnf install -y dnf-plugins-core
-        dnf config-manager --add-repo https://download.docker.com/linux/centos/docker-ce.repo
-        dnf install -y --allowerasing docker-ce-cli
-
     - name: Install and configure Kind cluster
       shell: bash
       run: |
         CLUSTER_NAME="${{ inputs.cluster_name }}"
-        
+
         # Install kubectl
         curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
         chmod +x kubectl
@@ -32,16 +25,21 @@ runs:
         chmod +x ./kind
         mv ./kind /usr/local/bin/
 
-        # Create a fresh cluster using the dynamic input name
-        kind create cluster --name $CLUSTER_NAME
+        # Create fresh cluster
+        kind create cluster --name "$CLUSTER_NAME"
 
         # Bridge the CI container to the kind network
-        docker network connect kind $HOSTNAME
-        
-        # Get the internal IP and update kubeconfig
-        KIND_IP=$(docker inspect -f '{{.NetworkSettings.Networks.kind.IPAddress}}' ${CLUSTER_NAME}-control-plane)
-        kubectl config set-cluster kind-${CLUSTER_NAME} --server=https://${KIND_IP}:6443
+        docker network connect kind "$HOSTNAME"
+
+        # Get internal IP and configure kubeconfig
+        KIND_IP=$(docker inspect -f '{{.NetworkSettings.Networks.kind.IPAddress}}' "${CLUSTER_NAME}-control-plane")
+        kubectl config set-cluster "kind-${CLUSTER_NAME}" --server="https://${KIND_IP}:6443"
+
+        # Label Kind node with the container's hostname so drunc recognizes it as a valid target host
+        NODE_NAME=$(kubectl get nodes -o jsonpath='{.items[0].metadata.name}')
+        kubectl label node "$NODE_NAME" kubernetes.io/hostname="$HOSTNAME" --overwrite || true
+        kubectl label node "$NODE_NAME" "drunc.host=$HOSTNAME" --overwrite || true
 
         # Verify
         kubectl cluster-info
-        kubectl get nodes
+        kubectl get nodes --show-labels
