@@ -276,21 +276,22 @@ jobs:
       - name: Inspect Kubernetes Pod State & Failure
         if: failure()
         run: |
-          echo "==================== POD STATUS ===================="
-          kubectl get pods -A -o wide
+          KIND_NODE=$(docker ps --filter "label=io.x-k8s.kind.cluster=${{ inputs.cluster_name || 'daq-k8s-cluster' }}" --format '{{.Names}}' | head -n 1)
 
-          echo "==================== DRUNC POD LOG DUMP ===================="
-          LOG_DIR="${TEST_DIR:-/__w/_temp}"
-          find "$LOG_DIR" -type f \( -name "*.log" -o -name "*.txt" -o -name "*.out" -o -name "*.err" \) -exec echo "--- File: {} ---" \; -exec cat {} \;
+          echo "==================== ALL CONTAINERS (INCLUDING EXITED) ===================="
+          docker exec "$KIND_NODE" crictl ps -a
 
-          echo "==================== DESCRIBE PODS ===================="
-          kubectl describe pods -n smallfootprint || true
-
-          echo "==================== POD LOGS ===================="
-          kubectl logs -n smallfootprint --all-pods=true --all-containers=true --tail=100 || true
-
-          echo "==================== K8S SYSTEM EVENTS ===================="
-          kubectl get events -n smallfootprint --sort-by='.metadata.creationTimestamp' || true
+          echo "==================== LOGS OF EXITED CONTAINERS ===================="
+          docker exec "$KIND_NODE" bash -c '
+            for cid in $(crictl ps -a --state Exited -q); do
+              echo "--------------------------------------------------"
+              echo "Container ID: $cid"
+              crictl inspect "$cid" | grep -E "image|name|exitCode|reason" | head -n 10
+              echo "--- STDOUT / STDERR ---"
+              crictl logs "$cid"
+              echo "--------------------------------------------------"
+            done
+          '
 
   # daqsystemtest-integration-k8s-msqt:
   #   needs: generate-release-tarball

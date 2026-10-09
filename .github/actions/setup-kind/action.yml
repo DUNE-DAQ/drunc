@@ -115,6 +115,8 @@ runs:
 
         KIND_NODE=$(docker ps --filter "label=io.x-k8s.kind.cluster=${CLUSTER_NAME}" --format '{{.Names}}' | head -n 1)
         echo "=Checking CVMFS mount="
+        docker exec "$KIND_NODE" ls -la /cvmfs/ || true
+        docker exec "$KIND_NODE" ls -la /cvmfs/dunedaq-development.opensciencegrid.org/ || true
         docker exec "$KIND_NODE" ls -la /cvmfs/dunedaq-development.opensciencegrid.org/nightly/ || true
         echo "=Checking NFS mount="
         docker exec "$KIND_NODE" ls -la /nfs/ || true
