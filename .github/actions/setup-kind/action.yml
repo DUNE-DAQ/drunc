@@ -84,6 +84,9 @@ runs:
         # Verify cluster nodes
         kubectl get nodes -o wide
 
+        # Create dummy mount directories required by drunc's pod hostPath volumes
+        docker exec "$KIND_CONTAINER" mkdir -p /nfs /cvmfs
+
     - name: Preload DAQ image into Kind
       shell: bash
       run: |
