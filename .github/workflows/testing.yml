@@ -21,7 +21,7 @@ env:
   HEAD_REF: ${{ github.head_ref || github.ref_name }}
 
 jobs:
-  setup:
+  generate-release-tarball:
     if: github.event.pull_request.draft == false
     runs-on: ubuntu-latest
     defaults:
@@ -52,7 +52,7 @@ jobs:
           retention-days: 1
 
   # unit-tests:
-  #   needs: setup
+  #   needs: generate-release-tarball
   #   runs-on: ubuntu-latest
   #   defaults:
   #     run:
@@ -150,7 +150,7 @@ jobs:
 
 
   # daqsystemtest-integration:
-  #   needs: [setup, select-daqsystemtest-integtests]
+  #   needs: [generate-release-tarball, select-daqsystemtest-integtests]
   #   runs-on: ubuntu-latest
   #   strategy:
   #     fail-fast: false 
@@ -179,7 +179,7 @@ jobs:
 
 
   # drunc-integration:
-  #   needs: [setup, select-drunc-integtests]
+  #   needs: [generate-release-tarball, select-drunc-integtests]
   #   runs-on: ubuntu-latest
   #   strategy:
   #     fail-fast: false
@@ -208,7 +208,7 @@ jobs:
 
 
   daqsystemtest-integration-k8s:
-    needs: [setup, select-daqsystemtest-integtests]
+    needs: [generate-release-tarball, select-daqsystemtest-integtests]
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false 
@@ -247,7 +247,7 @@ jobs:
 
 
   # drunc-integration-k8s:
-  #   needs: [setup, select-drunc-integtests]
+  #   needs: [generate-release-tarball, select-drunc-integtests]
   #   runs-on: ubuntu-latest
   #   strategy:
   #     fail-fast: false
