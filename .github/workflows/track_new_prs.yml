@@ -18,7 +18,7 @@ jobs:
       pull-requests: write 
     steps:
       - name: Add PR to drunc project
-        uses: actions/add-to-project@v1.0.2
+        uses: actions/add-to-project@v2
         with:
           project-url: https://github.com/orgs/DUNE-DAQ/projects/8
           github-token: ${{ secrets.BOT_CI_ISSUES }}

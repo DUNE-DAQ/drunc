@@ -18,11 +18,11 @@ jobs:
           python-version: "3.11"
       - uses: ts-graphviz/setup-graphviz@v1
       - name: Checkout Main Repository
-        uses: actions/checkout@v5
+        uses: actions/checkout@v7.0.2
 
       # Clone the Wiki content  
       - name: Checkout Wiki Content 
-        uses: actions/checkout@v5 
+        uses: actions/checkout@v7.0.2 
         with: 
           repository: ${{ github.repository }}.wiki 
           ref: master # Wiki default branch 
