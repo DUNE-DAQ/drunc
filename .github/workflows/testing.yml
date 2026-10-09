@@ -63,21 +63,8 @@ jobs:
       checks: write # Required for action-junit-report
 
     steps:
-      - name: Checkout workflow repository
-        uses: actions/checkout@v4
-
-      - name: Setup SSH daemon
-        uses: ./.github/actions/setup-ssh-daemon
-
-      - uses: actions/download-artifact@v4
-        with:
-          name: nightly-env
-
-      - name: Install zstd
-        run: dnf install -y zstd
-          
-      - name: Unpack workarea
-        run: tar --zstd -xf nightly.tar.zst
+      - name: Initialize Test Environment
+        uses: ./.github/actions/setup-test-runner
 
       - name: Run unit tests
         run: |
@@ -102,16 +89,51 @@ jobs:
           retention-days: 1
 
 
+  publish-coverage:
+    # Depends only on unit-tests so it triggers without waiting for integration tests
+    needs: unit-tests
+    # always() ensures it runs even if unit tests failed, but only for pushes
+    if: always() && github.event_name == 'push' && !contains(needs.unit-tests.result, 'cancelled')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write # Allows actions-gh-pages to push HTML to gh-pages branch
+      
+    steps:
+      - name: Download HTML coverage artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: html-coverage-report
+          path: htmlcov
+          
+      - name: Deploy HTML coverage to GitHub Pages
+        uses: peaceiris/actions-gh-pages@v3
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: htmlcov
+          destination_dir: coverage/${{ github.ref_name }}
+          publish_branch: gh-pages
+          keep_files: true
+
+
+  prepare-daqsystemtest-matrix:
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.set-matrix.outputs.matrix }}
+    steps:
+      - name: Define daqsystemtest matrix
+        id: set-matrix
+        run: |
+          # Output the shared list of test scripts as a JSON array
+          echo 'matrix=["small_footprint_quick_test.py", "fake_data_producer_test.py", "minimal_system_quick_test.py"]' >> "$GITHUB_OUTPUT"
+
+
   daqsystemtest-integration:
-    needs: setup
+    needs: [setup, prepare-daqsystemtest-matrix]
     runs-on: ubuntu-latest
     strategy:
-      fail-fast: false # Prevents cancelling all tests if one fails
+      fail-fast: false 
       matrix:
-        test_script: 
-          - small_footprint_quick_test.py
-          - fake_data_producer_test.py
-          - minimal_system_quick_test.py
+        test_script: ${{ fromJSON(needs.prepare-daqsystemtest-matrix.outputs.matrix) }}
     
     defaults:
       run:
@@ -120,27 +142,8 @@ jobs:
       image: ghcr.io/dune-daq/nightly-release-alma9:development_v5
 
     steps:
-      - name: Checkout workflow repository
-        uses: actions/checkout@v4
-
-      - name: Setup SSH daemon
-        uses: ./.github/actions/setup-ssh-daemon
-
-      - uses: actions/download-artifact@v4
-        with:
-          name: nightly-env
-
-      - name: Install zstd
-        run: dnf install -y zstd
-          
-      - name: Unpack workarea
-        run: tar --zstd -xf nightly.tar.zst
-
-      - name: Setup Temp Directory
-        run: |
-          TEST_DIR="$RUNNER_TEMP/my_integration_test"
-          mkdir -p "$TEST_DIR"
-          echo "TEST_DIR=$TEST_DIR" >> "$GITHUB_ENV"
+      - name: Initialize Test Environment
+        uses: ./.github/actions/setup-test-runner
 
       - name: Run daqsystemtest (${{ matrix.test_script }})
         run: |
@@ -181,27 +184,8 @@ jobs:
       image: ghcr.io/dune-daq/nightly-release-alma9:development_v5
 
     steps:
-      - name: Checkout workflow repository
-        uses: actions/checkout@v4
-
-      - name: Setup SSH daemon
-        uses: ./.github/actions/setup-ssh-daemon
-
-      - uses: actions/download-artifact@v4
-        with:
-          name: nightly-env
-
-      - name: Install zstd
-        run: dnf install -y zstd
-          
-      - name: Unpack workarea
-        run: tar --zstd -xf nightly.tar.zst
-
-      - name: Setup Temp Directory
-        run: |
-          TEST_DIR="$RUNNER_TEMP/my_integration_test"
-          mkdir -p "$TEST_DIR"
-          echo "TEST_DIR=$TEST_DIR" >> "$GITHUB_ENV"
+      - name: Initialize Test Environment
+        uses: ./.github/actions/setup-test-runner
 
       - name: Run drunc (${{ matrix.test_script }})
         run: |
@@ -211,28 +195,69 @@ jobs:
           source scripts/setup_drunc_config_path.sh
           source scripts/drunc_integtest_bundle.sh -k ${{ matrix.test_script }} --verbosity 5 --tmpdir "$TEST_DIR" 2>&1
 
-
-  publish-coverage:
-    # Depends only on unit-tests so it triggers without waiting for integration tests
-    needs: unit-tests
-    # always() ensures it runs even if unit tests failed, but only for pushes
-    if: always() && github.event_name == 'push' && !contains(needs.unit-tests.result, 'cancelled')
+  daqsystemtest-integration-k8s:
+    needs: [setup, prepare-daqsystemtest-matrix]
     runs-on: ubuntu-latest
-    permissions:
-      contents: write # Allows actions-gh-pages to push HTML to gh-pages branch
-      
+    strategy:
+      fail-fast: false 
+      matrix:
+        test_script: ${{ fromJSON(needs.prepare-daqsystemtest-matrix.outputs.matrix) }}
+    
+    defaults:
+      run:
+        shell: bash
+    container:
+      image: ghcr.io/dune-daq/nightly-release-alma9:development_v5
+      volumes:
+        - /var/run/docker.sock:/var/run/docker.sock
+      options: --network host
+
     steps:
-      - name: Download HTML coverage artifact
-        uses: actions/download-artifact@v4
-        with:
-          name: html-coverage-report
-          path: htmlcov
+      - name: Initialize Test Environment
+        uses: ./.github/actions/setup-test-runner
+
+      - name: Setup Kind and Kubectl
+        uses: ./.github/actions/setup-kind
+
+      - name: Run daqsystemtest (k8s)
+        run: |
+          cd nightly/NFD_DEV*
+          source env.sh
+          export USER=$(whoami)
           
-      - name: Deploy HTML coverage to GitHub Pages
-        uses: peaceiris/actions-gh-pages@v3
-        with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-          publish_dir: htmlcov
-          destination_dir: coverage/${{ github.ref_name }}
-          publish_branch: gh-pages
-          keep_files: true
+          # NOTE: You will likely need to append whatever specific flag your framework uses 
+          # to instruct the tests to use k8s instead of the default PM (e.g. --pm k8s)
+          daqsystemtest_integtest_bundle.sh -k ${{ matrix.test_script }} --pytest-options "--process-manager-type k8s" --verbosity 5 --tmpdir "$TEST_DIR" 2>&1
+
+
+  drunc-integration-k8s:
+    needs: [setup, prepare-drunc-matrix]
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        test_script: ${{ fromJSON(needs.prepare-drunc-matrix.outputs.matrix) }}
+
+    defaults:
+      run:
+        shell: bash
+    container:
+      image: ghcr.io/dune-daq/nightly-release-alma9:development_v5
+      volumes:
+        - /var/run/docker.sock:/var/run/docker.sock
+      options: --network host
+
+    steps:
+      - name: Initialize Test Environment
+        uses: ./.github/actions/setup-test-runner
+
+      - name: Setup Kind and Kubectl
+        uses: ./.github/actions/setup-kind
+
+      - name: Run drunc (k8s)
+        run: |
+          cd nightly/NFD_DEV*
+          source env.sh
+          cd pythoncode/drunc
+          source scripts/setup_drunc_config_path.sh
+          source scripts/drunc_integtest_bundle.sh -k ${{ matrix.test_script }} --pytest-options "--process-manager-type k8s" --verbosity 5 --tmpdir "$TEST_DIR" 2>&1

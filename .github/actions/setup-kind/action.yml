@@ -1,0 +1,23 @@
+name: Setup Kind
+description: Sets up Kind and Kubectl for Kubernetes testing
+
+runs:
+  using: composite
+  steps:
+    - name: Setup Kind and Kubectl
+      run: |
+        curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
+        chmod +x kubectl
+        mv kubectl /usr/local/bin/
+
+        # Install kind
+        curl -Lo ./kind https://kind.sigs.k8s.io/dl/latest/kind-linux-amd64
+        chmod +x ./kind
+        mv ./kind /usr/local/bin/
+
+        # Create a fresh cluster for this matrix job
+        kind create cluster --name daq-k8s-cluster
+
+        # Verify cluster is up and accessible
+        kubectl cluster-info
+        kubectl get nodes
