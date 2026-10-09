@@ -237,6 +237,9 @@ jobs:
 
       - name: Run daqsystemtest (k8s)
         run: |
+          # Stop Kubernetes from shadow-mounting over the container's baked-in CVMFS
+          find nightly -type f -name "k8s.json" -exec sed -i 's|"mount_path": "/cvmfs"|"mount_path": "/tmp/dummy_cvmfs"|g' {} +
+
           cd nightly/NFD_DEV*
           source env.sh
           export USER=$(whoami)
@@ -292,7 +295,18 @@ jobs:
               echo "--------------------------------------------------"
             done
           '
+      - name: Inspect Kubernetes Pod State & Failure Count 12345
+        if: failure()
+        run: |
+          echo "==================== DRUNC POD COMMAND DEFINITION ===================="
+          # This prints the exact command and arguments Drunc configured for root-controller
+          cat /__w/_temp/my_integration_test/pytest-of-root/pytest-0/config0/integtest-session-resolved.data.xml | grep -C 10 -i "root-controller" || true
 
+          echo "==================== EXECUTABLE PERMISSIONS CHECK ===================="
+          # This verifies if the virtual environment binaries actually have the +x bit
+          NIGHTLY_CONTAINER_PATH=$(find /__w -maxdepth 4 -type d -name "NFD_DEV*" | head -n 1)
+          ls -la "$NIGHTLY_CONTAINER_PATH"/.venv/bin/drunc-controller || true
+          ls -la "$NIGHTLY_CONTAINER_PATH"/.venv/bin/drunc || true
   # daqsystemtest-integration-k8s-msqt:
   #   needs: generate-release-tarball
   #   runs-on: ubuntu-latest
