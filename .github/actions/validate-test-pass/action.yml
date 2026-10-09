@@ -1,0 +1,27 @@
+name: Validate Test Pass
+description: Checks the stdout of the integration test bundle script to validate test pass
+
+runs:
+  using: composite
+  steps:
+    - name: Verify Integration Test Results
+      if: always()
+      shell: bash
+      run: |
+        TEST_DIR="__w/_temp/my_integration_test"
+
+        # 1. Locate the latest bundle log
+        LATEST_LOG=$(ls -t "$TEST_DIR"/pytest-of-*/dunedaq_integtest_bundle_*.log 2>/dev/null | head -n 1)
+
+        if [ -z "$LATEST_LOG" ]; then
+          echo "::error::No integration test log was found in $TEST_DIR"
+          exit 1
+        fi
+
+        echo "Inspecting log: $LATEST_LOG"
+
+        # 2. Check for failure patterns in the test summary
+        if grep -qE "failed ❌|Unhandled exception|COMMAND_ERROR" "$LATEST_LOG"; then
+          echo "::error::Failures detected in integration test bundle log: $LATEST_LOG"
+          exit 1
+        fi

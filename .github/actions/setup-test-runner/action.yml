@@ -5,7 +5,7 @@ runs:
   using: composite
   steps:
     - name: Checkout workflow repository
-      uses: actions/checkout@v4
+      uses: actions/checkout@v5
 
     - name: Setup SSH daemon
       uses: ./.github/actions/setup-ssh-daemon
@@ -18,7 +18,7 @@ runs:
     - name: Install dependencies and unpack
       shell: bash
       run: |
-        dnf install -y zstd docker
+        dnf install -y zstd
         tar --zstd -xf nightly.tar.zst
 
     - name: Setup Temp Directory

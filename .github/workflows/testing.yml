@@ -32,7 +32,7 @@ jobs:
 
     steps:
       - name: Checkout workflow repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Set up dev nightly
         uses: ./.github/actions/setup-dev-nightly-with-drunc
@@ -64,7 +64,7 @@ jobs:
 
   #   steps:
   #     - name: Checkout workflow repository
-  #       uses: actions/checkout@v4
+  #       uses: actions/checkout@v5
 
   #     - name: Initialize Test Environment
   #       uses: ./.github/actions/setup-test-runner
@@ -165,7 +165,7 @@ jobs:
 
   #   steps:
   #     - name: Checkout workflow repository
-  #       uses: actions/checkout@v4
+  #       uses: actions/checkout@v5
 
   #     - name: Initialize Test Environment
   #       uses: ./.github/actions/setup-test-runner
@@ -193,7 +193,7 @@ jobs:
 
   #   steps:
   #     - name: Checkout workflow repository
-  #       uses: actions/checkout@v4
+  #       uses: actions/checkout@v5
 
   #     - name: Initialize Test Environment
   #       uses: ./.github/actions/setup-test-runner
@@ -225,7 +225,7 @@ jobs:
 
     steps:
       - name: Checkout workflow repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Initialize Test Environment
         uses: ./.github/actions/setup-test-runner
@@ -241,24 +241,15 @@ jobs:
           source env.sh
           export USER=$(whoami)
           
-          # NOTE: You will likely need to append whatever specific flag your framework uses 
-          # to instruct the tests to use k8s instead of the default PM (e.g. --pm k8s)
-          daqsystemtest_integtest_bundle.sh -k ${{ matrix.test_script }} --pytest-options "--process-manager-type k8s" --verbosity 5 --tmpdir "$TEST_DIR" | tee "$TEST_DIR/bundle_stdout.log"
+          daqsystemtest_integtest_bundle.sh \
+            -k "${{ matrix.test_script }}" \
+            --pytest-options "--process-manager-type k8s" \
+            --verbosity 5 \
+            --tmpdir "$TEST_DIR" 2>&1 | tee "$TEST_DIR/bundle_stdout.log"
 
-          TEST_EXIT=${PIPESTATUS[0]}
-
-          # Check 1: Did the script itself exit non-zero?
-          if [ "$TEST_EXIT" -ne 0 ]; then
-            echo "::error::daqsystemtest_integtest_bundle.sh exited with code $TEST_EXIT"
-            exit "$TEST_EXIT"
-          fi
-
-          # Check 2: Inspect the generated log/summary for pytest failures or command errors
-          LATEST_LOG=$(ls -t "$TEST_DIR"/pytest-of-*/dunedaq_integtest_bundle_*.log 2>/dev/null | head -n 1)
-          if [ -n "$LATEST_LOG" ] && grep -qE "failed ❌|Unhandled exception|COMMAND_ERROR" "$LATEST_LOG"; then
-            echo "::error::Failures detected in integration test bundle log: $LATEST_LOG"
-            exit 1
-          fi
+      - name: Validate test pass
+        if: always()
+        uses: ./.github/actions/validate-test-pass
 
   daqsystemtest-integration-k8s-msqt:
     needs: generate-release-tarball
@@ -274,7 +265,7 @@ jobs:
 
     steps:
       - name: Checkout workflow repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Initialize Test Environment
         uses: ./.github/actions/setup-test-runner
@@ -290,24 +281,15 @@ jobs:
           source env.sh
           export USER=$(whoami)
           
-          # NOTE: You will likely need to append whatever specific flag your framework uses 
-          # to instruct the tests to use k8s instead of the default PM (e.g. --pm k8s)
-          daqsystemtest_integtest_bundle.sh -k "minimal" --pytest-options "--skip-resource-checks --process-manager-type k8s" --verbosity 5 --tmpdir "$TEST_DIR" | tee "$TEST_DIR/bundle_stdout.log"
+          daqsystemtest_integtest_bundle.sh \
+            -k "${{ matrix.test_script }}" \
+            --pytest-options "--process-manager-type k8s" \
+            --verbosity 5 \
+            --tmpdir "$TEST_DIR" 2>&1 | tee "$TEST_DIR/bundle_stdout.log"
 
-          TEST_EXIT=${PIPESTATUS[0]}
-
-          # Check 1: Did the script itself exit non-zero?
-          if [ "$TEST_EXIT" -ne 0 ]; then
-            echo "::error::daqsystemtest_integtest_bundle.sh exited with code $TEST_EXIT"
-            exit "$TEST_EXIT"
-          fi
-
-          # Check 2: Inspect the generated log/summary for pytest failures or command errors
-          LATEST_LOG=$(ls -t "$TEST_DIR"/pytest-of-*/dunedaq_integtest_bundle_*.log 2>/dev/null | head -n 1)
-          if [ -n "$LATEST_LOG" ] && grep -qE "failed ❌|Unhandled exception|COMMAND_ERROR" "$LATEST_LOG"; then
-            echo "::error::Failures detected in integration test bundle log: $LATEST_LOG"
-            exit 1
-          fi
+      - name: Validate test pass
+        if: always()
+        uses: ./.github/actions/validate-test-pass
 
   # drunc-integration-k8s:
   #   needs: [generate-release-tarball, select-drunc-integtests]
@@ -327,7 +309,7 @@ jobs:
 
   #   steps:
   #     - name: Checkout workflow repository
-  #       uses: actions/checkout@v4
+  #       uses: actions/checkout@v5
 
   #     - name: Initialize Test Environment
   #       uses: ./.github/actions/setup-test-runner
