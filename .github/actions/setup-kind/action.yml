@@ -77,6 +77,10 @@ runs:
         kubectl label node "$NODE_NAME" "drunc.host=$HOSTNAME" --overwrite || true
         kubectl label node "$NODE_NAME" "host=$HOSTNAME" --overwrite || true
 
+        # Wait for the node to become Ready (clears the NoSchedule taint)
+        echo "Waiting for node ${NODE_NAME} to reach Ready status..."
+        kubectl wait --for=condition=Ready "node/${NODE_NAME}" --timeout=90s
+
         # Verify cluster nodes
         kubectl get nodes -o wide
 
