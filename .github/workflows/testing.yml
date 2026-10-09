@@ -243,8 +243,71 @@ jobs:
           
           # NOTE: You will likely need to append whatever specific flag your framework uses 
           # to instruct the tests to use k8s instead of the default PM (e.g. --pm k8s)
-          daqsystemtest_integtest_bundle.sh -k ${{ matrix.test_script }} --pytest-options "--process-manager-type k8s" --verbosity 5 --tmpdir "$TEST_DIR" 2>&1
+          daqsystemtest_integtest_bundle.sh -k ${{ matrix.test_script }} --pytest-options "--process-manager-type k8s" --verbosity 5 --tmpdir "$TEST_DIR" | tee "$TEST_DIR/bundle_stdout.log"
 
+          TEST_EXIT=${PIPESTATUS[0]}
+
+          # Check 1: Did the script itself exit non-zero?
+          if [ "$TEST_EXIT" -ne 0 ]; then
+            echo "::error::daqsystemtest_integtest_bundle.sh exited with code $TEST_EXIT"
+            exit "$TEST_EXIT"
+          fi
+
+          # Check 2: Inspect the generated log/summary for pytest failures or command errors
+          LATEST_LOG=$(ls -t "$TEST_DIR"/pytest-of-*/dunedaq_integtest_bundle_*.log 2>/dev/null | head -n 1)
+          if [ -n "$LATEST_LOG" ] && grep -qE "failed ❌|Unhandled exception|COMMAND_ERROR" "$LATEST_LOG"; then
+            echo "::error::Failures detected in integration test bundle log: $LATEST_LOG"
+            exit 1
+          fi
+
+  daqsystemtest-integration-k8s-msqt:
+    needs: generate-release-tarball
+    runs-on: ubuntu-latest
+    
+    defaults:
+      run:
+        shell: bash
+    container:
+      image: ghcr.io/dune-daq/nightly-release-alma9:development_v5
+      volumes:
+        - /var/run/docker.sock:/var/run/docker.sock
+
+    steps:
+      - name: Checkout workflow repository
+        uses: actions/checkout@v4
+
+      - name: Initialize Test Environment
+        uses: ./.github/actions/setup-test-runner
+
+      - name: Setup Kind and Kubectl
+        uses: ./.github/actions/setup-kind
+        with:
+          cluster_name: daq-k8s-cluster
+
+      - name: Run daqsystemtest (k8s)
+        run: |
+          cd nightly/NFD_DEV*
+          source env.sh
+          export USER=$(whoami)
+          
+          # NOTE: You will likely need to append whatever specific flag your framework uses 
+          # to instruct the tests to use k8s instead of the default PM (e.g. --pm k8s)
+          daqsystemtest_integtest_bundle.sh -k "minimal" --pytest-options "--skip-resource-checks --process-manager-type k8s" --verbosity 5 --tmpdir "$TEST_DIR" | tee "$TEST_DIR/bundle_stdout.log"
+
+          TEST_EXIT=${PIPESTATUS[0]}
+
+          # Check 1: Did the script itself exit non-zero?
+          if [ "$TEST_EXIT" -ne 0 ]; then
+            echo "::error::daqsystemtest_integtest_bundle.sh exited with code $TEST_EXIT"
+            exit "$TEST_EXIT"
+          fi
+
+          # Check 2: Inspect the generated log/summary for pytest failures or command errors
+          LATEST_LOG=$(ls -t "$TEST_DIR"/pytest-of-*/dunedaq_integtest_bundle_*.log 2>/dev/null | head -n 1)
+          if [ -n "$LATEST_LOG" ] && grep -qE "failed ❌|Unhandled exception|COMMAND_ERROR" "$LATEST_LOG"; then
+            echo "::error::Failures detected in integration test bundle log: $LATEST_LOG"
+            exit 1
+          fi
 
   # drunc-integration-k8s:
   #   needs: [generate-release-tarball, select-drunc-integtests]
