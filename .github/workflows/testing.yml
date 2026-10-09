@@ -244,7 +244,7 @@ jobs:
           daqsystemtest_integtest_bundle.sh \
             -k "${{ matrix.test_script }}" \
             --pytest-options "--process-manager-type k8s" \
-            --verbosity 6 \
+            --verbosity 5 \
             --tmpdir "$TEST_DIR" 2>&1 | tee "$TEST_DIR/bundle_stdout.log"
 
       - name: Validate test pass
@@ -269,11 +269,15 @@ jobs:
           echo "==================== POD STATUS ===================="
           kubectl get pods -A -o wide
 
+          echo "==================== DRUNC POD LOG DUMP ===================="
+          LOG_DIR="${TEST_DIR:-/__w/_temp}"
+          find "$LOG_DIR" -type f \( -name "*.log" -o -name "*.txt" -o -name "*.out" -o -name "*.err" \) -exec echo "--- File: {} ---" \; -exec cat {} \;
+
           echo "==================== DESCRIBE PODS ===================="
           kubectl describe pods -n smallfootprint || true
 
           echo "==================== POD LOGS ===================="
-          kubectl logs -n smallfootprint --all-containers=true --tail=100 || true
+          kubectl logs -n smallfootprint --all-pods=true --all-containers=true --tail=100 || true
 
           echo "==================== K8S SYSTEM EVENTS ===================="
           kubectl get events -n smallfootprint --sort-by='.metadata.creationTimestamp' || true

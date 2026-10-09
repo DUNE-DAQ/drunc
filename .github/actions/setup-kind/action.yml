@@ -87,11 +87,21 @@ runs:
         # Create dummy mount directories required by drunc's pod hostPath volumes
         docker exec "$KIND_CONTAINER" mkdir -p /nfs /cvmfs
 
+        # Map container hostname to Kind node IP so NodePort polling reaches the Kind node
+        sed -i "/${HOSTNAME}/d" /etc/hosts 2>/dev/null || true
+        echo -e "${KIND_IP}\t${HOSTNAME}" >> /etc/hosts || {
+          cp /etc/hosts /tmp/hosts.new
+          echo -e "${KIND_IP}\t${HOSTNAME}" >> /tmp/hosts.new
+          cat /tmp/hosts.new > /etc/hosts
+        }
+
     - name: Preload DAQ image into Kind
       shell: bash
       run: |
         CLUSTER_NAME="${{ inputs.cluster_name }}"
         IMAGE="ghcr.io/dune-daq/nightly-release-alma9:development_v5"
 
-        # Load image into kind cluster directly from the host docker daemon
+        docker tag "$IMAGE" "ghcr.io/dune-daq/alma9:latest" || true
+
         kind load docker-image "$IMAGE" --name "$CLUSTER_NAME"
+        kind load docker-image "ghcr.io/dune-daq/alma9:latest" --name "$CLUSTER_NAME"
