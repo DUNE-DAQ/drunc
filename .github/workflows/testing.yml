@@ -247,6 +247,10 @@ jobs:
             --verbosity 6 \
             --tmpdir "$TEST_DIR" 2>&1 | tee "$TEST_DIR/bundle_stdout.log"
 
+      - name: Validate test pass
+        if: always()
+        uses: ./.github/actions/validate-test-pass
+
       - name: Debug Kubernetes Pod State
         if: failure()
         run: |
@@ -273,10 +277,6 @@ jobs:
 
           echo "==================== K8S SYSTEM EVENTS ===================="
           kubectl get events -n smallfootprint --sort-by='.metadata.creationTimestamp' || true
-
-      - name: Validate test pass
-        if: always()
-        uses: ./.github/actions/validate-test-pass
 
   # daqsystemtest-integration-k8s-msqt:
   #   needs: generate-release-tarball
