@@ -43,21 +43,30 @@ runs:
         chmod +x ./kind
         mv ./kind /usr/local/bin/
 
-        # Create fresh cluster
-        kind create cluster --name "$CLUSTER_NAME"
+        # Generate Kind config matching the container hostname
+        cat <<EOF > /tmp/kind-config.yaml
+        kind: Cluster
+        apiVersion: kind.x-k8s.io/v1alpha4
+        nodes:
+        - role: control-plane
+          extraPortMappings: []
+        EOF
 
-        # Bridge the CI container to the kind network
+        # Create Kind cluster
+        kind create cluster --name "$CLUSTER_NAME" --config /tmp/kind-config.yaml
+
+        # Connect CI container to kind network
         docker network connect kind "$HOSTNAME"
 
-        # Get internal IP and configure kubeconfig
+        # Update kubeconfig to point to internal network IP
         KIND_IP=$(docker inspect -f '{{.NetworkSettings.Networks.kind.IPAddress}}' "${CLUSTER_NAME}-control-plane")
         kubectl config set-cluster "kind-${CLUSTER_NAME}" --server="https://${KIND_IP}:6443"
 
-        # Label Kind node with the container's hostname so drunc recognizes it as a valid target host
+        # Add custom labels and annotations matching the runner hostname
         NODE_NAME=$(kubectl get nodes -o jsonpath='{.items[0].metadata.name}')
-        kubectl label node "$NODE_NAME" kubernetes.io/hostname="$HOSTNAME" --overwrite || true
+        kubectl annotate node "$NODE_NAME" "drunc.host=$HOSTNAME" --overwrite || true
         kubectl label node "$NODE_NAME" "drunc.host=$HOSTNAME" --overwrite || true
+        kubectl label node "$NODE_NAME" "host=$HOSTNAME" --overwrite || true
 
-        # Verify
-        kubectl cluster-info
-        kubectl get nodes --show-labels
+        # Verification
+        kubectl get nodes -o wide --show-labels
