@@ -57,6 +57,9 @@ runs:
             kind: InitConfiguration
             nodeRegistration:
               name: "${HOSTNAME}"
+          extraMounts:
+          - hostPath: /__w
+            containerPath: /__w
         EOF
 
         # Create cluster using the config
@@ -72,3 +75,12 @@ runs:
 
         # Verify node name matches $HOSTNAME
         kubectl get nodes -o wide
+
+    - name: Preload DAQ image into Kind
+      shell: bash
+      run: |
+        CLUSTER_NAME="${{ inputs.cluster_name }}"
+        IMAGE="ghcr.io/dune-daq/nightly-release-alma9:development_v5"
+
+        # Load image into kind cluster directly from the host docker daemon
+        kind load docker-image "$IMAGE" --name "$CLUSTER_NAME"

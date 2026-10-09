@@ -247,6 +247,18 @@ jobs:
             --verbosity 5 \
             --tmpdir "$TEST_DIR" 2>&1 | tee "$TEST_DIR/bundle_stdout.log"
 
+      - name: Debug Kubernetes Pod State
+        if: failure()
+        run: |
+          echo "=== All Pods across namespaces ==="
+          kubectl get pods -A -o wide
+
+          echo "=== Describe Failed Pods ==="
+          kubectl describe pods -n smallfootprint || true
+
+          echo "=== Pod Logs (if any container started) ==="
+          kubectl logs -n smallfootprint -l app=root-controller --all-containers=true || true
+
       - name: Validate test pass
         if: always()
         uses: ./.github/actions/validate-test-pass
