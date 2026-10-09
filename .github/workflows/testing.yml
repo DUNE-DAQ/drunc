@@ -244,7 +244,7 @@ jobs:
           daqsystemtest_integtest_bundle.sh \
             -k "${{ matrix.test_script }}" \
             --pytest-options "--process-manager-type k8s" \
-            --verbosity 5 \
+            --verbosity 6 \
             --tmpdir "$TEST_DIR" 2>&1 | tee "$TEST_DIR/bundle_stdout.log"
 
       - name: Debug Kubernetes Pod State
@@ -258,6 +258,21 @@ jobs:
 
           echo "=== Pod Logs (if any container started) ==="
           kubectl logs -n smallfootprint -l app=root-controller --all-containers=true || true
+
+      - name: Inspect Kubernetes Pod State & Failure
+        if: failure()
+        run: |
+          echo "==================== POD STATUS ===================="
+          kubectl get pods -A -o wide
+
+          echo "==================== DESCRIBE PODS ===================="
+          kubectl describe pods -n smallfootprint || true
+
+          echo "==================== POD LOGS ===================="
+          kubectl logs -n smallfootprint --all-containers=true --tail=100 || true
+
+          echo "==================== K8S SYSTEM EVENTS ===================="
+          kubectl get events -n smallfootprint --sort-by='.metadata.creationTimestamp' || true
 
       - name: Validate test pass
         if: always()

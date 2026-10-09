@@ -13,20 +13,12 @@ runs:
     - name: Install Docker CLI prerequisites
       shell: bash
       run: |
-        # Remove conflicting podman packages if present
         dnf remove -y podman-docker || true
-
-        # Add Docker CE repository
         dnf install -y dnf-plugins-core
         dnf config-manager --add-repo https://download.docker.com/linux/centos/docker-ce.repo
-
-        # Install Docker CE CLI
         dnf install -y --allowerasing docker-ce-cli
-
-        # Verify docker binary is found and can talk to the mounted daemon socket
         which docker
         docker info
-
 
     - name: Install and configure Kind cluster
       shell: bash
@@ -43,37 +35,39 @@ runs:
         chmod +x ./kind
         mv ./kind /usr/local/bin/
 
-        # Clean any preexisting kind cluster or network artifacts
         kind delete cluster --name "$CLUSTER_NAME" 2>/dev/null || true
 
-        # Write Kind config forcing the control-plane node to match container $HOSTNAME
-        cat <<EOF > /tmp/kind-config.yaml
-        kind: Cluster
-        apiVersion: kind.x-k8s.io/v1alpha4
-        nodes:
-        - role: control-plane
-          kubeadmConfigPatches:
-          - |
-            kind: InitConfiguration
-            nodeRegistration:
-              name: "${HOSTNAME}"
-          extraMounts:
-          - hostPath: /__w
-            containerPath: /__w
-        EOF
+        # Find the actual host path for /__w mounted by GitHub Actions into this container
+        HOST_WORKSPACE_PATH=$(docker inspect "$HOSTNAME" --format '{{range .Mounts}}{{if eq .Destination "/__w"}}{{.Source}}{{end}}{{end}}')
+        HOST_WORKSPACE_PATH="${HOST_WORKSPACE_PATH:-/__w}"
+        echo "Detected host workspace backing path: $HOST_WORKSPACE_PATH"
 
-        # Create cluster using the config
+        # Generate valid Kind config
+        cat <<EOF > /tmp/kind-config.yaml
+kind: Cluster
+apiVersion: kind.x-k8s.io/v1alpha4
+nodes:
+- role: control-plane
+  kubeadmConfigPatches:
+  - |
+    kind: InitConfiguration
+    nodeRegistration:
+      name: "${HOSTNAME}"
+  extraMounts:
+  - hostPath: ${HOST_WORKSPACE_PATH}
+    containerPath: /__w
+EOF
+
         kind create cluster --name "$CLUSTER_NAME" --config /tmp/kind-config.yaml
 
-        # Connect CI container to kind network (use a unique alias to prevent collision)
+        # Connect CI container to kind bridge network
         docker network connect --alias "ci-runner-${HOSTNAME}" kind "$HOSTNAME"
 
-        # Update kubeconfig to point to the internal network IP
+        # Update kubeconfig to point to internal network IP
         KIND_CONTAINER=$(docker ps --filter "label=io.x-k8s.kind.cluster=${CLUSTER_NAME}" --format '{{.Names}}' | head -n 1)
         KIND_IP=$(docker inspect -f '{{.NetworkSettings.Networks.kind.IPAddress}}' "$KIND_CONTAINER")
         kubectl config set-cluster "kind-${CLUSTER_NAME}" --server="https://${KIND_IP}:6443"
 
-        # Verify node name matches $HOSTNAME
         kubectl get nodes -o wide
 
     - name: Preload DAQ image into Kind
@@ -81,6 +75,5 @@ runs:
       run: |
         CLUSTER_NAME="${{ inputs.cluster_name }}"
         IMAGE="ghcr.io/dune-daq/nightly-release-alma9:development_v5"
-
-        # Load image into kind cluster directly from the host docker daemon
         kind load docker-image "$IMAGE" --name "$CLUSTER_NAME"
+        docker images | grep "$IMAGE"
