@@ -1,5 +1,5 @@
 name: Setup Kind and Kubectl
-description: Installs kubectl, kind, and spins up a cluster connected to the CI container
+description: Installs Docker CLI, kubectl, kind, and spins up a cluster connected to the CI container
 
 inputs:
   cluster_name:
@@ -10,6 +10,13 @@ inputs:
 runs:
   using: composite
   steps:
+    - name: Install K8s prerequisites (Docker CLI)
+      shell: bash
+      run: |
+        dnf install -y dnf-plugins-core curl
+        dnf config-manager --add-repo https://download.docker.com/linux/centos/docker-ce.repo
+        dnf install -y docker-ce-cli
+
     - name: Install and configure Kind cluster
       shell: bash
       run: |
