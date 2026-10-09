@@ -37,30 +37,34 @@ runs:
 
         kind delete cluster --name "$CLUSTER_NAME" 2>/dev/null || true
 
-        # Find the actual host path for /__w mounted by GitHub Actions into this container
+        # Detect the host runner's real path backing /__w
         HOST_WORKSPACE_PATH=$(docker inspect "$HOSTNAME" --format '{{range .Mounts}}{{if eq .Destination "/__w"}}{{.Source}}{{end}}{{end}}')
         HOST_WORKSPACE_PATH="${HOST_WORKSPACE_PATH:-/__w}"
         echo "Detected host workspace backing path: $HOST_WORKSPACE_PATH"
 
-        # Generate valid Kind config
+        # Write Kind config ensuring exact spacing inside the heredoc
         cat <<EOF > /tmp/kind-config.yaml
-kind: Cluster
-apiVersion: kind.x-k8s.io/v1alpha4
-nodes:
-- role: control-plane
-  kubeadmConfigPatches:
-  - |
-    kind: InitConfiguration
-    nodeRegistration:
-      name: "${HOSTNAME}"
-  extraMounts:
-  - hostPath: ${HOST_WORKSPACE_PATH}
-    containerPath: /__w
-EOF
+        kind: Cluster
+        apiVersion: kind.x-k8s.io/v1alpha4
+        nodes:
+        - role: control-plane
+          kubeadmConfigPatches:
+          - |
+            kind: InitConfiguration
+            nodeRegistration:
+              name: "${HOSTNAME}"
+          extraMounts:
+          - hostPath: ${HOST_WORKSPACE_PATH}
+            containerPath: /__w
+        EOF
 
+        # Strip the leading 8 spaces from the heredoc so Kind receives clean YAML
+        sed -i 's/^[ ]\{8\}//' /tmp/kind-config.yaml
+
+        # Create Kind cluster
         kind create cluster --name "$CLUSTER_NAME" --config /tmp/kind-config.yaml
 
-        # Connect CI container to kind bridge network
+        # Connect CI container to kind network
         docker network connect --alias "ci-runner-${HOSTNAME}" kind "$HOSTNAME"
 
         # Update kubeconfig to point to internal network IP
@@ -68,6 +72,7 @@ EOF
         KIND_IP=$(docker inspect -f '{{.NetworkSettings.Networks.kind.IPAddress}}' "$KIND_CONTAINER")
         kubectl config set-cluster "kind-${CLUSTER_NAME}" --server="https://${KIND_IP}:6443"
 
+        # Verify cluster nodes
         kubectl get nodes -o wide
 
     - name: Preload DAQ image into Kind
@@ -76,4 +81,3 @@ EOF
         CLUSTER_NAME="${{ inputs.cluster_name }}"
         IMAGE="ghcr.io/dune-daq/nightly-release-alma9:development_v5"
         kind load docker-image "$IMAGE" --name "$CLUSTER_NAME"
-        docker images | grep "$IMAGE"
