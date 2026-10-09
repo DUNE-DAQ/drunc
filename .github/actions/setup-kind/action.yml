@@ -72,6 +72,11 @@ runs:
         KIND_IP=$(docker inspect -f '{{.NetworkSettings.Networks.kind.IPAddress}}' "$KIND_CONTAINER")
         kubectl config set-cluster "kind-${CLUSTER_NAME}" --server="https://${KIND_IP}:6443"
 
+        # Label node with the container hostname so drunc accepts it
+        NODE_NAME=$(kubectl get nodes -o jsonpath='{.items[0].metadata.name}')
+        kubectl label node "$NODE_NAME" "drunc.host=$HOSTNAME" --overwrite || true
+        kubectl label node "$NODE_NAME" "host=$HOSTNAME" --overwrite || true
+
         # Verify cluster nodes
         kubectl get nodes -o wide
 
@@ -80,4 +85,6 @@ runs:
       run: |
         CLUSTER_NAME="${{ inputs.cluster_name }}"
         IMAGE="ghcr.io/dune-daq/nightly-release-alma9:development_v5"
+
+        # Load image into kind cluster directly from the host docker daemon
         kind load docker-image "$IMAGE" --name "$CLUSTER_NAME"
