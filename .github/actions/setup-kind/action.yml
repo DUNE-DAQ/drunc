@@ -6,6 +6,7 @@ runs:
   steps:
     - name: Setup Kind and Kubectl
       run: |
+        # Install kubectl
         curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
         chmod +x kubectl
         mv kubectl /usr/local/bin/
@@ -15,8 +16,17 @@ runs:
         chmod +x ./kind
         mv ./kind /usr/local/bin/
 
-        # Create a fresh cluster for this matrix job
-        kind create cluster --name daq-k8s-cluster
+        # Create a fresh cluster
+        kind create cluster --name daq-k8s-testing-cluster
+
+        # Bridge the CI container to the kind network using its $HOSTNAME (which is the container ID)
+        docker network connect kind $HOSTNAME
+
+        # Get the internal IP of the kind control plane node
+        KIND_IP=$(docker inspect -f '{{.NetworkSettings.Networks.kind.IPAddress}}' daq-k8s-testing-cluster-control-plane)
+
+        # Reconfigure kubectl to use the internal IP instead of the localhost port mapping
+        kubectl config set-cluster kind-daq-k8s-testing-cluster --server=https://${KIND_IP}:6443
 
         # Verify cluster is up and accessible
         kubectl cluster-info

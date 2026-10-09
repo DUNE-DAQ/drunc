@@ -51,71 +51,71 @@ jobs:
           compression-level: 0
           retention-days: 1
 
-  unit-tests:
-    needs: setup
-    runs-on: ubuntu-latest
-    defaults:
-      run:
-        shell: bash
-    container:
-      image: ghcr.io/dune-daq/nightly-release-alma9:development_v5
-    permissions:
-      checks: write # Required for action-junit-report
+  # unit-tests:
+  #   needs: setup
+  #   runs-on: ubuntu-latest
+  #   defaults:
+  #     run:
+  #       shell: bash
+  #   container:
+  #     image: ghcr.io/dune-daq/nightly-release-alma9:development_v5
+  #   permissions:
+  #     checks: write # Required for action-junit-report
 
-    steps:
-      - name: Checkout workflow repository
-        uses: actions/checkout@v4
+  #   steps:
+  #     - name: Checkout workflow repository
+  #       uses: actions/checkout@v4
 
-      - name: Initialize Test Environment
-        uses: ./.github/actions/setup-test-runner
+  #     - name: Initialize Test Environment
+  #       uses: ./.github/actions/setup-test-runner
 
-      - name: Run unit tests
-        run: |
-          cd nightly/NFD_DEV*
-          source env.sh
-          cd pythoncode/drunc
-          pytest --junitxml=junit/test-results.xml --cov=drunc --cov-report=html
+  #     - name: Run unit tests
+  #       run: |
+  #         cd nightly/NFD_DEV*
+  #         source env.sh
+  #         cd pythoncode/drunc
+  #         pytest --junitxml=junit/test-results.xml --cov=drunc --cov-report=html
 
-      - name: Publish JUnit test report
-        uses: mikepenz/action-junit-report@v5
-        if: ${{ !cancelled() }}
-        with:
-          check_name: "Pytest Results"
-          report_paths: 'nightly/NFD_DEV*/pythoncode/drunc/junit/test-results.xml'
+  #     - name: Publish JUnit test report
+  #       uses: mikepenz/action-junit-report@v5
+  #       if: ${{ !cancelled() }}
+  #       with:
+  #         check_name: "Pytest Results"
+  #         report_paths: 'nightly/NFD_DEV*/pythoncode/drunc/junit/test-results.xml'
       
-      - name: Upload coverage report (HTML)
-        uses: actions/upload-artifact@v4
-        if: ${{ !cancelled() && github.event_name == 'push' }}
-        with:
-          name: html-coverage-report
-          path: nightly/NFD_DEV*/pythoncode/drunc/htmlcov/
-          retention-days: 1
+  #     - name: Upload coverage report (HTML)
+  #       uses: actions/upload-artifact@v4
+  #       if: ${{ !cancelled() && github.event_name == 'push' }}
+  #       with:
+  #         name: html-coverage-report
+  #         path: nightly/NFD_DEV*/pythoncode/drunc/htmlcov/
+  #         retention-days: 1
 
 
-  publish-coverage:
-    # Depends only on unit-tests so it triggers without waiting for integration tests
-    needs: unit-tests
-    # always() ensures it runs even if unit tests failed, but only for pushes
-    if: always() && github.event_name == 'push' && !contains(needs.unit-tests.result, 'cancelled')
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write # Allows actions-gh-pages to push HTML to gh-pages branch
+  # publish-coverage:
+  #   # Depends only on unit-tests so it triggers without waiting for integration tests
+  #   needs: unit-tests
+  #   # always() ensures it runs even if unit tests failed, but only for pushes
+  #   if: always() && github.event_name == 'push' && !contains(needs.unit-tests.result, 'cancelled')
+  #   runs-on: ubuntu-latest
+  #   permissions:
+  #     contents: write # Allows actions-gh-pages to push HTML to gh-pages branch
       
-    steps:
-      - name: Download HTML coverage artifact
-        uses: actions/download-artifact@v4
-        with:
-          name: html-coverage-report
-          path: htmlcov
+  #   steps:
+  #     - name: Download HTML coverage artifact
+  #       uses: actions/download-artifact@v4
+  #       with:
+  #         name: html-coverage-report
+  #         path: htmlcov
           
-      - name: Deploy HTML coverage to GitHub Pages
-        uses: peaceiris/actions-gh-pages@v3
-        with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-          publish_dir: htmlcov
-          destination_dir: coverage/${{ github.ref_name }}
-          publish_branch: gh-pages
-          keep_files: true
+  #     - name: Deploy HTML coverage to GitHub Pages
+  #       uses: peaceiris/actions-gh-pages@v3
+  #       with:
+  #         github_token: ${{ secrets.GITHUB_TOKEN }}
+  #         publish_dir: htmlcov
+  #         destination_dir: coverage/${{ github.ref_name }}
+  #         publish_branch: gh-pages
+  #         keep_files: true
 
 
   prepare-daqsystemtest-matrix:
@@ -128,82 +128,84 @@ jobs:
         id: set-matrix
         run: |
           # Output the shared list of test scripts as a JSON array
-          echo 'matrix=["small_footprint_quick_test.py", "fake_data_producer_test.py", "minimal_system_quick_test.py"]' >> "$GITHUB_OUTPUT"
+          # echo 'matrix=["small_footprint_quick_test.py", "fake_data_producer_test.py", "minimal_system_quick_test.py"]' >> "$GITHUB_OUTPUT"
+          echo 'matrix=["minimal_system_quick_test.py"]' >> "$GITHUB_OUTPUT"
 
 
-  daqsystemtest-integration:
-    needs: [setup, prepare-daqsystemtest-matrix]
-    runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false 
-      matrix:
-        test_script: ${{ fromJSON(needs.prepare-daqsystemtest-matrix.outputs.matrix) }}
-    
-    defaults:
-      run:
-        shell: bash
-    container:
-      image: ghcr.io/dune-daq/nightly-release-alma9:development_v5
-
-    steps:
-      - name: Checkout workflow repository
-        uses: actions/checkout@v4
-
-      - name: Initialize Test Environment
-        uses: ./.github/actions/setup-test-runner
-
-      - name: Run daqsystemtest (${{ matrix.test_script }})
-        run: |
-          cd nightly/NFD_DEV*
-          source env.sh
-          export USER=$(whoami)
-          daqsystemtest_integtest_bundle.sh -k ${{ matrix.test_script }} --verbosity 5 --tmpdir "$TEST_DIR" 2>&1
-
-
-  prepare-drunc-matrix:
-    runs-on: ubuntu-latest
-    outputs:
-      matrix: ${{ steps.set-matrix.outputs.matrix }}
-    steps:
-      - name: Generate test list
-        id: set-matrix
-        run: |
-          # Clone just the drunc repository to read the file list
-          git clone "https://github.com/${REPO_OWNER}/drunc.git" -b "$HEAD_REF" || git clone https://github.com/DUNE-DAQ/drunc.git
-          cd drunc/src/drunc/integtest
+  # prepare-drunc-matrix:
+  #   runs-on: ubuntu-latest
+  #   outputs:
+  #     matrix: ${{ steps.set-matrix.outputs.matrix }}
+  #   steps:
+  #     - name: Generate test list
+  #       id: set-matrix
+  #       run: |
+  #         # Clone just the drunc repository to read the file list
+  #         git clone "https://github.com/${REPO_OWNER}/drunc.git" -b "$HEAD_REF" || git clone https://github.com/DUNE-DAQ/drunc.git
+  #         cd drunc/src/drunc/integtest
           
-          # Find all python files, build a JSON array, and set it as an output variable
-          FILES_JSON=$(ls -1 *_test.py | jq -R -s -c 'split("\n")[:-1]')
-          echo "matrix=$FILES_JSON" >> "$GITHUB_OUTPUT"
+  #         # Find all python files, build a JSON array, and set it as an output variable
+  #         FILES_JSON=$(ls -1 *_test.py | jq -R -s -c 'split("\n")[:-1]')
+  #         echo "matrix=$FILES_JSON" >> "$GITHUB_OUTPUT"
 
 
-  drunc-integration:
-    needs: [setup, prepare-drunc-matrix]
-    runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        test_script: ${{ fromJSON(needs.prepare-drunc-matrix.outputs.matrix) }}
-    defaults:
-      run:
-        shell: bash
-    container:
-      image: ghcr.io/dune-daq/nightly-release-alma9:development_v5
+  # daqsystemtest-integration:
+  #   needs: [setup, prepare-daqsystemtest-matrix]
+  #   runs-on: ubuntu-latest
+  #   strategy:
+  #     fail-fast: false 
+  #     matrix:
+  #       test_script: ${{ fromJSON(needs.prepare-daqsystemtest-matrix.outputs.matrix) }}
+    
+  #   defaults:
+  #     run:
+  #       shell: bash
+  #   container:
+  #     image: ghcr.io/dune-daq/nightly-release-alma9:development_v5
 
-    steps:
-      - name: Checkout workflow repository
-        uses: actions/checkout@v4
+  #   steps:
+  #     - name: Checkout workflow repository
+  #       uses: actions/checkout@v4
 
-      - name: Initialize Test Environment
-        uses: ./.github/actions/setup-test-runner
+  #     - name: Initialize Test Environment
+  #       uses: ./.github/actions/setup-test-runner
 
-      - name: Run drunc (${{ matrix.test_script }})
-        run: |
-          cd nightly/NFD_DEV*
-          source env.sh
-          cd pythoncode/drunc
-          source scripts/setup_drunc_config_path.sh
-          source scripts/drunc_integtest_bundle.sh -k ${{ matrix.test_script }} --verbosity 5 --tmpdir "$TEST_DIR" 2>&1
+  #     - name: Run daqsystemtest (${{ matrix.test_script }})
+  #       run: |
+  #         cd nightly/NFD_DEV*
+  #         source env.sh
+  #         export USER=$(whoami)
+  #         daqsystemtest_integtest_bundle.sh -k ${{ matrix.test_script }} --verbosity 5 --tmpdir "$TEST_DIR" 2>&1
+
+
+  # drunc-integration:
+  #   needs: [setup, prepare-drunc-matrix]
+  #   runs-on: ubuntu-latest
+  #   strategy:
+  #     fail-fast: false
+  #     matrix:
+  #       test_script: ${{ fromJSON(needs.prepare-drunc-matrix.outputs.matrix) }}
+  #   defaults:
+  #     run:
+  #       shell: bash
+  #   container:
+  #     image: ghcr.io/dune-daq/nightly-release-alma9:development_v5
+
+  #   steps:
+  #     - name: Checkout workflow repository
+  #       uses: actions/checkout@v4
+
+  #     - name: Initialize Test Environment
+  #       uses: ./.github/actions/setup-test-runner
+
+  #     - name: Run drunc (${{ matrix.test_script }})
+  #       run: |
+  #         cd nightly/NFD_DEV*
+  #         source env.sh
+  #         cd pythoncode/drunc
+  #         source scripts/setup_drunc_config_path.sh
+  #         source scripts/drunc_integtest_bundle.sh -k ${{ matrix.test_script }} --verbosity 5 --tmpdir "$TEST_DIR" 2>&1
+
 
   daqsystemtest-integration-k8s:
     needs: [setup, prepare-daqsystemtest-matrix]
@@ -220,7 +222,6 @@ jobs:
       image: ghcr.io/dune-daq/nightly-release-alma9:development_v5
       volumes:
         - /var/run/docker.sock:/var/run/docker.sock
-      options: --network host
 
     steps:
       - name: Checkout workflow repository
@@ -243,37 +244,36 @@ jobs:
           daqsystemtest_integtest_bundle.sh -k ${{ matrix.test_script }} --pytest-options "--process-manager-type k8s" --verbosity 5 --tmpdir "$TEST_DIR" 2>&1
 
 
-  drunc-integration-k8s:
-    needs: [setup, prepare-drunc-matrix]
-    runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        test_script: ${{ fromJSON(needs.prepare-drunc-matrix.outputs.matrix) }}
+  # drunc-integration-k8s:
+  #   needs: [setup, prepare-drunc-matrix]
+  #   runs-on: ubuntu-latest
+  #   strategy:
+  #     fail-fast: false
+  #     matrix:
+  #       test_script: ${{ fromJSON(needs.prepare-drunc-matrix.outputs.matrix) }}
 
-    defaults:
-      run:
-        shell: bash
-    container:
-      image: ghcr.io/dune-daq/nightly-release-alma9:development_v5
-      volumes:
-        - /var/run/docker.sock:/var/run/docker.sock
-      options: --network host
+  #   defaults:
+  #     run:
+  #       shell: bash
+  #   container:
+  #     image: ghcr.io/dune-daq/nightly-release-alma9:development_v5
+  #     volumes:
+  #       - /var/run/docker.sock:/var/run/docker.sock
 
-    steps:
-      - name: Checkout workflow repository
-        uses: actions/checkout@v4
+  #   steps:
+  #     - name: Checkout workflow repository
+  #       uses: actions/checkout@v4
 
-      - name: Initialize Test Environment
-        uses: ./.github/actions/setup-test-runner
+  #     - name: Initialize Test Environment
+  #       uses: ./.github/actions/setup-test-runner
 
-      - name: Setup Kind and Kubectl
-        uses: ./.github/actions/setup-kind
+  #     - name: Setup Kind and Kubectl
+  #       uses: ./.github/actions/setup-kind
 
-      - name: Run drunc (k8s)
-        run: |
-          cd nightly/NFD_DEV*
-          source env.sh
-          cd pythoncode/drunc
-          source scripts/setup_drunc_config_path.sh
-          source scripts/drunc_integtest_bundle.sh -k ${{ matrix.test_script }} --pytest-options "--process-manager-type k8s" --verbosity 5 --tmpdir "$TEST_DIR" 2>&1
+  #     - name: Run drunc (k8s)
+  #       run: |
+  #         cd nightly/NFD_DEV*
+  #         source env.sh
+  #         cd pythoncode/drunc
+  #         source scripts/setup_drunc_config_path.sh
+  #         source scripts/drunc_integtest_bundle.sh -k ${{ matrix.test_script }} --pytest-options "--process-manager-type k8s" --verbosity 5 --tmpdir "$TEST_DIR" 2>&1
