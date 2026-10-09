@@ -63,6 +63,9 @@ jobs:
       checks: write # Required for action-junit-report
 
     steps:
+      - name: Checkout workflow repository
+        uses: actions/checkout@v4
+
       - name: Initialize Test Environment
         uses: ./.github/actions/setup-test-runner
 
@@ -116,6 +119,7 @@ jobs:
 
 
   prepare-daqsystemtest-matrix:
+    # Select integration tests that can run on the default 4 core runner
     runs-on: ubuntu-latest
     outputs:
       matrix: ${{ steps.set-matrix.outputs.matrix }}
@@ -142,6 +146,9 @@ jobs:
       image: ghcr.io/dune-daq/nightly-release-alma9:development_v5
 
     steps:
+      - name: Checkout workflow repository
+        uses: actions/checkout@v4
+
       - name: Initialize Test Environment
         uses: ./.github/actions/setup-test-runner
 
@@ -184,6 +191,9 @@ jobs:
       image: ghcr.io/dune-daq/nightly-release-alma9:development_v5
 
     steps:
+      - name: Checkout workflow repository
+        uses: actions/checkout@v4
+
       - name: Initialize Test Environment
         uses: ./.github/actions/setup-test-runner
 
@@ -213,6 +223,9 @@ jobs:
       options: --network host
 
     steps:
+      - name: Checkout workflow repository
+        uses: actions/checkout@v4
+
       - name: Initialize Test Environment
         uses: ./.github/actions/setup-test-runner
 
@@ -248,6 +261,9 @@ jobs:
       options: --network host
 
     steps:
+      - name: Checkout workflow repository
+        uses: actions/checkout@v4
+
       - name: Initialize Test Environment
         uses: ./.github/actions/setup-test-runner
 
