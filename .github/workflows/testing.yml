@@ -237,22 +237,23 @@ jobs:
 
       - name: Run daqsystemtest (k8s)
         run: |
-          # 1. Fix Exit Code 126: Stop shadow-mounting over the container's baked-in CVMFS
+          KIND_CONTAINER=$(docker ps --filter "label=io.x-k8s.kind.cluster=${{ inputs.cluster_name || 'daq-k8s-cluster' }}" --format '{{.Names}}' | head -n 1)
+          KIND_IP=$(docker inspect -f '{{.NetworkSettings.Networks.kind.IPAddress}}' "$KIND_CONTAINER")
+          CI_RUNNER_IP=$(docker inspect -f '{{.NetworkSettings.Networks.kind.IPAddress}}' "$HOSTNAME")
+
+          # 1. FIX CVMFS SHADOW MOUNT (Exit Code 126)
           find nightly -type f -name "k8s.json" -exec sed -i 's|"mount_path": "/cvmfs"|"mount_path": "/tmp/dummy_cvmfs"|g' {} +
           find nightly -type f -name "k8s.json" -exec sed -i "s|'/cvmfs'|'/tmp/dummy_cvmfs'|g" {} +
 
-          # 2. Fix the NodePort Timeout: Bypass Docker DNS routing collision for TCP checks
-          KIND_CONTAINER=$(docker ps --filter "label=io.x-k8s.kind.cluster=${{ inputs.cluster_name || 'daq-k8s-cluster' }}" --format '{{.Names}}' | head -n 1)
-          KIND_IP=$(docker inspect -f '{{.NetworkSettings.Networks.kind.IPAddress}}' "$KIND_CONTAINER")
-          
+          # 2. FIX NODEPORT POLLING TIMEOUT (Docker DNS loopback collision for python TCP checks)
           find nightly -type f -name "k8s_process_manager.py" -exec sed -i "s|sock.connect_ex((node_name, port))|sock.connect_ex(('$KIND_IP', port))|g" {} +
           find nightly -type f -name "k8s_process_manager.py" -exec sed -i "s|url = f\"http://{node_name}:{lcs.node_port}\"|url = f\"http://$KIND_IP:{lcs.node_port}\"|g" {} +
 
-          # 3. Global Network Fix: Route hostNetwork pods back to the CI Runner
-          CI_RUNNER_IP=$(docker inspect -f '{{.NetworkSettings.Networks.kind.IPAddress}}' "$HOSTNAME")
-          
-          # Safely rewrite /etc/hosts in place without breaking Docker's bind mount
-          docker exec -u root "$KIND_CONTAINER" bash -c "cat /etc/hosts | grep -v '${HOSTNAME}' > /tmp/hosts.new; echo -e '${CI_RUNNER_IP}\t${HOSTNAME}' >> /tmp/hosts.new; cat /tmp/hosts.new > /etc/hosts"
+          # 3. GLOBAL NETWORK FIX (C++ APPS CONNECTION REFUSED)
+          # We cannot use HostAliases because Kubelet appends them to the bottom. Linux reads top-down,
+          # meaning the default 127.0.0.1 collision would still win. We safely rewrite the Kind Node's
+          # /etc/hosts using grep/cat to bypass the Docker bind-mount lock.
+          docker exec -u root "$KIND_CONTAINER" bash -c "grep -v '${HOSTNAME}' /etc/hosts > /tmp/hosts.new && echo -e '${CI_RUNNER_IP}\t${HOSTNAME}' >> /tmp/hosts.new && cat /tmp/hosts.new > /etc/hosts"
 
           cd nightly/NFD_DEV*
           source env.sh
