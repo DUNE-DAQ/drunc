@@ -241,12 +241,19 @@ jobs:
           find nightly -type f -name "k8s.json" -exec sed -i 's|"mount_path": "/cvmfs"|"mount_path": "/tmp/dummy_cvmfs"|g' {} +
           find nightly -type f -name "k8s.json" -exec sed -i "s|'/cvmfs'|'/tmp/dummy_cvmfs'|g" {} +
 
-          # 2. Fix the NodePort Timeout: Bypass Docker DNS routing collision
+          # 2. Fix the NodePort Timeout: Bypass Docker DNS routing collision for TCP checks
           KIND_CONTAINER=$(docker ps --filter "label=io.x-k8s.kind.cluster=${{ inputs.cluster_name || 'daq-k8s-cluster' }}" --format '{{.Names}}' | head -n 1)
           KIND_IP=$(docker inspect -f '{{.NetworkSettings.Networks.kind.IPAddress}}' "$KIND_CONTAINER")
           
           find nightly -type f -name "k8s_process_manager.py" -exec sed -i "s|sock.connect_ex((node_name, port))|sock.connect_ex(('$KIND_IP', port))|g" {} +
           find nightly -type f -name "k8s_process_manager.py" -exec sed -i "s|url = f\"http://{node_name}:{lcs.node_port}\"|url = f\"http://$KIND_IP:{lcs.node_port}\"|g" {} +
+
+          # 3. Global Network Fix: Route hostNetwork pods back to the CI Runner
+          # The Kind node automatically maps $HOSTNAME to itself. We overwrite this to point
+          # to the CI Runner's IP so the C++ apps can reach the Connectivity Service.
+          CI_RUNNER_IP=$(docker inspect -f '{{.NetworkSettings.Networks.kind.IPAddress}}' "$HOSTNAME")
+          docker exec -u root "$KIND_CONTAINER" sed -i "/${HOSTNAME}/d" /etc/hosts
+          docker exec -u root "$KIND_CONTAINER" bash -c "echo -e '${CI_RUNNER_IP}\t${HOSTNAME}' >> /etc/hosts"
 
           cd nightly/NFD_DEV*
           source env.sh
