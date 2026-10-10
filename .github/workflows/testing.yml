@@ -237,8 +237,16 @@ jobs:
 
       - name: Run daqsystemtest (k8s)
         run: |
-          # Stop Kubernetes from shadow-mounting over the container's baked-in CVMFS
+          # 1. Fix Exit Code 126: Stop shadow-mounting over the container's baked-in CVMFS
           find nightly -type f -name "k8s.json" -exec sed -i 's|"mount_path": "/cvmfs"|"mount_path": "/tmp/dummy_cvmfs"|g' {} +
+          find nightly -type f -name "k8s.json" -exec sed -i "s|'/cvmfs'|'/tmp/dummy_cvmfs'|g" {} +
+
+          # 2. Fix the NodePort Timeout: Bypass Docker DNS routing collision
+          KIND_CONTAINER=$(docker ps --filter "label=io.x-k8s.kind.cluster=${{ inputs.cluster_name || 'daq-k8s-cluster' }}" --format '{{.Names}}' | head -n 1)
+          KIND_IP=$(docker inspect -f '{{.NetworkSettings.Networks.kind.IPAddress}}' "$KIND_CONTAINER")
+          
+          find nightly -type f -name "k8s_process_manager.py" -exec sed -i "s|sock.connect_ex((node_name, port))|sock.connect_ex(('$KIND_IP', port))|g" {} +
+          find nightly -type f -name "k8s_process_manager.py" -exec sed -i "s|url = f\"http://{node_name}:{lcs.node_port}\"|url = f\"http://$KIND_IP:{lcs.node_port}\"|g" {} +
 
           cd nightly/NFD_DEV*
           source env.sh
