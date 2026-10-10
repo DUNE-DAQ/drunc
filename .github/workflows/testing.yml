@@ -249,11 +249,10 @@ jobs:
           find nightly -type f -name "k8s_process_manager.py" -exec sed -i "s|url = f\"http://{node_name}:{lcs.node_port}\"|url = f\"http://$KIND_IP:{lcs.node_port}\"|g" {} +
 
           # 3. Global Network Fix: Route hostNetwork pods back to the CI Runner
-          # The Kind node automatically maps $HOSTNAME to itself. We overwrite this to point
-          # to the CI Runner's IP so the C++ apps can reach the Connectivity Service.
           CI_RUNNER_IP=$(docker inspect -f '{{.NetworkSettings.Networks.kind.IPAddress}}' "$HOSTNAME")
-          docker exec -u root "$KIND_CONTAINER" sed -i "/${HOSTNAME}/d" /etc/hosts
-          docker exec -u root "$KIND_CONTAINER" bash -c "echo -e '${CI_RUNNER_IP}\t${HOSTNAME}' >> /etc/hosts"
+          
+          # Safely rewrite /etc/hosts in place without breaking Docker's bind mount
+          docker exec -u root "$KIND_CONTAINER" bash -c "cat /etc/hosts | grep -v '${HOSTNAME}' > /tmp/hosts.new; echo -e '${CI_RUNNER_IP}\t${HOSTNAME}' >> /tmp/hosts.new; cat /tmp/hosts.new > /etc/hosts"
 
           cd nightly/NFD_DEV*
           source env.sh
