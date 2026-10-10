@@ -1,0 +1,29 @@
+name: Setup Test Runner
+description: Prepares a runner for testing by checking out code, starting SSH, and unpacking the nightly build
+
+runs:
+  using: composite
+  steps:
+    - name: Checkout workflow repository
+      uses: actions/checkout@v7
+
+    - name: Setup SSH daemon
+      uses: ./.github/actions/setup-ssh-daemon
+
+    - name: Download environment artifact
+      uses: actions/download-artifact@v8
+      with:
+        name: nightly-env
+
+    - name: Install dependencies and unpack
+      shell: bash
+      run: |
+        dnf install -y zstd
+        tar --zstd -xf nightly.tar.zst
+
+    - name: Setup Temp Directory
+      shell: bash
+      run: |
+        TEST_DIR="$RUNNER_TEMP/my_integration_test"
+        mkdir -p "$TEST_DIR"
+        echo "TEST_DIR=$TEST_DIR" >> "$GITHUB_ENV"

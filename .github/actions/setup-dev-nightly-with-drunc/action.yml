@@ -1,0 +1,33 @@
+name: Setup dev nightly
+description: Create and initialize a dev nightly DBT area and install drunc
+
+runs:
+  using: composite
+  steps:
+    - name: Set up dev nightly
+      shell: bash
+      run: |
+        mkdir nightly
+        cd nightly
+
+        source /cvmfs/dunedaq.opensciencegrid.org/setup_dunedaq.sh
+        setup_dbt latest
+        dbt-create -n last_fddaq
+
+        cd NFD_DEV*
+        source env.sh
+
+
+        cd sourcecode
+        git clone "https://github.com/${REPO_OWNER}/druncschema.git" -b "$HEAD_REF" || git clone https://github.com/DUNE-DAQ/druncschema.git
+        cd druncschema
+        pip install .[test]
+
+        cd ../../pythoncode
+        git clone "https://github.com/${REPO_OWNER}/drunc.git" -b "$HEAD_REF" || git clone https://github.com/DUNE-DAQ/drunc.git
+        cd drunc
+        pip install .[test]
+
+        cd ../..
+        dbt-build --skip-python-install
+        dbt-workarea-env

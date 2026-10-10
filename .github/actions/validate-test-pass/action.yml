@@ -1,0 +1,32 @@
+name: Validate Test Pass
+description: Checks the stdout and logs of the integration test bundle script to validate test pass
+
+runs:
+  using: composite
+  steps:
+    - name: Verify Integration Test Results
+      shell: bash
+      run: |
+        # Use exported TEST_DIR or fallback to RUNNER_TEMP with an absolute path
+        TARGET_DIR="${TEST_DIR:-$RUNNER_TEMP/my_integration_test}"
+
+        echo "Checking directory: $TARGET_DIR"
+
+        # Find the latest log file safely
+        LATEST_LOG=$(find "$TARGET_DIR" -type f -name "dunedaq_integtest_bundle_*.log" | sort -r | head -n 1)
+
+        if [ -z "$LATEST_LOG" ] || [ ! -f "$LATEST_LOG" ]; then
+          echo "::error::No bundle log file found in $TARGET_DIR"
+          exit 1
+        fi
+
+        echo "Inspecting log: $LATEST_LOG"
+
+        # Check for pytest failure signatures
+        if grep -q -E "(failed ❌|Unhandled exception|COMMAND_ERROR|[1-9][0-9]* failed)" "$LATEST_LOG"; then
+          echo "::error::Integration test failure detected in: $LATEST_LOG"
+          grep -E "([0-9]+ failed|[0-9]+ passed|Unhandled exception|COMMAND_ERROR)" "$LATEST_LOG" || true
+          exit 1
+        fi
+
+        echo "Integration test completed successfully."

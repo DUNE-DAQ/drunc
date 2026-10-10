@@ -1,0 +1,120 @@
+name: Setup Kind and Kubectl
+description: Installs Docker CLI, kubectl, kind, and spins up a cluster connected to the CI container
+
+inputs:
+  cluster_name:
+    description: "The name of the kind cluster to create"
+    required: true
+    default: "test-cluster"
+
+runs:
+  using: composite
+  steps:
+    - name: Install Docker CLI prerequisites
+      shell: bash
+      run: |
+        dnf remove -y podman-docker || true
+        dnf install -y dnf-plugins-core
+        dnf config-manager --add-repo https://download.docker.com/linux/centos/docker-ce.repo
+        dnf install -y --allowerasing docker-ce-cli
+        which docker
+        docker info
+
+    - name: Install and configure Kind cluster
+      shell: bash
+      run: |
+        CLUSTER_NAME="${{ inputs.cluster_name }}"
+
+        # Install kubectl
+        curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
+        chmod +x kubectl
+        mv kubectl /usr/local/bin/
+
+        # Install kind
+        curl -Lo ./kind https://kind.sigs.k8s.io/dl/latest/kind-linux-amd64
+        chmod +x ./kind
+        mv ./kind /usr/local/bin/
+
+        kind delete cluster --name "$CLUSTER_NAME" 2>/dev/null || true
+
+        # Detect the host runner's real path backing /__w
+        HOST_WORKSPACE_PATH=$(docker inspect "$HOSTNAME" --format '{{range .Mounts}}{{if eq .Destination "/__w"}}{{.Source}}{{end}}{{end}}')
+        HOST_WORKSPACE_PATH="${HOST_WORKSPACE_PATH:-/__w}"
+        
+        # Detect the nightly path in the container and translate to host backing path
+        NIGHTLY_CONTAINER_PATH=$(find /__w -maxdepth 4 -type d -name "NFD_DEV*" | head -n 1)
+        NIGHTLY_DIRNAME=$(basename "$NIGHTLY_CONTAINER_PATH")
+        NIGHTLY_HOST_PATH="${NIGHTLY_CONTAINER_PATH//\/__w/$HOST_WORKSPACE_PATH}"
+
+        cat <<EOF > /tmp/kind-config.yaml
+        kind: Cluster
+        apiVersion: kind.x-k8s.io/v1alpha4
+        nodes:
+        - role: control-plane
+          kubeadmConfigPatches:
+          - |
+            kind: InitConfiguration
+            nodeRegistration:
+              name: "${HOSTNAME}"
+          extraMounts:
+          - hostPath: ${HOST_WORKSPACE_PATH}
+            containerPath: /__w
+          - hostPath: ${HOST_WORKSPACE_PATH}
+            containerPath: /nfs
+          - hostPath: ${NIGHTLY_HOST_PATH}
+            containerPath: /cvmfs/dunedaq-development.opensciencegrid.org/nightly/${NIGHTLY_DIRNAME}
+        EOF
+        # Strip the leading 8 spaces from the heredoc so Kind receives clean YAML
+        sed -i 's/^[ ]\{8\}//' /tmp/kind-config.yaml
+
+        # Create Kind cluster
+        kind create cluster --name "$CLUSTER_NAME" --config /tmp/kind-config.yaml
+
+        # Connect CI container to kind network
+        docker network connect --alias "ci-runner-${HOSTNAME}" kind "$HOSTNAME"
+
+        # Update kubeconfig to point to internal network IP
+        KIND_CONTAINER=$(docker ps --filter "label=io.x-k8s.kind.cluster=${CLUSTER_NAME}" --format '{{.Names}}' | head -n 1)
+        KIND_IP=$(docker inspect -f '{{.NetworkSettings.Networks.kind.IPAddress}}' "$KIND_CONTAINER")
+        kubectl config set-cluster "kind-${CLUSTER_NAME}" --server="https://${KIND_IP}:6443"
+
+        # Label node with the container hostname so drunc accepts it
+        NODE_NAME=$(kubectl get nodes -o jsonpath='{.items[0].metadata.name}')
+        kubectl label node "$NODE_NAME" "drunc.host=$HOSTNAME" --overwrite || true
+        kubectl label node "$NODE_NAME" "host=$HOSTNAME" --overwrite || true
+
+        # Wait for the node to become Ready
+        kubectl wait --for=condition=Ready "node/${NODE_NAME}" --timeout=90s
+
+        # Create dummy mount directories required by drunc's pod hostPath volumes
+        docker exec "$KIND_CONTAINER" mkdir -p /cvmfs
+
+        # Map container hostname to Kind node IP so NodePort polling reaches the Kind node
+        sed -i "/${HOSTNAME}/d" /etc/hosts 2>/dev/null || true
+        echo -e "${KIND_IP}\t${HOSTNAME}" >> /etc/hosts || {
+          cp /etc/hosts /tmp/hosts.new
+          echo -e "${KIND_IP}\t${HOSTNAME}" >> /tmp/hosts.new
+          cat /tmp/hosts.new > /etc/hosts
+        }
+
+    - name: Preload DAQ image into Kind
+      shell: bash
+      run: |
+        CLUSTER_NAME="${{ inputs.cluster_name }}"
+        IMAGE="ghcr.io/dune-daq/nightly-release-alma9:development_v5"
+
+        # 1. Bake workspace symlinks into the image so the pod finds drunc-controller
+        cat <<EOF > Dockerfile.ci
+        FROM $IMAGE
+        USER root
+        RUN mkdir -p /__w && ln -s /nfs/drunc /__w/drunc && ln -s /nfs/_temp /__w/_temp
+        EOF
+        
+        # 2. Tag with :ci-local instead of :latest to prevent 'imagePullPolicy: Always'
+        docker build -t "ghcr.io/dune-daq/alma9:ci-local" -f Dockerfile.ci .
+
+        # 3. Load the shim into Kind
+        kind load docker-image "ghcr.io/dune-daq/alma9:ci-local" --name "$CLUSTER_NAME"
+
+        # 4. Patch drunc to request the local tag so Kubernetes uses the cached 10GB image
+        find /__w -type f \( -name "*.py" -o -name "*.yaml" -o -name "*.json" \) -exec sed -i 's|ghcr.io/dune-daq/alma9:latest|ghcr.io/dune-daq/alma9:ci-local|g' {} + 2>/dev/null || true
