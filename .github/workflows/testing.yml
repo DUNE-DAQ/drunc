@@ -220,6 +220,7 @@ jobs:
         shell: bash
     container:
       image: ghcr.io/dune-daq/nightly-release-alma9:development_v5
+      options: --cap-add=NET_ADMIN
       volumes:
         - /var/run/docker.sock:/var/run/docker.sock
 
@@ -257,7 +258,8 @@ jobs:
           # 4. SDN ROUTING FIX (Bridge the CI Runner to the K8s Pod Subnet)
           # Tell the GitHub Actions runner that any traffic destined for the K8s virtual 
           # network (10.244.0.0/16) should be routed through the Kind container.
-          sudo ip route add 10.244.0.0/16 via "$KIND_IP"
+          dnf install -y iproute
+          ip route add 10.244.0.0/16 via "$KIND_IP"
 
           cd nightly/NFD_DEV*
           source env.sh
