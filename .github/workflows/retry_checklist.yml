@@ -1,0 +1,34 @@
+name: Retry reviewer checklist
+
+'on':
+  issue_comment:
+    types: [created]
+
+permissions:
+  contents: read
+  actions: write
+  pull-requests: read
+
+concurrency:
+  group: retry-checklist-${{ github.event.issue.number }}
+  cancel-in-progress: false
+
+jobs:
+  retry-checklist:
+    if: >-
+      github.event.issue.pull_request &&
+      github.event.comment.user.type == 'User' &&
+      contains(github.event.comment.body, '/retry-checklist')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+
+      - uses: ./.github/actions/setup-scripts
+
+      - name: Retry the PR's reviewer-checklist job
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: python .github/scripts/retry_checklist.py
