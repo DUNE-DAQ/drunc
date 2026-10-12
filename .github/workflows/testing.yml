@@ -242,29 +242,28 @@ jobs:
           KIND_IP=$(docker inspect -f '{{.NetworkSettings.Networks.kind.IPAddress}}' "$KIND_CONTAINER")
           
           # 0. BRIDGE THE CI RUNNER TO THE K8s NETWORK
-          # Allows K8s pods to reach the CI runner to talk to the Connectivity Service.
           docker network connect kind "$HOSTNAME" || true
-          export CI_RUNNER_KIND_IP=$(docker inspect -f '{{.NetworkSettings.Networks.kind.IPAddress}}' "$HOSTNAME")
+          CI_RUNNER_KIND_IP=$(docker inspect -f '{{.NetworkSettings.Networks.kind.IPAddress}}' "$HOSTNAME")
           PRIMARY_IP=$(hostname -I | awk '{print $1}')
-          if [ -z "$CI_RUNNER_KIND_IP" ]; then export CI_RUNNER_KIND_IP=$PRIMARY_IP; fi
+          PRIMARY_SUBNET=$(echo $PRIMARY_IP | awk -F. '{print $1"."$2".0.0/16"}')
 
           # 1. FIX CVMFS SHADOW MOUNT
           find nightly -type f -name "k8s.json" -exec sed -i 's|"mount_path": "/cvmfs"|"mount_path": "/tmp/dummy_cvmfs"|g' {} +
           find nightly -type f -name "k8s.json" -exec sed -i "s|'/cvmfs'|'/tmp/dummy_cvmfs'|g" {} +
 
-          # 2. FIX K8S PROCESS MANAGER POLLING 
+          # 2. FIX PM NODEPORT POLLING
           find nightly -type f -name "k8s_process_manager.py" -exec sed -i "s|sock.connect_ex((node_name, port))|sock.connect_ex(('$KIND_IP', port))|g" {} +
           find nightly -type f -name "k8s_process_manager.py" -exec sed -i "s|url = f\"http://{node_name}:{lcs.node_port}\"|url = f\"http://$KIND_IP:{lcs.node_port}\"|g" {} +
 
-          # 3. FORCE HOSTNETWORK FOR ALL PODS (The Localhost Fix)
-          # Pulls the root-controller out of the K8s SDN and drops it natively on the Kind Node 
-          # so all applications share the exact same 127.0.0.1 loopback interface.
-          find nightly -type f -name "k8s_process_manager.py" -exec sed -i 's/use_host_network = service_type != "NodePort"/use_host_network = True/g' {} +
+          # 3. FIX OKS CONNECTION (Bridge K8s Pods <-> CI Runner)
+          # OKS hardcodes the Connectivity Service to the CI Runner's primary IP (e.g. 172.18.x.x).
+          # We add a static route inside the Kind Node to forward this traffic over the shared Docker bridge.
+          docker exec -u root "$KIND_CONTAINER" ip route add "$PRIMARY_SUBNET" via "$CI_RUNNER_KIND_IP"
 
-          # 4. OVERRIDE CONNECTIVITY SERVER URL (Bypass OKS Database)
-          # OKS tells pods the Connectivity Service is on "localhost". We intercept the container 
-          # boot env and force it to phone home to the CI Runner's bridged network IP.
-          find nightly -type f -name "k8s_process_manager.py" -exec sed -i '/container_env = \[client.V1EnvVar/i \        if "local-env-connectivity-port" in os.environ:\n            env_vars["CONNECTION_SERVER"] = f"http://{os.environ.get(\"CI_RUNNER_KIND_IP\")}:{os.environ.get(\"local-env-connectivity-port\")}"' {} +
+          # 4. FIX POD BINDING (Replace CI Runner hostname with Kind Node IP)
+          # OKS generates commands using the CI Runner's hostname, causing the pods to crash on bind().
+          # We intercept the command execution chain and dynamically swap it for the local Kind Node IP.
+          find nightly -type f -name "k8s_process_manager.py" -exec sed -i "s|main_command_chain = \" \&\& \".join(command_parts)|main_command_chain = \" \&\& \".join(command_parts).replace('$HOSTNAME', '$KIND_IP')|g" {} +
 
           cd nightly/NFD_DEV*
           source env.sh
