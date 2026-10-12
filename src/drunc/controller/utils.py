@@ -128,6 +128,9 @@ def get_detector_name(configuration) -> str:
 
 
 def get_segment_lookup_timeout(segment_conf, base_timeout=60):
+
+    if os.getenv("DRUNC_K8S_CI_TIMEOUT"):
+        return int(os.getenv("DRUNC_K8S_CI_TIMEOUT"))
     def recurse_segment(segment, recursion_count: int = 1) -> int:
         if segment.segments == []:
             return recursion_count
