@@ -43,10 +43,6 @@ def rc_shell(ctx: click.core.Context, run_control_address: str):
         rc_shell_log.critical("Could not connect to the run control")
         rc_shell_log.exception(e)
         exit(1)
-    except Exception as e:
-        rc_shell_log.critical(f"failed somehow: {e}")
-        rc_shell_log.info("dont forget to remove this fork :)")
-        exit(1)
 
     rc_log.info(
         f"[green]{getpass.getuser()}[/green] connected to the run control through a [green]drunc-run-control-shell[/green] via address [green]{run_control_address}[/green]"

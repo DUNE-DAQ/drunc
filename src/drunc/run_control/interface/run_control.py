@@ -47,7 +47,9 @@ def run_rc(
         log.info("serving")
 
         if not address:
-            raise DruncSetupException("your address sucks")
+            raise DruncSetupException(
+                "The address on which to expect commands/send status wasn't specified"
+            )
         nonlocal server
         server = grpc.server(
             concurrent.futures.ThreadPoolExecutor(

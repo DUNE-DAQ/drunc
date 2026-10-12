@@ -17,13 +17,12 @@ class RunControl(abc.ABC, RunControlServicer):
     rc_type = "Hehehehe"
 
     def __init__(self):
-        self.log = get_logger("run_control.NAME_run_control")
-        self.name = "Some run control thing!"
-
-        self.log.critical("run control active!")
+        # TODO: This needs to contain the configuration name
+        self.log = get_logger("run_control.CONFIGURATION_NAME_run_control")
+        self.name = "run_control"  # TODO Skeleton: needs to update
 
         dach = DummyAuthoriserConfHandler.from_pyobject(
-            data=None  # CONFIGURATION NEEDS UPDATING HERE
+            data=None  # TODO Skeleton: CONFIGURATION NEEDS UPDATING HERE
         )
 
         self.authoriser = DummyAuthoriser(dach, SystemType.RUN_CONTROL)
@@ -68,6 +67,7 @@ class RunControl(abc.ABC, RunControlServicer):
     def describe(self, request: Request, context: ServicerContext) -> Description:
         self.log.info(f"{self.name} running describe")
 
+        # TODO Skeleton: Will obviously need filling up as features pop in
         response = Description(
             type="some name for now",
             name="unnamed",
