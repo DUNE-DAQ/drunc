@@ -7,7 +7,7 @@ import os
 from functools import cache
 from pathlib import Path
 from urllib.error import HTTPError, URLError
-from urllib.parse import quote
+from urllib.parse import quote, urlencode
 from urllib.request import Request, urlopen
 
 import yaml
@@ -119,12 +119,25 @@ class GitHubApi:
             raise RoutingError(f"GitHub API request failed: {error}") from error
         return json.loads(content) if content else {}
 
-    def paginated(self, path: str) -> list[dict]:
-        """Fetch all pages for an API collection endpoint."""
+    def paginated(
+        self,
+        path: str,
+        *,
+        params: dict[str, str] | None = None,
+        collection_key: str | None = None,
+    ) -> list[dict]:
+        """Fetch all pages from a list or a named collection in an API object."""
         results: list[dict] = []
         page = 1
         while True:
-            response = self.request("GET", f"{path}?per_page=100&page={page}")
+            query = urlencode({**(params or {}), "per_page": 100, "page": page})
+            response = self.request("GET", f"{path}?{query}")
+            if collection_key is not None:
+                if not isinstance(response, dict):
+                    raise RoutingError(
+                        f"Expected an object from GitHub endpoint {path}"
+                    )
+                response = response.get(collection_key)
             if not isinstance(response, list):
                 raise RoutingError(f"Expected a list from GitHub endpoint {path}")
             results.extend(response)
