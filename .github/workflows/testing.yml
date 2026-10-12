@@ -241,7 +241,7 @@ jobs:
           KIND_CONTAINER=$(docker ps --filter "label=io.x-k8s.kind.cluster=${{ inputs.cluster_name || 'daq-k8s-cluster' }}" --format '{{.Names}}' | head -n 1)
           KIND_IP=$(docker inspect -f '{{.NetworkSettings.Networks.kind.IPAddress}}' "$KIND_CONTAINER")
           
-          # 0. BRIDGE THE CI RUNNER TO THE K8s NETWORK
+          # 0. BRIDGE NETWORKS
           docker network connect kind "$HOSTNAME" || true
           CI_RUNNER_KIND_IP=$(docker inspect -f '{{.NetworkSettings.Networks.kind.IPAddress}}' "$HOSTNAME")
           PRIMARY_IP=$(hostname -I | awk '{print $1}')
@@ -255,15 +255,22 @@ jobs:
           find nightly -type f -name "k8s_process_manager.py" -exec sed -i "s|sock.connect_ex((node_name, port))|sock.connect_ex(('$KIND_IP', port))|g" {} +
           find nightly -type f -name "k8s_process_manager.py" -exec sed -i "s|url = f\"http://{node_name}:{lcs.node_port}\"|url = f\"http://$KIND_IP:{lcs.node_port}\"|g" {} +
 
-          # 3. FIX OKS CONNECTION (Bridge K8s Pods <-> CI Runner)
-          # OKS hardcodes the Connectivity Service to the CI Runner's primary IP (e.g. 172.18.x.x).
-          # We add a static route inside the Kind Node to forward this traffic over the shared Docker bridge.
-          docker exec -u root "$KIND_CONTAINER" ip route add "$PRIMARY_SUBNET" via "$CI_RUNNER_KIND_IP"
+          # 3. FIX APP BINDING (The missing code from the last run)
+          # OKS tells apps to bind to the CI Runner's $HOSTNAME. We intercept this in both the 
+          # Kind Node (for hostNetwork=True) and K8s Pods (for hostNetwork=False) to resolve it 
+          # to the Kind Node's IP, which the kernel allows them to successfully bind to.
+          docker exec -u root "$KIND_CONTAINER" bash -c "grep -v '${HOSTNAME}' /etc/hosts > /tmp/hosts.new && echo -e '${KIND_IP}\t${HOSTNAME}' >> /tmp/hosts.new && cat /tmp/hosts.new > /etc/hosts"
+          find nightly -type f -name "k8s_process_manager.py" -exec sed -i "s|host_aliases=host_aliases if host_aliases else None|host_aliases=(host_aliases if host_aliases else []) + [client.V1HostAlias(ip='$KIND_IP', hostnames=['$HOSTNAME'])]|g" {} +
 
-          # 4. FIX POD BINDING (Replace CI Runner hostname with Kind Node IP)
-          # OKS generates commands using the CI Runner's hostname, causing the pods to crash on bind().
-          # We intercept the command execution chain and dynamically swap it for the local Kind Node IP.
-          find nightly -type f -name "k8s_process_manager.py" -exec sed -i "s|main_command_chain = \" \&\& \".join(command_parts)|main_command_chain = \" \&\& \".join(command_parts).replace('$HOSTNAME', '$KIND_IP')|g" {} +
+          # 4. FIX CI RUNNER -> SDN ROUTING 
+          # Allows the Python test script to reach the root-controller inside the isolated K8s network.
+          dnf install -y iproute
+          ip route add 10.244.0.0/16 via "$KIND_IP"
+
+          # 5. FIX PODS -> CONNECTIVITY SERVICE ROUTING
+          # OKS tells pods to reach the Connectivity Service via the CI Runner's primary IP (172.18.x.x).
+          # The Kind Node drops this by default, so we route it through the shared docker bridge.
+          docker exec -u root "$KIND_CONTAINER" ip route add "$PRIMARY_SUBNET" via "$CI_RUNNER_KIND_IP"
 
           cd nightly/NFD_DEV*
           source env.sh
