@@ -234,8 +234,8 @@ jobs:
         run: |
           KIND_CONTAINER=$(docker ps --filter "label=io.x-k8s.kind.cluster=${{ inputs.cluster_name || 'daq-k8s-cluster' }}" --format '{{.Names}}' | head -n 1)
           KIND_IP=$(docker inspect -f '{{.NetworkSettings.Networks.kind.IPAddress}}' "$KIND_CONTAINER")
-
-          # 0. BRIDGE NETWORKS (Allows K8s pods to reach the Connectivity Service on the CI Runner)
+          
+          # 0. BRIDGE NETWORKS
           docker network connect kind "$HOSTNAME" || true
 
           # 1. FIX CVMFS SHADOW MOUNT
@@ -246,15 +246,19 @@ jobs:
           find nightly -type f -name "k8s_process_manager.py" -exec sed -i "s|sock.connect_ex((node_name, port))|sock.connect_ex(('$KIND_IP', port))|g" {} +
           find nightly -type f -name "k8s_process_manager.py" -exec sed -i "s|url = f\"http://{node_name}:{lcs.node_port}\"|url = f\"http://$KIND_IP:{lcs.node_port}\"|g" {} +
 
-          # 3. FIX BINDING CRASH (The crucial missing piece)
-          # daqsystemtest hardcodes the CI Runner's hostname into the execution commands.
-          # When hostNetwork pods try to bind() to this hostname, the kernel kills them.
-          # We surgically replace the hostname with the local Kind IP directly in the Python execution chain.
+          # 3. FIX APP BINDING
           find nightly -type f -name "k8s_process_manager.py" -exec sed -i "s|main_command_chain = \" && \".join(command_parts)|&.replace('$HOSTNAME', '$KIND_IP')|g" {} +
 
-          # 4. FIX SDN ROUTING (Allows the CI Runner to reach the root-controller inside K8s)
+          # 4. FIX SDN ROUTING 
           dnf install -y iproute
           ip route add 10.244.0.0/16 via "$KIND_IP"
+
+          # 5. FIX INITIALIZATION TIMEOUTS (No CPU Throttling)
+          # Patch drunc's internal timeout utility to force a 900-second timeout 
+          # so the root-controller patiently waits for the CPU-heavy children to register.
+          UTILS_FILE=$(find nightly -type f -name "utils.py" -path "*/drunc/controller/*" | head -n 1)
+          sed -i 's/def get_segment_lookup_timeout/def get_segment_lookup_timeout_old/g' "$UTILS_FILE"
+          echo -e "\n\ndef get_segment_lookup_timeout(*args, **kwargs):\n    return 900\n" >> "$UTILS_FILE"
 
           cd nightly/NFD_DEV*
           source env.sh
