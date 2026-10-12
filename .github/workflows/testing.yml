@@ -241,14 +241,9 @@ jobs:
           KIND_CONTAINER=$(docker ps --filter "label=io.x-k8s.kind.cluster=${{ inputs.cluster_name || 'daq-k8s-cluster' }}" --format '{{.Names}}' | head -n 1)
           KIND_IP=$(docker inspect -f '{{.NetworkSettings.Networks.kind.IPAddress}}' "$KIND_CONTAINER")
           
-          # 0. BRIDGE THE CI RUNNER DIRECTLY TO THE KIND NETWORK
+          # 0. BRIDGE THE CI RUNNER TO THE K8s NETWORK
           docker network connect kind "$HOSTNAME" || true
           CI_RUNNER_KIND_IP=$(docker inspect -f '{{.NetworkSettings.Networks.kind.IPAddress}}' "$HOSTNAME")
-          
-          # Force the test runner to bind everything to the shared Kind network IP 
-          # so Docker doesn't block cross-bridge traffic with "Connection refused".
-          export DAQ_CONNECTION_SERVER_IP="$CI_RUNNER_KIND_IP"
-          export HOSTNAME="$CI_RUNNER_KIND_IP"
 
           # 1. FIX CVMFS SHADOW MOUNT
           find nightly -type f -name "k8s.json" -exec sed -i 's|"mount_path": "/cvmfs"|"mount_path": "/tmp/dummy_cvmfs"|g' {} +
@@ -258,13 +253,28 @@ jobs:
           find nightly -type f -name "k8s_process_manager.py" -exec sed -i "s|sock.connect_ex((node_name, port))|sock.connect_ex(('$KIND_IP', port))|g" {} +
           find nightly -type f -name "k8s_process_manager.py" -exec sed -i "s|url = f\"http://{node_name}:{lcs.node_port}\"|url = f\"http://$KIND_IP:{lcs.node_port}\"|g" {} +
 
-          # 3. FIX APP BINDING (Map hostname to Kind Node inside the cluster)
-          docker exec -u root "$KIND_CONTAINER" bash -c "grep -v '${HOSTNAME}' /etc/hosts > /tmp/hosts.new && echo -e '${KIND_IP}\t${HOSTNAME}' >> /tmp/hosts.new && cat /tmp/hosts.new > /etc/hosts"
-          find nightly -type f -name "k8s_process_manager.py" -exec sed -i "s|host_aliases=host_aliases if host_aliases else None|host_aliases=(host_aliases if host_aliases else []) + [client.V1HostAlias(ip='$KIND_IP', hostnames=['$HOSTNAME'])]|g" {} +
-
-          # 4. SDN ROUTING FIX 
-          dnf install -y iproute
+          # 3. ROUTE K8S SDN
+          # Allows the CI Runner to reach the root-controller inside the isolated K8s network.
+          dnf install -y iproute socat
           ip route add 10.244.0.0/16 via "$KIND_IP"
+
+          # 4. BACKGROUND OKS WATCHDOG & CS PROXY
+          (
+            while true; do
+              # A. Swap the CI Runner hostname for the Kind IP in OKS config so C++ apps can bind()
+              if [ -d "$TEST_DIR" ]; then
+                find "$TEST_DIR" -type f -name "*.data.xml" -exec sed -i "s|$HOSTNAME|$KIND_IP|g" {} + 2>/dev/null
+              fi
+              
+              # B. Forward the dynamic Connectivity Service port to the CI Runner
+              CS_PORT=$(ss -Htlpn | grep gunicorn | awk '{print $4}' | awk -F: '{print $NF}' | head -n 1)
+              if [ -n "$CS_PORT" ] && [ ! -f "/tmp/socat_running_$CS_PORT" ]; then
+                docker exec -u root -d "$KIND_CONTAINER" socat TCP-LISTEN:$CS_PORT,fork,reuseaddr TCP:$CI_RUNNER_KIND_IP:$CS_PORT
+                touch "/tmp/socat_running_$CS_PORT"
+              fi
+              sleep 0.2
+            done
+          ) &
 
           cd nightly/NFD_DEV*
           source env.sh
