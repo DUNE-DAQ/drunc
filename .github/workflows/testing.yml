@@ -240,7 +240,14 @@ jobs:
         run: |
           KIND_CONTAINER=$(docker ps --filter "label=io.x-k8s.kind.cluster=${{ inputs.cluster_name || 'daq-k8s-cluster' }}" --format '{{.Names}}' | head -n 1)
           KIND_IP=$(docker inspect -f '{{.NetworkSettings.Networks.kind.IPAddress}}' "$KIND_CONTAINER")
-          CI_RUNNER_IP=$(docker inspect -f '{{.NetworkSettings.Networks.kind.IPAddress}}' "$HOSTNAME")
+          
+          # 0. BRIDGE THE CI RUNNER TO THE K8s NETWORK
+          # By connecting the CI runner to the kind network, the pods can bypass Docker's 
+          # network isolation rules and communicate with the CI Runner natively.
+          docker network connect kind "$HOSTNAME" || true
+          CI_RUNNER_KIND_IP=$(docker inspect -f '{{.NetworkSettings.Networks.kind.IPAddress}}' "$HOSTNAME")
+          PRIMARY_IP=$(hostname -I | awk '{print $1}')
+          if [ -z "$CI_RUNNER_KIND_IP" ]; then CI_RUNNER_KIND_IP=$PRIMARY_IP; fi
 
           # 1. FIX CVMFS SHADOW MOUNT (Exit Code 126)
           find nightly -type f -name "k8s.json" -exec sed -i 's|"mount_path": "/cvmfs"|"mount_path": "/tmp/dummy_cvmfs"|g' {} +
@@ -250,21 +257,21 @@ jobs:
           find nightly -type f -name "k8s_process_manager.py" -exec sed -i "s|sock.connect_ex((node_name, port))|sock.connect_ex(('$KIND_IP', port))|g" {} +
           find nightly -type f -name "k8s_process_manager.py" -exec sed -i "s|url = f\"http://{node_name}:{lcs.node_port}\"|url = f\"http://$KIND_IP:{lcs.node_port}\"|g" {} +
 
-          # 3. GLOBAL NETWORK FIX (Allow pods to bind to the Kind Node's IP)
-          # We map the hostname to $KIND_IP instead of $CI_RUNNER_IP so hostNetwork pods 
-          # can actually bind to the interface they live on.
+          # 3. GLOBAL NETWORK FIX (Allow hostNetwork pods to bind to the Kind Node's IP)
           docker exec -u root "$KIND_CONTAINER" bash -c "grep -v '${HOSTNAME}' /etc/hosts > /tmp/hosts.new && echo -e '${KIND_IP}\t${HOSTNAME}' >> /tmp/hosts.new && cat /tmp/hosts.new > /etc/hosts"
 
           # 4. SDN ROUTING FIX (Bridge the CI Runner to the K8s Pod Subnet)
-          # Tell the GitHub Actions runner that any traffic destined for the K8s virtual 
-          # network (10.244.0.0/16) should be routed through the Kind container.
           dnf install -y iproute
           ip route add 10.244.0.0/16 via "$KIND_IP"
 
-          # 6. SDN POD DNS FIX (Inject HostAlias into all K8s Pods)
-          # Patches the PM to dynamically inject a Kubernetes HostAlias into every pod manifest.
-          # This teaches the Root Controller's internal DNS how to reach the HostNetwork segment controllers.
+          # 5. SDN POD DNS FIX (Inject HostAlias into all K8s Pods)
+          # Ensures internal K8s traffic destined for the hostname routes back to the physical Kind Node.
           find nightly -type f -name "k8s_process_manager.py" -exec sed -i "s|host_aliases=host_aliases if host_aliases else None|host_aliases=(host_aliases if host_aliases else []) + [client.V1HostAlias(ip='$KIND_IP', hostnames=['$HOSTNAME'])]|g" {} +
+
+          # 6. CONNECTIVITY SERVICE SPLIT-HORIZON FIX
+          # We intercept the environment variable immediately before the pod manifest is generated 
+          # and replace the isolated IP/hostname with the CI Runner's bridged Kind network IP.
+          find nightly -type f -name "k8s_process_manager.py" -exec sed -i '/container_env = \[client/i \        if "CONNECTION_SERVER" in env_vars:\n            env_vars["CONNECTION_SERVER"] = env_vars["CONNECTION_SERVER"].replace("'$HOSTNAME'", "'$CI_RUNNER_KIND_IP'").replace("localhost", "'$CI_RUNNER_KIND_IP'").replace("127.0.0.1", "'$CI_RUNNER_KIND_IP'").replace("'$PRIMARY_IP'", "'$CI_RUNNER_KIND_IP'")' {} +
 
           cd nightly/NFD_DEV*
           source env.sh
