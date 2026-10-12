@@ -73,4 +73,4 @@ def rc_shell(ctx: click.core.Context, run_control_address: str):
     for cmd in exposed_run_control_commands:
         command_group.add_command(cmd, format_name_for_cli(cmd.name or ""))
 
-    rc_log.info("ready")
+    rc_log.info("Ready")

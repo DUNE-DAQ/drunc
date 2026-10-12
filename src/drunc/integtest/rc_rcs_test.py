@@ -35,19 +35,31 @@ rc_port = find_free_port(50020, 52000)
 
 # The command lines that should be used to start the applications
 procmsg_startup_commands = ["drunc-run-control", str(rc_port)]
-rcapp = idc.DAQControlApplication("rc", procmsg_startup_commands)
+rcapp = idc.DAQControlApplication(
+    "rc",
+    procmsg_startup_commands,
+    idc.KeyPhraseWaitParameters(
+        search_phrase="communicating through",
+        timeout_waiting_for_first_msg=5,
+        wait_time_after_last_msg=5,
+    ),
+)
 
 rcshell_startup_commands = [
     "drunc-run-control-shell",
     f"grpc://localhost:{rc_port}",
 ]
-rcshellapp = idc.DAQControlApplication("rcshell", rcshell_startup_commands)
+rcshellapp = idc.DAQControlApplication(
+    "rcshell",
+    rcshell_startup_commands,
+    idc.KeyPhraseWaitParameters(search_phrase="Ready"),
+)
 
 # Packaging up the commands into DAQCommandSets
 cmd_set = idc.DAQCommandSet(
     "rcshell",
     dunerc_commands,
-    idc.CommandWaitParameters(style=idc.CommandWaitStyle.ECHO),
+    idc.EchoCommandWaitParameters(),
 )
 
 # Putting everything together into a DAQSessionIngredients object
