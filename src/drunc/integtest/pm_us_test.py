@@ -88,6 +88,7 @@ _FSM_SEQUENCES = {
         run_number=6,
     ),
     "test_stop_run": FsmCommandParams("test_stop_run", "stop-run", "configured"),
+    "test_stop_run_3": FsmCommandParams("test_stop_run_3", "stop-run", "configured"),
 }
 
 _SHUTDOWN_MARKER = "test_shutdown"
@@ -186,7 +187,7 @@ dunerc_commands = (
     + _FSM_SEQUENCES["test_start_run"].to_command_block()
     + _FSM_SEQUENCES["test_stop_run"].to_command_block()
     + "start-run --run-number 3"
-    + _FSM_SEQUENCES["test_stop_run"].to_command_block()
+    + _FSM_SEQUENCES["test_stop_run_3"].to_command_block()
     + f"""
     echo {_SHUTDOWN_MARKER}
     shutdown
@@ -663,12 +664,6 @@ def test_terminate(run_dunerc) -> None:
         error_message="Did not find the 'test_terminate_done' footer line in stdout.",
     )
 
-    pre_boot_idx_us = require_line_containing(
-        lines_us,
-        "test_terminate",
-        error_message="Did not find the 'test_terminate' header line in stdout.",
-    )
-
     between_pm = lines_pm[pre_boot_idx_pm + 1 : post_boot_idx_pm]
     shutdown_re = "--- Shutdown stage: Role 'root-controller' complete ---"
     assert any(shutdown_re in line for line in between_pm), (
@@ -676,16 +671,18 @@ def test_terminate(run_dunerc) -> None:
         + "\n".join(between_pm)
     )
 
-    # TODO: This bit here is grabbing functions from the integ test utils. Maybe it can be better optimised?
+    terminate_lines = get_text_between_echo_markers(
+        lines_us, "test_terminate", "test_terminate_done"
+    ).splitlines()
     table_start_idx = find_line_index(
-        lines_us,
+        terminate_lines,
         lambda line: "Terminated process" in line,
-        start_idx=pre_boot_idx_us + 1,
     )
 
-    assert table_start_idx is not None, "cannot fine terminated process table"
+    assert table_start_idx is not None, "Could not find terminated process table."
 
-    terminated_table = _parse_table_from_index(lines_pm, table_start_idx, "ps")
+    terminated_table = _parse_table_from_index(terminate_lines, table_start_idx, "ps")
+    assert terminated_table, "Expected terminated process rows."
     for row in terminated_table:
         assert UUID_RE.match(row["uuid"]), (
             f"Expected a valid UUID for process '{row['friendly_name']}', got '{row['uuid']}'"
