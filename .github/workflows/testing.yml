@@ -261,15 +261,11 @@ jobs:
           dnf install -y iproute
           ip route add 10.244.0.0/16 via "$KIND_IP"
 
-          # 5. CI RUNNER DNS FIX (Route test script gRPC calls to the Kind Node)
-          # Forces the GitHub Actions Runner to resolve the hostname to the Kind IP
-          # so Python can talk directly to the HostNetwork segment controllers.
-          grep -v "${HOSTNAME}" /etc/hosts > /tmp/hosts.new && echo -e "${KIND_IP}\t${HOSTNAME}" >> /tmp/hosts.new && cat /tmp/hosts.new > /etc/hosts
-
           # 6. SDN POD DNS FIX (Inject HostAlias into all K8s Pods)
           # Patches the PM to dynamically inject a Kubernetes HostAlias into every pod manifest.
           # This teaches the Root Controller's internal DNS how to reach the HostNetwork segment controllers.
           find nightly -type f -name "k8s_process_manager.py" -exec sed -i "s|host_aliases=host_aliases if host_aliases else None|host_aliases=(host_aliases if host_aliases else []) + [client.V1HostAlias(ip='$KIND_IP', hostnames=['$HOSTNAME'])]|g" {} +
+
           cd nightly/NFD_DEV*
           source env.sh
           export USER=$(whoami)
