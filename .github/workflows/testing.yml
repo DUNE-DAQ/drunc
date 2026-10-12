@@ -311,6 +311,11 @@ jobs:
               echo "--------------------------------------------------"
             done
           '
+
+          echo "Running secondary check"
+          kubectl get events -n smallfootprint --sort-by='.metadata.creationTimestamp'
+          echo "Done"
+
       - name: Inspect Kubernetes Pod State & Failure Count 12345
         if: failure()
         run: |
