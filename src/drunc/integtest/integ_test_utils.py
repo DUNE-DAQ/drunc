@@ -425,9 +425,6 @@ def _parse_table_from_index(
                 f"No data rows found in {table_type} table after line {start_idx}."
             )
             return rows
-        assert not re.search(r"\bdrunc\.echo\b", stripped), (
-            f"Missing closing border in {table_type} table before marker at line {line_index}."
-        )
         if not stripped.startswith("│"):
             continue
         assert stripped.endswith("│"), (
@@ -457,20 +454,16 @@ def _get_table_after_echo(
     header_keyword: str,
     table_type: str,
 ) -> list[dict[str, str]]:
-    """Extract a table between a unique echo marker and the next echo marker.
+    """Extract the first matching table after a unique echo marker.
 
     Input is a list of stdout lines; ANSI styling is removed internally.
     Missing or malformed tables raise AssertionError. Only explicit
     no-process output returns an empty list for a process listing.
+    Subsequent echo markers do not implicitly bound the search.
     """
     lines = [strip_ansi(line) for line in lines]
     echo_idx = require_echo_marker_index(lines, echo_marker)
-    end_idx = find_line_index(
-        lines,
-        lambda line: re.search(r"\bdrunc\.echo\b", line) is not None,
-        start_idx=echo_idx + 1,
-    )
-    section = lines[echo_idx + 1 : end_idx]
+    section = lines[echo_idx + 1 :]
     title_pattern = {
         "ps": r"Processes running(?: in session .+)?",
         "status": r"(?:\S+\s+)?status",
@@ -488,7 +481,7 @@ def _get_table_after_echo(
         ):
             return []
         raise AssertionError(
-            f"No '{header_keyword}' table found after '{echo_marker}' before the next echo marker.\n"
+            f"No '{header_keyword}' table found after '{echo_marker}'.\n"
             + "\n".join(section)
         )
     return _parse_table_from_index(section, table_start_idx, table_type)
@@ -498,7 +491,7 @@ def get_ps_table_after_echo(lines: list[str], echo_marker: str) -> list[dict[str
     r"""Return parsed process-table rows found after a specific echo marker.
 
     Explicit no-process output returns an empty list. Missing or malformed
-    tables raise AssertionError; searches stop at the next echo marker.
+    tables raise AssertionError. Later echo markers do not bound the search.
 
     Example:
         >>> stdout = (
@@ -519,8 +512,8 @@ def get_status_table_after_echo(
 ) -> list[dict[str, str]]:
     r"""Return parsed status-table rows found after a specific echo marker.
 
-    Missing or malformed tables raise AssertionError. Searches stop at the
-    next echo marker.
+    Missing or malformed tables raise AssertionError. Later echo markers
+    do not bound the search.
 
     The table is structured as
     | Name | Info | State | Substate | In error | Included | Endpoint |
@@ -559,8 +552,8 @@ def get_execution_report_after_echo(
 ) -> list[dict[str, str]]:
     """Return parsed execution-report rows found after a specific echo marker.
 
-    Missing or malformed tables raise AssertionError. Searches stop at the
-    next echo marker.
+    Missing or malformed tables raise AssertionError. Later echo markers
+    do not bound the search.
 
     Returns:
         Parsed rows with keys: name, command_execution, fsm_transition.

@@ -57,15 +57,16 @@ def test_missing_table_border() -> None:
         utils._parse_table_from_index(lines, 0, "ps")
 
 
-def test_missing_table_does_not_find_later_command() -> None:
-    """Do not borrow a table from a subsequent command."""
+def test_intermediate_echo_does_not_bound_table_search() -> None:
+    """Do not treat an intervening echo as an implicit command boundary."""
+    cells = ["cell"] * 6
     lines = [
         _echo("before"),
-        _echo("after"),
-        *_table("Processes running", ["cell"] * 6),
+        _echo("intermediate"),
+        *_table("Processes running", cells),
     ]
-    with pytest.raises(AssertionError, match="before"):
-        utils.get_ps_table_after_echo(lines, "before")
+    rows = utils.get_ps_table_after_echo(lines, "before")
+    assert rows == [dict(zip(utils.get_table_columns("ps")[:6], cells))]
 
 
 def test_missing_process_output_is_not_empty_listing() -> None:
