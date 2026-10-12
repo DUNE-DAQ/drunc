@@ -4,11 +4,11 @@ on:
   push:
     branches:
       - develop
-      - 'prep-release/**'
+      - "prep-release/**"
   pull_request:
     branches:
       - develop
-      - 'prep-release/**'
+      - "prep-release/**"
     types: [opened, synchronize, reopened, ready_for_review]
 
 concurrency:
@@ -82,7 +82,7 @@ jobs:
   #       with:
   #         check_name: "Pytest Results"
   #         report_paths: 'nightly/NFD_DEV*/pythoncode/drunc/junit/test-results.xml'
-      
+
   #     - name: Upload coverage report (HTML)
   #       uses: actions/upload-artifact@v7
   #       if: ${{ !cancelled() && github.event_name == 'push' }}
@@ -90,7 +90,6 @@ jobs:
   #         name: html-coverage-report
   #         path: nightly/NFD_DEV*/pythoncode/drunc/htmlcov/
   #         retention-days: 1
-
 
   # publish-coverage:
   #   # Depends only on unit-tests so it triggers without waiting for integration tests
@@ -100,14 +99,14 @@ jobs:
   #   runs-on: ubuntu-latest
   #   permissions:
   #     contents: write # Allows actions-gh-pages to push HTML to gh-pages branch
-      
+
   #   steps:
   #     - name: Download HTML coverage artifact
   #       uses: actions/download-artifact@v8
   #       with:
   #         name: html-coverage-report
   #         path: htmlcov
-          
+
   #     - name: Deploy HTML coverage to GitHub Pages
   #       uses: peaceiris/actions-gh-pages@v4
   #       with:
@@ -116,7 +115,6 @@ jobs:
   #         destination_dir: coverage/${{ github.ref_name }}
   #         publish_branch: gh-pages
   #         keep_files: true
-
 
   select-daqsystemtest-integtests:
     # Select integration tests that can run on the default 4 core runner
@@ -131,7 +129,6 @@ jobs:
           # echo 'matrix=["small_footprint_quick_test.py", "fake_data_producer_test.py"]' >> "$GITHUB_OUTPUT"
           echo 'matrix=["small_footprint_quick_test.py"]' >> "$GITHUB_OUTPUT"
 
-
   # select-drunc-integtests:
   #   runs-on: ubuntu-latest
   #   outputs:
@@ -143,20 +140,19 @@ jobs:
   #         # Clone just the drunc repository to read the file list
   #         git clone "https://github.com/${REPO_OWNER}/drunc.git" -b "$HEAD_REF" || git clone https://github.com/DUNE-DAQ/drunc.git
   #         cd drunc/src/drunc/integtest
-          
+
   #         # Find all python files, build a JSON array, and set it as an output variable
   #         FILES_JSON=$(ls -1 *_test.py | jq -R -s -c 'split("\n")[:-1]')
   #         echo "matrix=$FILES_JSON" >> "$GITHUB_OUTPUT"
-
 
   # daqsystemtest-integration:
   #   needs: [generate-release-tarball, select-daqsystemtest-integtests]
   #   runs-on: ubuntu-latest
   #   strategy:
-  #     fail-fast: false 
+  #     fail-fast: false
   #     matrix:
   #       test_script: ${{ fromJSON(needs.select-daqsystemtest-integtests.outputs.matrix) }}
-    
+
   #   defaults:
   #     run:
   #       shell: bash
@@ -176,7 +172,6 @@ jobs:
   #         source env.sh
   #         export USER=$(whoami)
   #         daqsystemtest_integtest_bundle.sh -k ${{ matrix.test_script }} --verbosity 5 --tmpdir "$TEST_DIR" 2>&1
-
 
   # drunc-integration:
   #   needs: [generate-release-tarball, select-drunc-integtests]
@@ -206,15 +201,14 @@ jobs:
   #         source scripts/setup_drunc_config_path.sh
   #         source scripts/drunc_integtest_bundle.sh -k ${{ matrix.test_script }} --verbosity 5 --tmpdir "$TEST_DIR" 2>&1
 
-
   daqsystemtest-integration-k8s:
     needs: [generate-release-tarball, select-daqsystemtest-integtests]
     runs-on: ubuntu-latest
     strategy:
-      fail-fast: false 
+      fail-fast: false
       matrix:
         test_script: ${{ fromJSON(needs.select-daqsystemtest-integtests.outputs.matrix) }}
-    
+
     defaults:
       run:
         shell: bash
@@ -240,10 +234,9 @@ jobs:
         run: |
           KIND_CONTAINER=$(docker ps --filter "label=io.x-k8s.kind.cluster=${{ inputs.cluster_name || 'daq-k8s-cluster' }}" --format '{{.Names}}' | head -n 1)
           KIND_IP=$(docker inspect -f '{{.NetworkSettings.Networks.kind.IPAddress}}' "$KIND_CONTAINER")
-          
-          # 0. BRIDGE THE CI RUNNER TO THE K8s NETWORK
+
+          # 0. BRIDGE NETWORKS (Allows K8s pods to reach the Connectivity Service on the CI Runner)
           docker network connect kind "$HOSTNAME" || true
-          CI_RUNNER_KIND_IP=$(docker inspect -f '{{.NetworkSettings.Networks.kind.IPAddress}}' "$HOSTNAME")
 
           # 1. FIX CVMFS SHADOW MOUNT
           find nightly -type f -name "k8s.json" -exec sed -i 's|"mount_path": "/cvmfs"|"mount_path": "/tmp/dummy_cvmfs"|g' {} +
@@ -253,28 +246,15 @@ jobs:
           find nightly -type f -name "k8s_process_manager.py" -exec sed -i "s|sock.connect_ex((node_name, port))|sock.connect_ex(('$KIND_IP', port))|g" {} +
           find nightly -type f -name "k8s_process_manager.py" -exec sed -i "s|url = f\"http://{node_name}:{lcs.node_port}\"|url = f\"http://$KIND_IP:{lcs.node_port}\"|g" {} +
 
-          # 3. ROUTE K8S SDN
-          # Allows the CI Runner to reach the root-controller inside the isolated K8s network.
-          dnf install -y iproute socat
-          ip route add 10.244.0.0/16 via "$KIND_IP"
+          # 3. FIX BINDING CRASH (The crucial missing piece)
+          # daqsystemtest hardcodes the CI Runner's hostname into the execution commands.
+          # When hostNetwork pods try to bind() to this hostname, the kernel kills them.
+          # We surgically replace the hostname with the local Kind IP directly in the Python execution chain.
+          find nightly -type f -name "k8s_process_manager.py" -exec sed -i "s|main_command_chain = \" && \".join(command_parts)|&.replace('$HOSTNAME', '$KIND_IP')|g" {} +
 
-          # 4. BACKGROUND OKS WATCHDOG & CS PROXY
-          (
-            while true; do
-              # A. Swap the CI Runner hostname for the Kind IP in OKS config so C++ apps can bind()
-              if [ -d "$TEST_DIR" ]; then
-                find "$TEST_DIR" -type f -name "*.data.xml" -exec sed -i "s|$HOSTNAME|$KIND_IP|g" {} + 2>/dev/null
-              fi
-              
-              # B. Forward the dynamic Connectivity Service port to the CI Runner
-              CS_PORT=$(ss -Htlpn | grep gunicorn | awk '{print $4}' | awk -F: '{print $NF}' | head -n 1)
-              if [ -n "$CS_PORT" ] && [ ! -f "/tmp/socat_running_$CS_PORT" ]; then
-                docker exec -u root -d "$KIND_CONTAINER" socat TCP-LISTEN:$CS_PORT,fork,reuseaddr TCP:$CI_RUNNER_KIND_IP:$CS_PORT
-                touch "/tmp/socat_running_$CS_PORT"
-              fi
-              sleep 0.2
-            done
-          ) &
+          # 4. FIX SDN ROUTING (Allows the CI Runner to reach the root-controller inside K8s)
+          dnf install -y iproute
+          ip route add 10.244.0.0/16 via "$KIND_IP"
 
           cd nightly/NFD_DEV*
           source env.sh
@@ -346,7 +326,7 @@ jobs:
   # daqsystemtest-integration-k8s-msqt:
   #   needs: generate-release-tarball
   #   runs-on: ubuntu-latest
-    
+
   #   defaults:
   #     run:
   #       shell: bash
@@ -372,7 +352,7 @@ jobs:
   #         cd nightly/NFD_DEV*
   #         source env.sh
   #         export USER=$(whoami)
-          
+
   #         daqsystemtest_integtest_bundle.sh \
   #           -k "minimal" \
   #           --pytest-options "--process-manager-type k8s" \
