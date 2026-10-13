@@ -1506,10 +1506,10 @@ class K8sProcessManager(ProcessManager):
         )
         if host_aliases is None:
             host_aliases = []
-        if os.getenv("CI_RUNNER_KIND_IP") and os.getenv("HOSTNAME"):
+        if os.getenv("KIND_IP") and os.getenv("HOSTNAME"):
             host_aliases.append(
                 client.V1HostAlias(
-                    ip=os.getenv("CI_RUNNER_KIND_IP"), hostnames=[os.getenv("HOSTNAME")]
+                    ip=os.getenv("KIND_IP"), hostnames=[os.getenv("HOSTNAME")]
                 )
             )
         return client.V1Pod(
