@@ -311,7 +311,7 @@ class ProcessManagerDriver:
         data_path = app.get("data_path")
         env["DUNE_DAQ_BASE_RELEASE"] = os.getenv("DUNE_DAQ_BASE_RELEASE")
         env["SPACK_RELEASES_DIR"] = os.getenv("SPACK_RELEASES_DIR")
-        env["DRUNC_K8S_CI_TIMEOUT"] = os.getenv("DRUNC_K8S_CI_TIMEOUT", "60")
+        env["DRUNC_K8S_CI_TIMEOUT"] = os.getenv("DRUNC_K8S_CI_TIMEOUT", "600")
         # Some edge cases throw issues with DISPLAY being set, so we remove it from the
         # environment
         env.pop("DISPLAY", None)
