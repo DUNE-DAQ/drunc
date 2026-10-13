@@ -592,7 +592,7 @@ def get_control_type_and_uri_from_connectivity_service(
 
     start = time.time()
     elapsed = 0.0
-
+    timeout = int(os.getenv("DRUNC_K8S_CI_TIMEOUT", timeout))
     if progress_bar and is_interactive:
         with Progress(
             SpinnerColumn(),
