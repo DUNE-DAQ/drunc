@@ -1504,6 +1504,7 @@ class K8sProcessManager(ProcessManager):
         pod_security_context = client.V1PodSecurityContext(
             run_as_user=os.getuid(), run_as_group=os.getgid(), fs_group=os.getgid()
         )
+
         return client.V1Pod(
             api_version="v1",
             kind="Pod",
