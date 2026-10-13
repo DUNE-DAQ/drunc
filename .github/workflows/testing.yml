@@ -232,38 +232,19 @@ jobs:
 
       - name: Run daqsystemtest (k8s)
         run: |
+          # 1. Capture the Kind network IPs
           KIND_CONTAINER=$(docker ps --filter "label=io.x-k8s.kind.cluster=${{ inputs.cluster_name || 'daq-k8s-cluster' }}" --format '{{.Names}}' | head -n 1)
-          KIND_IP=$(docker inspect -f '{{.NetworkSettings.Networks.kind.IPAddress}}' "$KIND_CONTAINER")
+          export KIND_IP=$(docker inspect -f '{{.NetworkSettings.Networks.kind.IPAddress}}' "$KIND_CONTAINER")
           
-          # 0. BRIDGE NETWORKS
+          # 2. Bridge the runner and capture the shared IP
           docker network connect kind "$HOSTNAME" || true
-          CI_RUNNER_KIND_IP=$(docker inspect -f '{{.NetworkSettings.Networks.kind.IPAddress}}' "$HOSTNAME")
-          PRIMARY_IP=$(hostname -I | awk '{print $1}')
-          PRIMARY_SUBNET=$(echo $PRIMARY_IP | awk -F. '{print $1"."$2".0.0/16"}')
-
-          # 1. FIX CVMFS SHADOW MOUNT
-          find nightly -type f -name "k8s.json" -exec sed -i 's|"mount_path": "/cvmfs"|"mount_path": "/tmp/dummy_cvmfs"|g' {} +
-          find nightly -type f -name "k8s.json" -exec sed -i "s|'/cvmfs'|'/tmp/dummy_cvmfs'|g" {} +
-
-          # 2. FIX PM NODEPORT POLLING
-          find nightly -type f -name "k8s_process_manager.py" -exec sed -i "s|sock.connect_ex((node_name, port))|sock.connect_ex(('$KIND_IP', port))|g" {} +
-          find nightly -type f -name "k8s_process_manager.py" -exec sed -i "s|url = f\"http://{node_name}:{lcs.node_port}\"|url = f\"http://$KIND_IP:{lcs.node_port}\"|g" {} +
-
-          # 3. FIX APP BINDING
-          find nightly -type f -name "k8s_process_manager.py" -exec sed -i "s|main_command_chain = \" && \".join(command_parts)|&.replace('$HOSTNAME', '$KIND_IP')|g" {} +
-
-          # 4. FIX CI RUNNER -> SDN ROUTING 
-          dnf install -y iproute
-          ip route add 10.244.0.0/16 via "$KIND_IP"
-
-          # 5. FIX PODS -> CONNECTIVITY SERVICE ROUTING (Prevents "Connection refused")
-          docker exec -u root "$KIND_CONTAINER" ip route add "$PRIMARY_SUBNET" via "$CI_RUNNER_KIND_IP"
+          export CI_RUNNER_KIND_IP=$(docker inspect -f '{{.NetworkSettings.Networks.kind.IPAddress}}' "$HOSTNAME")
 
           cd nightly/NFD_DEV*
           source env.sh
           export USER=$(whoami)
 
-          # 6. FIX INITIALIZATION TIMEOUTS (Using the PR Python patch)
+          # 3. Tell your updated drunc code to engage the CI safeguards
           export DRUNC_K8S_CI_TIMEOUT=900
 
           daqsystemtest_integtest_bundle.sh \

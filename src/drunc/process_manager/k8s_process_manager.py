@@ -1504,7 +1504,12 @@ class K8sProcessManager(ProcessManager):
         pod_security_context = client.V1PodSecurityContext(
             run_as_user=os.getuid(), run_as_group=os.getgid(), fs_group=os.getgid()
         )
-
+        if os.getenv("CI_RUNNER_KIND_IP") and os.getenv("HOSTNAME"):
+            host_aliases.append(
+                client.V1HostAlias(
+                    ip=os.getenv("CI_RUNNER_KIND_IP"), hostnames=[os.getenv("HOSTNAME")]
+                )
+            )
         return client.V1Pod(
             api_version="v1",
             kind="Pod",
