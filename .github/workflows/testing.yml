@@ -274,9 +274,6 @@ jobs:
           cd nightly/NFD_DEV*
           source env.sh
           export USER=$(whoami)
-
-          # 4. Tell your updated drunc code to engage the 15m CI safeguards
-          export DRUNC_K8S_CI_TIMEOUT=900
           export HOSTNAME=$HOSTNAME
 
           daqsystemtest_integtest_bundle.sh \

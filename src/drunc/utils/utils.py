@@ -131,11 +131,6 @@ def strip_non_drunc_loggers() -> None:
         root.handlers.clear()
 
 
-def get_k8s_ci_timeout() -> int:
-    """Extra seconds to add on top of every default timeout (DRUNC_K8S_CI_TIMEOUT, default 0)."""
-    return int(os.getenv("DRUNC_K8S_CI_TIMEOUT", "0"))
-
-
 def get_random_string(length: int) -> str:
     """Generate a random string of lowercase ASCII letters.
 
