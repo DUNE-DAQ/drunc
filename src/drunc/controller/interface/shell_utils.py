@@ -14,7 +14,6 @@ from urllib.parse import urlparse
 
 import click
 import grpc
-from peewee import Check
 from daqpytools.logging.formatter import DATE_TIME_BASE_FORMAT, TIME_ZONE
 from druncschema.common_pb2 import LoggerTarget
 from druncschema.controller_pb2 import (
@@ -674,14 +673,27 @@ def tree_prefix(i: int, n: int) -> str:
     else:
         return next
 
+def parse_bool(value: bool | str) -> bool:
+    """Convert a boolean string to a bool.
 
-def parse_bool(value: bool | str, aname:str, atype_name:str):
-    bvalue = value  # .lower() in ['true', '1', 't', 'y', 'yes', 'yeah', 'yup', 'certainly']
-    try:
-        value = bool_msg(value=bvalue)
-    except Exception as e:
-        raise InvalidArgumentType(aname, value, atype_name) from e
-    return value
+    Args:
+        value: A boolean as a string.
+
+    Returns:
+        The corresponding boolean value.
+
+    Raises:
+        ValueError: If the string is not a recognized boolean value.
+    """
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, str):
+        bool_value = value.strip().lower()
+        if bool_value in {"true", "1", "yes", "on"}:
+            return True
+        if bool_value in {"false", "0", "no", "off"}:
+            return False
+    raise ValueError(f"Invalid boolean value: {value}")
 
 
 def validate_and_format_fsm_arguments(
@@ -713,7 +725,6 @@ def validate_and_format_fsm_arguments(
         Argument.Type.STRING: (string_msg, "string_val", str),
         Argument.Type.BOOL: (bool_msg, "bool_val", parse_bool),
     }
-
 
     # Strip out any arguments that are None, as they are considered not passed, and will
     # be set to default values if they exist, or raise an error if they are mandatory
