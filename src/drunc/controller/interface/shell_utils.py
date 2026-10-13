@@ -521,7 +521,7 @@ def controller_setup(
 
     desc = Description()
 
-    timeout = 60
+    timeout = 60 + int(os.getenv("DRUNC_K8S_CI_TIMEOUT", "0"))
 
     with Progress(
         SpinnerColumn(),
@@ -567,7 +567,7 @@ def controller_setup(
     log.debug("Connected to the controller")
 
     # 60s for everyone to show up on the connectivity service, and 10s to come out of initialising state
-    timeout = 60 + 10
+    timeout = 60 + 10 + int(os.getenv("DRUNC_K8S_CI_TIMEOUT", "0"))
 
     time_start = time.time()
     state = ctx.get_driver("controller").status().status.state.lower()
