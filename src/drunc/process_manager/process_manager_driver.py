@@ -115,7 +115,7 @@ class ProcessManagerDriver:
         session_name: str,
         log_level: str | None = None,
         override_logs: bool = True,
-        timeout: int | float = 60,
+        timeout: int | float = 60 + int(os.getenv("DRUNC_K8S_CI_TIMEOUT", "0")),
         sleep_between_app_boot: (
             int | float
         ) = 0,  # This may be useful if you have are using SSHPM, and have SSHD's maxstartups setting set to a low value.

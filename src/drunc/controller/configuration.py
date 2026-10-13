@@ -1,3 +1,4 @@
+import os
 import socket
 import threading
 
@@ -116,7 +117,7 @@ class ControllerConfHandler(ConfHandler):
         booting_errors: list[Exception] = []
 
         # 60s for applications to show on the connectivity service.
-        timeout = 60
+        timeout = 60 + int(os.getenv("DRUNC_K8S_CI_TIMEOUT", "0"))
         self.log.debug(f"init_children: connectivity service timeout: {timeout}")
 
         try:

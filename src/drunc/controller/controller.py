@@ -183,7 +183,7 @@ class Controller(ControllerServicer):
         # _bit more_ than 60s for that controller to come out of initialising state.
         # Let's assume that parent controller takes 10s to get from initialising to
         # ready, in error state.
-        timeout = 60 + 10
+        timeout = 60 + 10 + int(os.getenv("DRUNC_K8S_CI_TIMEOUT", "0"))
 
         time_start = time.time()
 
