@@ -618,9 +618,12 @@ To debug it, close drunc and run the following command:
                     f"Looking for top controller '{top_controller_name}' in the connectivity service at http://{connection_server}:{connection_port}"
                 )
                 try:
+                    k8s_ci_timeout = int(os.getenv("DRUNC_K8S_CI_TIMEOUT", "0"))
                     timeout = (
-                        get_segment_lookup_timeout(session_dal.segment, 60) + 60
-                    )  # root-controller timeout to find all its children + 60s for the root controller to start itself
+                        get_segment_lookup_timeout(session_dal.segment, 60)
+                        + 60
+                        + k8s_ci_timeout
+                    )  # root-controller timeout to find all its children + 60s for the root controller to start itself + DRUNC_K8S_CI_TIMEOUT
                     self.log.debug(
                         f"Using a timeout of {timeout}s to find the [green]{top_controller_name}[/] on the connectivity service"
                     )
