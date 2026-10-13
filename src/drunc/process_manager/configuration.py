@@ -3,7 +3,7 @@ import os
 import sys
 from enum import Enum
 from importlib import resources
-from typing import TYPE_CHECKING, Any, Dict, Self, Union
+from typing import TYPE_CHECKING, Self
 from urllib.parse import unquote, urlparse
 
 from jsonschema import ValidationError
@@ -24,7 +24,7 @@ from drunc.utils.configuration import ConfHandler, ConfTypes
 from drunc.utils.utils import expand_path, get_logger, touch_and_chmod
 
 if TYPE_CHECKING:
-    import conffwk
+    from confmodel_dal.dal_protocols import Application, Session
 
 PROCESS_SHUTDOWN_ORDERING = [
     "unknown",
@@ -62,7 +62,7 @@ class ProcessManagerConfHandler(ConfHandler):
         self.settings: ProcessManagerSettings = data.settings
         self.opmon_conf: OpMonConfig | None = data.opmon_conf
         self.opmon_uri: OpMonUri | None = data.opmon_uri
-        self.opmon_publisher = None
+        self.opmon_publisher: OpMonPublisher | KafkaOpMonPublisher | None = None
 
         conf_type = data.type.lower()
         match conf_type:
@@ -121,7 +121,6 @@ class ProcessManagerConfHandler(ConfHandler):
         self.log.debug(
             "Initializing process manager OpMon with configuration %s", opmon_conf
         )
-        self.opmon_publisher: OpMonPublisher | KafkaOpMonPublisher | None = None
         try:
             if opmon_conf.opmon_type == "stream":
                 self.opmon_publisher = KafkaOpMonPublisher(opmon_conf)
@@ -147,9 +146,9 @@ class ProcessManagerConfHandler(ConfHandler):
 
 def get_commandline_parameters(
     config_filename: str,
-    session_dal: "conffwk.dal.Session",
+    session_dal: "Session",
     session_name: str,
-    obj: Any,
+    obj: "Application",
 ) -> list[str]:
     """
     Build CLI arguments used to launch a process manager application.
@@ -224,7 +223,7 @@ def get_process_manager_configuration(process_manager_conf_filename: str) -> str
     return process_manager_conf_filename
 
 
-def _load_pm_schema_from_package() -> Dict[str, Any]:
+def _load_pm_schema_from_package() -> dict[str, object]:
     """Load JSON Schema from packaged file; raise if missing or unreadable."""
     try:
         # Package path for schema JSON: drunc/data/process_manager/schema/process_manager.schema.json
@@ -235,7 +234,8 @@ def _load_pm_schema_from_package() -> Dict[str, Any]:
         if not hasattr(schema_resource, "open"):
             raise FileNotFoundError("process_manager.schema.json resource not found")
         with schema_resource.open("r", encoding="utf-8") as f:
-            return json.load(f)
+            data: dict[str, object] = json.load(f)
+            return data
     except Exception as e:
         logger = get_logger("process_manager.config_validation")
         logger.error(f"Failed to load packaged schema: {e}")
@@ -244,7 +244,7 @@ def _load_pm_schema_from_package() -> Dict[str, Any]:
         )
 
 
-def _load_config_from_source(source: Union[str, Dict[str, Any]]) -> Dict[str, Any]:
+def _load_config_from_source(source: str | dict[str, object]) -> dict[str, object]:
     """
     Accepts:
       - file URLs (file:///...),
@@ -252,11 +252,13 @@ def _load_config_from_source(source: Union[str, Dict[str, Any]]) -> Dict[str, An
       - raw JSON text (starts with '{' or '[').
     Returns dict.
     """
+    data: dict[str, object]
     if isinstance(source, str):
         s = source.lstrip()
         # Raw JSON text
         if s.startswith("{") or s.startswith("["):
-            return json.loads(source)
+            data = json.loads(source)
+            return data
 
         # URL?
         if "://" in source:
@@ -264,7 +266,8 @@ def _load_config_from_source(source: Union[str, Dict[str, Any]]) -> Dict[str, An
             if u.scheme == "file":
                 path = unquote(u.path)
                 with open(path, "r", encoding="utf-8") as f:
-                    return json.load(f)
+                    data = json.load(f)
+                    return data
             raise FileNotFoundError(f"Unsupported URL scheme: {u.scheme}")
 
         # Name or filesystem path: resolve and then load
@@ -272,7 +275,8 @@ def _load_config_from_source(source: Union[str, Dict[str, Any]]) -> Dict[str, An
         u = urlparse(resolved_url)
         path = unquote(u.path)
         with open(path, "r", encoding="utf-8") as f:
-            return json.load(f)
+            data = json.load(f)
+            return data
 
     # Already a dict
     elif isinstance(source, dict):
@@ -281,7 +285,7 @@ def _load_config_from_source(source: Union[str, Dict[str, Any]]) -> Dict[str, An
     raise TypeError("validate_config() expects dict, path, URL, or raw JSON text")
 
 
-def validate_pm_config(config_or_source: Union[str, Dict[str, Any]]) -> bool:
+def validate_pm_config(config_or_source: str | dict[str, object]) -> bool:
     try:
         pm_conf = _load_config_from_source(config_or_source)
         schema = _load_pm_schema_from_package()
