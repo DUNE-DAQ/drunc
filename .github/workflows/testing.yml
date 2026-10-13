@@ -246,6 +246,7 @@ jobs:
 
           # 3. Tell your updated drunc code to engage the CI safeguards
           export DRUNC_K8S_CI_TIMEOUT=900
+          export HOSTNAME=$HOSTNAME
 
           daqsystemtest_integtest_bundle.sh \
             -k "${{ matrix.test_script }}" \

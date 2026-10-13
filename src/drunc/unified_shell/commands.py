@@ -91,7 +91,7 @@ def boot(
             log_level=controller_log_level,
             override_logs=override_logs_boot,
             sleep_between_app_boot=sleep_between_app_boot,
-            timeout=os.getenv("DRUNC_K8S_CI_TIMEOUT", 60),
+            timeout=int(os.getenv("DRUNC_K8S_CI_TIMEOUT", "60")),
         )
         if results is None:
             log.error("Boot request did not return any results.")
