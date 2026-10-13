@@ -97,6 +97,27 @@ runs:
           cat /tmp/hosts.new > /etc/hosts
         }
 
+    - name: Configure runner and Kind networking
+      shell: bash
+      run: |
+        KIND_CONTAINER=$(docker ps --filter "label=io.x-k8s.kind.cluster=${{ inputs.cluster_name }}" --format '{{.Names}}' | head -n 1)
+        KIND_IP=$(docker inspect -f '{{.NetworkSettings.Networks.kind.IPAddress}}' "$KIND_CONTAINER")
+        CI_RUNNER_KIND_IP=$(docker inspect -f '{{.NetworkSettings.Networks.kind.IPAddress}}' "$HOSTNAME")
+        {
+          echo "KIND_CONTAINER=$KIND_CONTAINER"
+          echo "KIND_IP=$KIND_IP"
+          echo "CI_RUNNER_KIND_IP=$CI_RUNNER_KIND_IP"
+        } >> "$GITHUB_ENV"
+
+        # Lets the runner reach pod IPs (e.g. the root controller's registered POD_IP); needs NET_ADMIN
+        dnf install -y iproute
+        ip route add 10.244.0.0/16 via "$KIND_IP"
+
+        # hostNetwork pods reach the runner-hosted integtest connectivity service via localhost
+        docker exec "$KIND_CONTAINER" sysctl -w net.ipv4.conf.all.route_localnet=1
+        docker exec "$KIND_CONTAINER" iptables -t nat -A OUTPUT -d 127.0.0.1/32 -p tcp --dport 30000:32767 -j DNAT --to-destination "$CI_RUNNER_KIND_IP"
+        docker exec "$KIND_CONTAINER" iptables -t nat -A POSTROUTING -s 127.0.0.1/32 -d "$CI_RUNNER_KIND_IP" -j MASQUERADE
+
     - name: Preload DAQ image into Kind
       shell: bash
       run: |

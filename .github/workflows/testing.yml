@@ -230,51 +230,35 @@ jobs:
         with:
           cluster_name: daq-k8s-cluster
 
-      - name: Run daqsystemtest (k8s)
+      # Temporary CI-only shims for running drunc inside Kind; KIND_IP and CI_RUNNER_KIND_IP come from setup-kind
+      - name: Patch drunc for Kind
         run: |
-          # 1. Capture the Kind network IPs
-          KIND_CONTAINER=$(docker ps --filter "label=io.x-k8s.kind.cluster=${{ inputs.cluster_name || 'daq-k8s-cluster' }}" --format '{{.Names}}' | head -n 1)
-          export KIND_IP=$(docker inspect -f '{{.NetworkSettings.Networks.kind.IPAddress}}' "$KIND_CONTAINER")
-          
-          # 2. Bridge the runner and capture the shared IP
-          docker network connect kind "$HOSTNAME" || true
-          export CI_RUNNER_KIND_IP=$(docker inspect -f '{{.NetworkSettings.Networks.kind.IPAddress}}' "$HOSTNAME")
+          # Pods cannot mount /cvmfs inside Kind
+          find nightly -type f -name "k8s.json" -exec sed -i \
+            -e 's|"mount_path": "/cvmfs"|"mount_path": "/tmp/dummy_cvmfs"|g' \
+            -e "s|'/cvmfs'|'/tmp/dummy_cvmfs'|g" {} +
 
-          # --- RESTORED INFRASTRUCTURE & ROUTING FIXES ---
-          # These are strictly necessary for Docker-in-Docker Kind routing
-          
-          # A. FIX CVMFS SHADOW MOUNT (Fixes pod creation errors)
-          find nightly -type f -name "k8s.json" -exec sed -i 's|"mount_path": "/cvmfs"|"mount_path": "/tmp/dummy_cvmfs"|g' {} +
-          find nightly -type f -name "k8s.json" -exec sed -i "s|'/cvmfs'|'/tmp/dummy_cvmfs'|g" {} +
+          PM_FILES=$(find nightly -type f -name "k8s_process_manager.py")
 
-          # B. FIX PM NODEPORT POLLING (Fixes Runner -> Kind Node polling)
-          find nightly -type f -name "k8s_process_manager.py" -exec sed -i "s|sock.connect_ex((node_name, port))|sock.connect_ex(('$KIND_IP', port))|g" {} +
-          find nightly -type f -name "k8s_process_manager.py" -exec sed -i "s|url = f\"http://{node_name}:{lcs.node_port}\"|url = f\"http://$KIND_IP:{lcs.node_port}\"|g" {} +
+          # Runner polls NodePorts on the Kind node rather than the node name
+          sed -i \
+            -e "s|sock.connect_ex((node_name, port))|sock.connect_ex(('$KIND_IP', port))|g" \
+            -e "s|url = f\"http://{node_name}:{lcs.node_port}\"|url = f\"http://$KIND_IP:{lcs.node_port}\"|g" \
+            $PM_FILES
 
-          # C. FIX BINDING CRASH (Fixes root-controller Exit Code 126 / bind failure)
-          find nightly -type f -name "k8s_process_manager.py" -exec sed -i "s|main_command_chain = \" && \".join(command_parts)|&.replace('$HOSTNAME', '$KIND_IP')|g" {} +
+          # Apps must bind to the Kind node address, not the runner hostname
+          sed -i "s|main_command_chain = \" && \".join(command_parts)|&.replace('$HOSTNAME', '$KIND_IP')|g" $PM_FILES
 
-          # D. FIX SDN ROUTING (Allows CI Runner to ping the K8s Pods so it doesn't time out)
-          dnf install -y iproute
-          ip route add 10.244.0.0/16 via "$KIND_IP"
+          # Controllers resolve DRUNC_HOST_NAME (runner hostname) to the runner-hosted connectivity service
+          sed -i "s|host_aliases=host_aliases if host_aliases else None,|host_aliases=(host_aliases or []) + [client.V1HostAlias(ip='$CI_RUNNER_KIND_IP', hostnames=['$HOSTNAME'])],|g" $PM_FILES
 
-          # E. ROUTE CONNECTIVITY SERVICE TO THE RUNNER (integtest starts gunicorn here, not in the cluster)
-          # Pod-network controllers resolve DRUNC_HOST_NAME (= runner $HOSTNAME) to the runner
-          find nightly -type f -name "k8s_process_manager.py" -exec sed -i "s|host_aliases=host_aliases if host_aliases else None,|host_aliases=(host_aliases or []) + [client.V1HostAlias(ip='$CI_RUNNER_KIND_IP', hostnames=['$HOSTNAME'])],|g" {} +
-          # hostNetwork pods use localhost; forward unclaimed NodePort-range ports on the kind node to the runner
-          docker exec "$KIND_CONTAINER" sysctl -w net.ipv4.conf.all.route_localnet=1
-          docker exec "$KIND_CONTAINER" iptables -t nat -A OUTPUT -d 127.0.0.1/32 -p tcp --dport 30000:32767 -j DNAT --to-destination "$CI_RUNNER_KIND_IP"
-          docker exec "$KIND_CONTAINER" iptables -t nat -A POSTROUTING -s 127.0.0.1/32 -d "$CI_RUNNER_KIND_IP" -j MASQUERADE
-          # -----------------------------------------------
-
-          # 3. FIX PIP INSTALL EXECUTABLE PERMISSIONS
-          # Restores the +x bit just in case pip install + tar packaging wiped it
           chmod -R +x nightly/NFD_DEV*/.venv/bin || true
 
+      - name: Run daqsystemtest (k8s)
+        run: |
           cd nightly/NFD_DEV*
           source env.sh
           export USER=$(whoami)
-          export HOSTNAME=$HOSTNAME
 
           daqsystemtest_integtest_bundle.sh \
             -k "${{ matrix.test_script }}" \
