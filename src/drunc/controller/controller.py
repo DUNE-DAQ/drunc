@@ -67,7 +67,7 @@ from drunc.fsm.exceptions import (
 )
 from drunc.fsm.utils import convert_fsm_transition
 from drunc.utils.grpc_utils import ServerTimeout
-from drunc.utils.utils import get_logger
+from drunc.utils.utils import get_k8s_ci_timeout, get_logger
 
 T = TypeVar("T")
 
@@ -183,7 +183,7 @@ class Controller(ControllerServicer):
         # _bit more_ than 60s for that controller to come out of initialising state.
         # Let's assume that parent controller takes 10s to get from initialising to
         # ready, in error state.
-        timeout = 60 + 10 + int(os.getenv("DRUNC_K8S_CI_TIMEOUT", "0"))
+        timeout = 60 + 10 + get_k8s_ci_timeout()
 
         time_start = time.time()
 

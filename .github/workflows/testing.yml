@@ -257,6 +257,14 @@ jobs:
           # D. FIX SDN ROUTING (Allows CI Runner to ping the K8s Pods so it doesn't time out)
           dnf install -y iproute
           ip route add 10.244.0.0/16 via "$KIND_IP"
+
+          # E. ROUTE CONNECTIVITY SERVICE TO THE RUNNER (integtest starts gunicorn here, not in the cluster)
+          # Pod-network controllers resolve DRUNC_HOST_NAME (= runner $HOSTNAME) to the runner
+          find nightly -type f -name "k8s_process_manager.py" -exec sed -i "s|host_aliases=host_aliases if host_aliases else None,|host_aliases=(host_aliases or []) + [client.V1HostAlias(ip='$CI_RUNNER_KIND_IP', hostnames=['$HOSTNAME'])],|g" {} +
+          # hostNetwork pods use localhost; forward unclaimed NodePort-range ports on the kind node to the runner
+          docker exec "$KIND_CONTAINER" sysctl -w net.ipv4.conf.all.route_localnet=1
+          docker exec "$KIND_CONTAINER" iptables -t nat -A OUTPUT -d 127.0.0.1/32 -p tcp --dport 30000:32767 -j DNAT --to-destination "$CI_RUNNER_KIND_IP"
+          docker exec "$KIND_CONTAINER" iptables -t nat -A POSTROUTING -s 127.0.0.1/32 -d "$CI_RUNNER_KIND_IP" -j MASQUERADE
           # -----------------------------------------------
 
           # 3. FIX PIP INSTALL EXECUTABLE PERMISSIONS

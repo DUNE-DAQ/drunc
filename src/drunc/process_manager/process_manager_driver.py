@@ -43,6 +43,7 @@ from drunc.utils.grpc_utils import (
 from drunc.utils.utils import (
     file_is_read_only,
     get_control_type_and_uri_from_connectivity_service,
+    get_k8s_ci_timeout,
     get_logger,
     host_is_local,
     is_port_available,
@@ -115,13 +116,14 @@ class ProcessManagerDriver:
         session_name: str,
         log_level: str | None = None,
         override_logs: bool = True,
-        timeout: int | float = 60 + int(os.getenv("DRUNC_K8S_CI_TIMEOUT", "0")),
+        timeout: int | float = 60,
         sleep_between_app_boot: (
             int | float
         ) = 0,  # This may be useful if you have are using SSHPM, and have SSHD's maxstartups setting set to a low value.
         **kwargs,
     ) -> Iterator[ProcessInstanceList]:
         self.log.info(f"Booting session [green]{session_name}[/green]")
+        timeout += get_k8s_ci_timeout()
 
         # Assume oksconflibs if no framework is defined
         conf_file = f"oksconflibs:{conf_file}" if ":" not in conf_file else conf_file
@@ -311,7 +313,7 @@ class ProcessManagerDriver:
         data_path = app.get("data_path")
         env["DUNE_DAQ_BASE_RELEASE"] = os.getenv("DUNE_DAQ_BASE_RELEASE")
         env["SPACK_RELEASES_DIR"] = os.getenv("SPACK_RELEASES_DIR")
-        env["DRUNC_K8S_CI_TIMEOUT"] = os.getenv("DRUNC_K8S_CI_TIMEOUT", "600")
+        env["DRUNC_K8S_CI_TIMEOUT"] = str(get_k8s_ci_timeout())
         # Some edge cases throw issues with DISPLAY being set, so we remove it from the
         # environment
         env.pop("DISPLAY", None)
@@ -618,11 +620,10 @@ To debug it, close drunc and run the following command:
                     f"Looking for top controller '{top_controller_name}' in the connectivity service at http://{connection_server}:{connection_port}"
                 )
                 try:
-                    k8s_ci_timeout = int(os.getenv("DRUNC_K8S_CI_TIMEOUT", "0"))
                     timeout = (
                         get_segment_lookup_timeout(session_dal.segment, 60)
                         + 60
-                        + k8s_ci_timeout
+                        + get_k8s_ci_timeout()
                     )  # root-controller timeout to find all its children + 60s for the root controller to start itself + DRUNC_K8S_CI_TIMEOUT
                     self.log.debug(
                         f"Using a timeout of {timeout}s to find the [green]{top_controller_name}[/] on the connectivity service"

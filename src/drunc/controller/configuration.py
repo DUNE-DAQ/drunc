@@ -1,4 +1,3 @@
-import os
 import socket
 import threading
 
@@ -27,6 +26,7 @@ from drunc.utils.utils import (
     ControlType,
     get_control_type_and_uri_from_cli,
     get_control_type_and_uri_from_connectivity_service,
+    get_k8s_ci_timeout,
     get_logger,
 )
 
@@ -117,7 +117,7 @@ class ControllerConfHandler(ConfHandler):
         booting_errors: list[Exception] = []
 
         # 60s for applications to show on the connectivity service.
-        timeout = 60 + int(os.getenv("DRUNC_K8S_CI_TIMEOUT", "0"))
+        timeout = 60 + get_k8s_ci_timeout()
         self.log.debug(f"init_children: connectivity service timeout: {timeout}")
 
         try:

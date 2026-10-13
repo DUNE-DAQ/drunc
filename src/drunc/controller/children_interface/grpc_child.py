@@ -51,6 +51,7 @@ from drunc.utils.grpc_utils import (
 from drunc.utils.utils import (
     ControlType,
     get_control_type_and_uri_from_connectivity_service,
+    get_k8s_ci_timeout,
 )
 
 
@@ -151,7 +152,9 @@ class gRPCChildNode(ChildNode):
 
         try:
             ctype, new_uri = get_control_type_and_uri_from_connectivity_service(
-                self.connectivity_service, self.name, timeout=10
+                self.connectivity_service,
+                self.name,
+                timeout=10 + get_k8s_ci_timeout(),
             )
 
             if new_uri != self.uri:

@@ -53,7 +53,12 @@ from drunc.utils.grpc_utils import (
     unpack_any,
 )
 from drunc.utils.shell_utils import format_table_width
-from drunc.utils.utils import format_name_for_cli, get_logger, get_shared_rich_console
+from drunc.utils.utils import (
+    format_name_for_cli,
+    get_k8s_ci_timeout,
+    get_logger,
+    get_shared_rich_console,
+)
 
 log = get_logger("controller.iface.shell_utils")
 
@@ -521,7 +526,7 @@ def controller_setup(
 
     desc = Description()
 
-    timeout = 60 + int(os.getenv("DRUNC_K8S_CI_TIMEOUT", "0"))
+    timeout = 60 + get_k8s_ci_timeout()
 
     with Progress(
         SpinnerColumn(),
@@ -567,7 +572,7 @@ def controller_setup(
     log.debug("Connected to the controller")
 
     # 60s for everyone to show up on the connectivity service, and 10s to come out of initialising state
-    timeout = 60 + 10 + int(os.getenv("DRUNC_K8S_CI_TIMEOUT", "0"))
+    timeout = 60 + 10 + get_k8s_ci_timeout()
 
     time_start = time.time()
     state = ctx.get_driver("controller").status().status.state.lower()
