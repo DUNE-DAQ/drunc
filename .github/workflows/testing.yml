@@ -240,11 +240,34 @@ jobs:
           docker network connect kind "$HOSTNAME" || true
           export CI_RUNNER_KIND_IP=$(docker inspect -f '{{.NetworkSettings.Networks.kind.IPAddress}}' "$HOSTNAME")
 
+          # --- RESTORED INFRASTRUCTURE & ROUTING FIXES ---
+          # These are strictly necessary for Docker-in-Docker Kind routing
+          
+          # A. FIX CVMFS SHADOW MOUNT (Fixes pod creation errors)
+          find nightly -type f -name "k8s.json" -exec sed -i 's|"mount_path": "/cvmfs"|"mount_path": "/tmp/dummy_cvmfs"|g' {} +
+          find nightly -type f -name "k8s.json" -exec sed -i "s|'/cvmfs'|'/tmp/dummy_cvmfs'|g" {} +
+
+          # B. FIX PM NODEPORT POLLING (Fixes Runner -> Kind Node polling)
+          find nightly -type f -name "k8s_process_manager.py" -exec sed -i "s|sock.connect_ex((node_name, port))|sock.connect_ex(('$KIND_IP', port))|g" {} +
+          find nightly -type f -name "k8s_process_manager.py" -exec sed -i "s|url = f\"http://{node_name}:{lcs.node_port}\"|url = f\"http://$KIND_IP:{lcs.node_port}\"|g" {} +
+
+          # C. FIX BINDING CRASH (Fixes root-controller Exit Code 126 / bind failure)
+          find nightly -type f -name "k8s_process_manager.py" -exec sed -i "s|main_command_chain = \" && \".join(command_parts)|&.replace('$HOSTNAME', '$KIND_IP')|g" {} +
+
+          # D. FIX SDN ROUTING (Allows CI Runner to ping the K8s Pods so it doesn't time out)
+          dnf install -y iproute
+          ip route add 10.244.0.0/16 via "$KIND_IP"
+          # -----------------------------------------------
+
+          # 3. FIX PIP INSTALL EXECUTABLE PERMISSIONS
+          # Restores the +x bit just in case pip install + tar packaging wiped it
+          chmod -R +x nightly/NFD_DEV*/.venv/bin || true
+
           cd nightly/NFD_DEV*
           source env.sh
           export USER=$(whoami)
 
-          # 3. Tell your updated drunc code to engage the CI safeguards
+          # 4. Tell your updated drunc code to engage the 15m CI safeguards
           export DRUNC_K8S_CI_TIMEOUT=900
           export HOSTNAME=$HOSTNAME
 
