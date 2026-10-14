@@ -1,21 +1,20 @@
 import logging
 import os
 from collections.abc import Sequence
-from typing import TYPE_CHECKING, Dict, List, NotRequired, TypedDict, cast
+from typing import Dict, List, NotRequired, TypedDict, cast
+
+from confmodel_dal.dal_protocols import (
+    Application,
+    Segment,
+    Session,
+    Variable,
+    VariableBase,
+    VariableSet,
+)
 
 from drunc.exceptions import DruncException, DruncSetupException
 from drunc.process_manager.configuration import get_commandline_parameters
 from drunc.utils.utils import file_is_read_only, get_logger
-
-if TYPE_CHECKING:
-    from confmodel_dal.dal_protocols import (
-        Application,
-        Segment,
-        Session,
-        Variable,
-        VariableBase,
-        VariableSet,
-    )
 
 
 def get_full_db_path(db_path: str) -> str:
@@ -94,7 +93,7 @@ def get_full_db_path(db_path: str) -> str:
 
 
 def collect_variables(
-    variables: Sequence["VariableBase"], env_dict: Dict[str, str]
+    variables: Sequence[VariableBase], env_dict: Dict[str, str]
 ) -> None:
     """!Process a dal::Variable object, placing key/value pairs in a dictionary
 
@@ -104,9 +103,9 @@ def collect_variables(
     """
     for item in variables:
         if item.className() == "VariableSet":
-            collect_variables(cast("VariableSet", item).contains, env_dict)
+            collect_variables(cast(VariableSet, item).contains, env_dict)
         elif item.className() == "Variable":
-            var = cast("Variable", item)
+            var = cast(Variable, item)
             env_dict[var.name] = var.value
 
 
@@ -114,9 +113,7 @@ class EnvironmentVariableCannotBeSet(DruncException):
     pass
 
 
-def entity_excluded_from_session_dal(
-    session_dal_obj: "Session", entity_id: str
-) -> bool:
+def entity_excluded_from_session_dal(session_dal_obj: Session, entity_id: str) -> bool:
     """
     Replaces the following without any db dependence
         confmodel_dal.entity_excluded(db._obj, session_dal_obj.id, entity_id)
@@ -171,8 +168,8 @@ class AppInfo(TypedDict):
 def collect_apps(
     config_filename: str,
     session_name: str,
-    session_dal_obj: "Session",
-    segment_obj: "Segment",
+    session_dal_obj: Session,
+    segment_obj: Segment,
     env: Dict[str, str],
     tree_prefix: List[int] = [
         0,
@@ -306,7 +303,7 @@ def collect_apps(
     return apps
 
 
-def get_writer_directory_path(app: "Application", log: logging.Logger) -> str | None:
+def get_writer_directory_path(app: Application, log: logging.Logger) -> str | None:
     # Map known OKS types to their specific writer attribute
     APP_TYPE_TO_WRITER_ATTR = {
         "DFApplication": "data_writers",
@@ -344,7 +341,7 @@ def get_writer_directory_path(app: "Application", log: logging.Logger) -> str | 
 
 
 def collect_infra_apps(
-    session: "Session",
+    session: Session,
     env: Dict[str, str],
     tree_prefix: List[int],
 ) -> list[AppInfo]:
