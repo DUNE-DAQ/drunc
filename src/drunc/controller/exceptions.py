@@ -1,6 +1,7 @@
 from drunc.exceptions import DruncCommandException
 
 
+# These are all terminal exceptions
 class ControllerException(DruncCommandException):
     pass
 
@@ -10,22 +11,6 @@ class ChildError(ControllerException):
 
 
 class CannotSurrenderControl(ControllerException):
-    pass
-
-
-class OtherUserAlreadyInControl(ControllerException):
-    pass
-
-
-class MalformedMessage(ControllerException):
-    pass
-
-
-class MalformedCommand(ControllerException):
-    pass
-
-
-class MalformedCommandArgument(ControllerException):
     pass
 
 

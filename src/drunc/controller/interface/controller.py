@@ -5,6 +5,7 @@ import signal
 import click
 import grpc
 from daqpytools.logging import logging_log_levels
+from drunc.utils.grpc_utils import RichErrorServerInterceptor
 from druncschema.controller_pb2_grpc import add_ControllerServicer_to_server
 from druncschema.token_pb2 import Token
 
@@ -112,6 +113,7 @@ def controller_cli(
                 max_workers=CONTROLLER_SERVER_GRPC_MAX_WORKERS
             ),
             options=CONTROLLER_SERVER_GRPC_CONFIG,
+            interceptors=[RichErrorServerInterceptor()],
         )
         add_ControllerServicer_to_server(ctrlr, server)
         port = server.add_insecure_port(listen_addr)
