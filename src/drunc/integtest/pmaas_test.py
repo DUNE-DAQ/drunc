@@ -50,6 +50,8 @@ conf = "local-1x1-config"
 file_path = "config/daqsystemtest/example-configs.data.xml"
 
 
+HELLO APPARENTLY INTEGTESTS ALLOWS US TO COPY THE CONFIG AND MAKE THIS WRITABLE. INVESTIGATE! MAYBE MAKE USE OF IT
+SEE example_system_test IN DAQSYSTEMTEST
 pytestmark = pytest.mark.skipif(
     file_is_read_only(get_full_db_path(file_path)),
     reason="Daqsystemtest needs to be locally installed and read/writeabe to use drunc with multiple sessions",
