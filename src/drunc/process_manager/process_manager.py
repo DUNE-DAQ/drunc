@@ -87,7 +87,7 @@ class ProcessManager(abc.ABC, ProcessManagerServicer):
         )
         self.opmon_publisher = getattr(self.configuration, "opmon_publisher", None)
         interval_s = 10.0
-        if getattr(self.configuration, "opmon_conf", None):
+        if self.configuration.opmon_conf is not None:
             interval_raw = self.configuration.opmon_conf.get("interval_s", 10.0)
             try:
                 interval_s = float(interval_raw)
@@ -95,8 +95,7 @@ class ProcessManager(abc.ABC, ProcessManagerServicer):
                 interval_s = 10.0
         self.authoriser = DummyAuthoriser(dach, SystemType.PROCESS_MANAGER)
 
-        self.process_store = {}  # dict[str, sh.RunningCommand] # str = uuid
-        self.boot_request = {}  # dict[str, BootRequest] # str = uuid
+        self.boot_request: dict[str, BootRequest] = {}  # str = uuid
 
         # Define a list of applications that we expect to die, and a lock to read the memory
         self.dead_process_lock = threading.Lock()
@@ -500,24 +499,16 @@ class ProcessManager(abc.ABC, ProcessManagerServicer):
         getattr(target_log, level, target_log.info)(request.text)
         return response
 
-    def _ensure_one_process(
-        self, uuids: list[str], in_boot_request: bool = False
-    ) -> str:
+    def _ensure_one_process(self, uuids: list[str]) -> str:
         if uuids == []:
             raise BadQuery("The process corresponding to the query doesn't exist")
         elif len(uuids) > 1:
             raise BadQuery("There are more than 1 processes corresponding to the query")
 
-        if in_boot_request:
-            if uuids[0] not in self.boot_request:
-                raise BadQuery(
-                    f"Couldn't find the process corresponding to the UUID {uuids[0]} in the boot requests"
-                )
-        else:
-            if uuids[0] not in self.process_store:
-                raise BadQuery(
-                    f"Couldn't find the process corresponding to the UUID {uuids[0]} in the process store"
-                )
+        if uuids[0] not in self.boot_request:
+            raise BadQuery(
+                f"Couldn't find the process corresponding to the UUID {uuids[0]} in the boot requests"
+            )
         return uuids[0]
 
     @staticmethod
@@ -717,7 +708,6 @@ class ProcessManager(abc.ABC, ProcessManagerServicer):
     def _get_process_uid(
         self,
         query: ProcessQuery,
-        in_boot_request: bool = False,
         order_by: str = "random",
     ) -> list[str]:
         """
@@ -728,18 +718,12 @@ class ProcessManager(abc.ABC, ProcessManagerServicer):
 
         Args:
             query: ProcessQuery containing selection criteria
-            in_boot_request: If True, search boot_request keys; if False, search process_store keys
             order_by: Sort order - "random", "leaf_first", or "root_first"
 
         Returns:
             List of process UUIDs matching the query criteria
         """
-        # Determine which UUID collection to search
-        all_the_uuids = (
-            list(self.process_store.keys())
-            if not in_boot_request
-            else list(self.boot_request.keys())
-        )
+        all_the_uuids = list(self.boot_request.keys())
 
         # Use static method to perform matching
         matched_processes = self._match_processes_against_query(
