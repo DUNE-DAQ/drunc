@@ -1895,7 +1895,7 @@ class K8sProcessManager(ProcessManager):
             A LogLines protobuf containing the process UUID and its log lines.
         """
         uuids = self._get_process_uid(log_request.query)
-        uuid = self._ensure_one_process(uuids, in_boot_request=True)
+        uuid = self._ensure_one_process(uuids)
         podname = self.boot_request[uuid].process_description.metadata.name
         session = self.boot_request[uuid].process_description.metadata.session
         try:
