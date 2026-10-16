@@ -40,7 +40,7 @@ C = TypeVar("C", bound=_Command)
 
 
 def authentified_and_authorised(
-    action: ActionType, system: SystemType
+    action: ActionType.ValueType, system: SystemType.ValueType
 ) -> Callable[[C], C]:
     """
     Decorator to check if the user is authentified and authorised to execute a command.
