@@ -16,6 +16,8 @@ import re
 
 import integrationtest.data_classes as idc
 import integrationtest.log_file_checks as log_file_checks
+import integrationtest.utility_functions as utility_functions
+from integrationtest.verbosity_helper import IntegtestVerbosityLevels
 import pytest
 from daqconf.utils import find_free_port
 from integ_test_utils import (
@@ -245,20 +247,9 @@ UUID_RE = re.compile(
 )
 
 
-def test_dunerc_success(run_dunerc) -> None:
-    """Checks that the drunc integration command sequence completes successfully."""
-    current_test = os.environ.get("PYTEST_CURRENT_TEST")
-    match_obj = re.search(r".*\[(.+)-run_.*rc.*\d].*", current_test)
-    if match_obj:
-        current_test = match_obj.group(1)
-    banner_line = re.sub(".", "=", current_test)
-    print(banner_line)
-    print(current_test)
-    print(banner_line)
-
-    assert run_dunerc.completed_processes["pmshell"].returncode == 0
-    assert run_dunerc.completed_processes["us_1"].returncode == 0
-    assert run_dunerc.completed_processes["us_2"].returncode == 0
+def test_dunerc_success(run_dunerc, caplog) -> None:
+    # checks for run control success, problems during pytest setup, etc.
+    utility_functions.basic_checks(run_dunerc, caplog, print_test_name=False)
 
 
 def test_log_files(run_dunerc) -> None:
@@ -287,6 +278,7 @@ def test_log_files(run_dunerc) -> None:
         True,
         True,
         ignored_logfile_problems,
+        verbosity_helper=run_dunerc.verbosity_helper,
     )
 
 
