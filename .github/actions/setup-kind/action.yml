@@ -166,7 +166,7 @@ runs:
     - name: Patch nightly for Kind
       shell: bash
       run: |
-        python - <<'PY'
+        python3 - <<'PY'
         import os
         from pathlib import Path
 
