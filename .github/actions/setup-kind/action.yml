@@ -172,7 +172,6 @@ runs:
 
         nightly = Path("nightly")
         kind_ip = os.environ["KIND_IP"]
-        runner_ip = os.environ["CI_RUNNER_KIND_IP"]
         runner_hostname = os.environ["HOSTNAME"]
 
         def replace_in_files(paths, old, new, description):
@@ -219,8 +218,8 @@ runs:
           ),
           (
             "host_aliases=host_aliases if host_aliases else None,",
-            f"host_aliases=(host_aliases or []) + [client.V1HostAlias(ip='{runner_ip}', hostnames=['{runner_hostname}'])],",
-            "runner connectivity-service alias",
+            f"host_aliases=([client.V1HostAlias(ip=host_aliases[0].ip, hostnames=host_aliases[0].hostnames + ['{runner_hostname}'])] + host_aliases[1:]) if host_aliases else None,",
+            "runner hostname to local connection server alias",
           ),
         ]
         for old, new, description in patches:
