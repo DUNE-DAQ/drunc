@@ -42,14 +42,14 @@ from drunc.utils.utils import get_logger, log_echo, pid_info_str
 
 
 class BadQuery(DruncCommandException):
-    def __init__(self, txt):
+    def __init__(self, txt: str):
         super(BadQuery, self).__init__(txt, code_pb2.INVALID_ARGUMENT)
 
 
 class ProcessManager(abc.ABC, ProcessManagerServicer):
     pm_type = ProcessManagerTypes.Unknown  # Used for describe (and possibly others)
 
-    def set_running_mode(self, running_mode):
+    def set_running_mode(self, running_mode: ProcessManagerRunningMode) -> None:
         self.running_mode = running_mode
 
     def __init__(
@@ -99,7 +99,7 @@ class ProcessManager(abc.ABC, ProcessManagerServicer):
 
         # Define a list of applications that we expect to die, and a lock to read the memory
         self.dead_process_lock = threading.Lock()
-        self.expected_dead_applications = {}  # dict[str, BootRequest] # str == uuid
+        self.expected_dead_applications: dict[str, BootRequest] = {}  # str == uuid
 
         # TODO, probably need to think of a better way to do this?
         # Maybe I should "bind" the commands to their methods, and have something looping over this list to generate the gRPC functions
@@ -164,21 +164,21 @@ class ProcessManager(abc.ABC, ProcessManagerServicer):
             )
             self.thread.start()
 
-    def get_log_path(self):
+    def get_log_path(self) -> str:
         return self.configuration.get_log_path()
 
-    def __del__(self):
+    def __del__(self) -> None:
         if hasattr(self, "opmon_publisher") and self.opmon_publisher is not None:
             self.stop_event.set()
             self.thread.join()
 
-    def publish(self, q: ProcessQuery, interval_s: float = 10.0):
+    def publish(self, q: ProcessQuery, interval_s: float = 10.0) -> None:
         tech_name = self.configuration.pm_type.name
         while not self.stop_event.is_set():
             results = self._ps_impl(q)
 
-            session_running = Counter()
-            session_dead = Counter()
+            session_running: Counter[str] = Counter()
+            session_dead: Counter[str] = Counter()
             dead_processes = set()
 
             for process in results.values:
@@ -197,14 +197,15 @@ class ProcessManager(abc.ABC, ProcessManagerServicer):
 
             # For future developers, if this is still slow consider using async.
             for sesh in all_sessions:
-                self.opmon_publisher.publish(
-                    message=ProcessStatus(
-                        n_running=session_running[sesh],
-                        n_dead=session_dead[sesh],
-                        n_session=1,
-                    ),
-                    custom_origin={"drunc_session": sesh},
-                )
+                if self.opmon_publisher is not None:
+                    self.opmon_publisher.publish(
+                        message=ProcessStatus(
+                            n_running=session_running[sesh],
+                            n_dead=session_dead[sesh],
+                            n_session=1,
+                        ),
+                        custom_origin={"drunc_session": sesh},
+                    )
 
             time.sleep(interval_s)
 
