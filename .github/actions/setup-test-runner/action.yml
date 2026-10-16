@@ -4,9 +4,6 @@ description: Prepares a runner for testing by checking out code, starting SSH, a
 runs:
   using: composite
   steps:
-    - name: Checkout workflow repository
-      uses: actions/checkout@v7
-
     - name: Setup SSH daemon
       uses: ./.github/actions/setup-ssh-daemon
 
