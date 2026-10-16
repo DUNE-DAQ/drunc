@@ -1,12 +1,10 @@
 import time
-import traceback
 from functools import wraps
 
-from druncschema.generic_pb2 import PlainText, Stacktrace
+from druncschema.generic_pb2 import PlainText
 from druncschema.opmon.FSM_pb2 import CommandTime
 from druncschema.request_response_pb2 import Response, ResponseFlag
 
-from drunc.exceptions import DruncException
 from drunc.utils.grpc_utils import pack_to_any
 from drunc.utils.utils import get_logger
 

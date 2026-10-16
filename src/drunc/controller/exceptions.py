@@ -1,18 +1,23 @@
-from drunc.exceptions import DruncCommandException
+from drunc.exceptions import DruncException
 
 
-# These are all terminal exceptions
-class ControllerException(DruncCommandException):
+# REST exceptions but they inherit from DruncException to carry rich error information
+class ControllerException(DruncException):
+    """Base exception for all controller-related errors."""
+    reason = "CONTROLLER_ERROR"
     pass
 
 
 class ChildError(ControllerException):
+    reason = "CHILD_ERROR"
     pass
 
 
 class CannotSurrenderControl(ControllerException):
+    reason = "CANNOT_SURRENDER_CONTROL"
     pass
 
 
 class ExpertCommandException(ControllerException):
+    reason = "EXPERT_COMMAND_ERROR"
     pass

@@ -16,13 +16,13 @@ from google.rpc import code_pb2, error_details_pb2, status_pb2
 from grpc_status import rpc_status
 
 from drunc.exceptions import (
-    DruncCommandException,
     DruncException,
+    DruncNonTerminalException,
     DruncTerminalException,
 )
 
 
-class UnpackingError(DruncCommandException):
+class UnpackingError(DruncNonTerminalException):
     """Exception raised when unpacking gRPC messages fails."""
 
     def __init__(self, data: object, format: type[Message]) -> None:

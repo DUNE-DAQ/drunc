@@ -5,7 +5,6 @@ import signal
 import click
 import grpc
 from daqpytools.logging import logging_log_levels
-from drunc.utils.grpc_utils import RichErrorServerInterceptor
 from druncschema.controller_pb2_grpc import add_ControllerServicer_to_server
 from druncschema.token_pb2 import Token
 
@@ -16,6 +15,7 @@ from drunc.grpc_settings import (
     CONTROLLER_SERVER_GRPC_MAX_WORKERS,
 )
 from drunc.utils.configuration import OKSKey
+from drunc.utils.grpc_utils import RichErrorServerInterceptor
 from drunc.utils.utils import (
     get_logger,
     get_root_logger,

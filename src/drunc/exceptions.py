@@ -95,20 +95,13 @@ class DruncCommandException(DruncTerminalException):
     grpc_error_code: int = code_pb2.INTERNAL
     reason: str = "COMMAND_ERROR"
 
-
-class DruncFSMCommandException(DruncNonTerminalException):
-    grpc_error_code: int = code_pb2.INTERNAL
-    reason: str = "FSM_COMMAND_ERROR"
-
-
 class DruncNotImplementedException(DruncTerminalException):
     grpc_error_code: int = code_pb2.UNIMPLEMENTED
     reason: str = "NOT_IMPLEMENTED"
 
 
-
-############## Shell Exceptions #########################
-# They can inherit from DruncException as execution is not affected by the rich error interceptor
+######################### Shell Exceptions #########################
+# Inherit from DruncException so they can still carry rich error information without being aborted by the rich error interceptor
 class DruncBatchShellError(DruncException):
     def __init__(self, msg: str) -> None:
         err_msg = f"Batch shell error: {msg}"
