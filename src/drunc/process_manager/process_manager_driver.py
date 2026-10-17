@@ -863,7 +863,7 @@ To debug it, close drunc and run the following command:
     # ----- RPC methods -----
     def terminate(
         self,
-        timeout: int | float = 130,
+        timeout: int | float = 600,
     ) -> ProcessInstanceList:
         request = Request(token=copy_token(self.token))
         msg = f"[green]{request.token.user_name}[/green] sent terminate"
@@ -872,7 +872,7 @@ To debug it, close drunc and run the following command:
         return response
 
     def kill(
-        self, request: ProcessQuery, timeout: int | float = 60
+        self, request: ProcessQuery, timeout: int | float = 150
     ) -> ProcessInstanceList:
         request.token.CopyFrom(self.token)
         log_msg_session_name_extension = (

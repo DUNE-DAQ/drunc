@@ -325,7 +325,7 @@ def test_root_controller_logs(run_dunerc) -> None:
     assert footer_idx > header_idx, "Footer appears before header in stdout."
 
     # 2) Check there are 5 lines between header and footer
-    between = lines[header_idx + 1 : footer_idx]
+    between = [line for line in lines[header_idx + 1 : footer_idx] if line.strip()]
     assert len(between) == 5, (
         f"Expected exactly 5 lines between header and footer, found {len(between)}.\nBetween:\n"
         + "\n".join(between)

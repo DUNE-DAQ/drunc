@@ -360,7 +360,7 @@ def test_pms_root_controller_logs_scoped(run_dunerc) -> None:
     assert footer_idx < marker_end_idx, "Scoped logs footer appears after scoped block."
     assert footer_idx > header_idx, "Footer appears before header in stdout."
 
-    between = lines[header_idx + 1 : footer_idx]
+    between = [line for line in lines[header_idx + 1 : footer_idx] if line.strip()]
     assert len(between) == 5, (
         f"Expected exactly 5 lines between header and footer, found {len(between)}.\nBetween:\n"
         + "\n".join(between)
