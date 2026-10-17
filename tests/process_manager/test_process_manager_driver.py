@@ -790,6 +790,7 @@ def test_terminate_grpc_error(mock_driver):
         mock_driver.terminate()
 
     assert excinfo.value is grpc_error
+    assert mock_driver._mock_stub.terminate.call_args.kwargs["timeout"] == 600
     mock_driver._mock_stub.terminate.assert_called_once()
 
 
