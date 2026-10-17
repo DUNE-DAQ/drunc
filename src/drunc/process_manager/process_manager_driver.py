@@ -872,7 +872,7 @@ To debug it, close drunc and run the following command:
         return response
 
     def kill(
-        self, request: ProcessQuery, timeout: int | float = 60
+        self, request: ProcessQuery, timeout: int | float = 150
     ) -> ProcessInstanceList:
         request.token.CopyFrom(self.token)
         log_msg_session_name_extension = (

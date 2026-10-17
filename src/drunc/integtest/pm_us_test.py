@@ -44,7 +44,7 @@ print = functools.partial(print, flush=True)  # always flush print() output
 
 pytest_plugins = "integrationtest.integrationtest_drunc"
 
-conf_dict = make_conf_dict("pm_us")
+conf_dict = make_conf_dict("pm-us")
 
 confgen_arguments = {"SmallFootprint": conf_dict}
 
@@ -331,14 +331,14 @@ def test_boot_pm(run_dunerc) -> None:
     lines = strip_ansi(run_dunerc.completed_processes["pm"].stdout).splitlines()
 
     between = get_lines_between_markers(lines, "pre_boot", "post_boot")
-    check_boot_sent_re = "sent boot for session pm_us via unified_shell"
+    check_boot_sent_re = "sent boot for session pm-us via unified_shell"
     assert any(check_boot_sent_re in line for line in between), (
         f"Did not find '{check_boot_sent_re}' between pre_boot and post_boot.\nBetween:\n"
         + "\n".join(between)
     )
 
     check_root_controller_boot = (
-        "Booted 'root-controller' from session 'pm_us' with UUID"
+        "Booted 'root-controller' from session 'pm-us' with UUID"
     )
     assert any(check_root_controller_boot in line for line in between), (
         f"Did not find '{check_root_controller_boot}' between pre_boot and post_boot.\nBetween:\n"

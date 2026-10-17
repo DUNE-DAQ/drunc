@@ -833,7 +833,9 @@ def test_kill_grpc_error(mock_driver, process_query_request):
         mock_driver.kill(process_query_request)
 
     assert excinfo.value is grpc_error
-    mock_driver._mock_stub.kill.assert_called_once()
+    mock_driver._mock_stub.kill.assert_called_once_with(
+        process_query_request, timeout=150
+    )
 
 
 def test_logs_success(mock_driver, log_request, logs_response):
