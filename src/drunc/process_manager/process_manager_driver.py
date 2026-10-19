@@ -14,7 +14,7 @@ import grpc
 from daqconf.set_connectivity_service_port import set_connectivity_service_port
 from daqconf.set_rc_controller_port import set_rc_controller_port
 from daqconf.utils import find_free_port
-from druncschema.common_pb2 import LogOnServerRequest, LogOnServerResponse
+from druncschema.common_pb2 import LoggerTarget, SendLogRequest, SendLogResponse
 from druncschema.description_pb2 import Description
 from druncschema.process_manager_pb2 import (
     BootRequest,
@@ -87,9 +87,10 @@ class ProcessManagerDriver:
         except Exception as e:
             self.log.error(f"Error closing gRPC channel: {e}", exc_info=True)
 
-    def update_controller_logs(self, ctrl_dal, level):
+    def update_controller_logs(self, ctrl_dal: "conffwk.dal.Session", level: str):
         """
         Update the log level of the controller in the DAL.
+        Will automatically capitalise any string to match the configuration schema.
 
         Args:
             ctrl_dal: The controller DAL object.
@@ -101,7 +102,7 @@ class ProcessManagerDriver:
         Raises:
             None
         """
-        ctrl_dal.controller_log_level = level
+        ctrl_dal.controller_log_level = level.upper()
         return ctrl_dal
 
     # ----- Boot workflow -----
@@ -609,7 +610,7 @@ To debug it, close drunc and run the following command:
         def get_controller_address(session_dal, session_name):
             from drunc.process_manager.oks_parser import collect_variables
 
-            env = {}
+            env: dict[str, str] = {}
             collect_variables(session_dal.environment, env)
 
             # 1: Try dynamic lookup via Connectivity Service
@@ -870,7 +871,6 @@ To debug it, close drunc and run the following command:
         msg = f"[green]{request.token.user_name}[/green] sent terminate"
         self.log.info(msg)
         response = self.stub.terminate(request, timeout=timeout)
-
         return response
 
     def kill(
@@ -888,12 +888,10 @@ To debug it, close drunc and run the following command:
         )
         self.log.info(msg)
         response = self.stub.kill(request, timeout=timeout)
-
         return response
 
     def logs(self, request: LogRequest, timeout: int | float = 60) -> LogLines | None:
         request.token.CopyFrom(self.token)
-
         response = self.stub.logs(request, timeout=timeout)
 
         # Check if the response indicates a BadQuery error
@@ -915,39 +913,31 @@ To debug it, close drunc and run the following command:
         self, request: ProcessQuery, timeout: int | float = 60
     ) -> ProcessInstanceList:
         request.token.CopyFrom(self.token)
-
         response = self.stub.ps(request, timeout=timeout)
-
         return response
 
     def flush(
         self, request: ProcessQuery, timeout: int | float = 60
     ) -> ProcessInstanceList:
         request.token.CopyFrom(self.token)
-
         response = self.stub.flush(request, timeout=timeout)
-
         return response
 
     def restart(
         self, request: ProcessQuery, timeout: int | float = 60
     ) -> ProcessInstanceList:
         request.token.CopyFrom(self.token)
-
         response = self.stub.restart(request, timeout=timeout)
         self.log.info(
             f"Restarted [green]{request.names}[/green] "
-            f"from session [green]{request.session} [/green]"
+            f"from session [green]{response.values[0].process_description.metadata.session} [/green]"
             f"with UUID [green]{response.values[0].uuid.uuid}[/green] on host [green]{response.values[0].process_description.metadata.hostname}[/green]"
         )
-
         return response
 
     def describe(self, timeout: int | float = 60) -> Description:
         request = Request(token=copy_token(self.token))
-
         response = self.stub.describe(request, timeout=timeout)
-
         return response
 
     # ----- logging helpers -----
@@ -990,36 +980,43 @@ To find the controller address, you can look up \'{top_controller_name}_control\
 """
         )
 
-    def log_on_server(
+    def send_log(
         self,
         text: str,
         severity: str = "INFO",
+        logger: int = LoggerTarget.MAIN,
+        target: str = "",
+        execute_along_path: bool = False,
+        execute_on_all_subsequent_children_in_path: bool = True,
         timeout: int | float = 60,
-    ) -> LogOnServerResponse:
-        """
-        Logs a message to the server's log system.
+    ) -> SendLogResponse:
+        """Send a log message to the process manager over gRPC.
 
         Args:
-            text (str): The message to log.
-            severity (str, optional): The severity level of the log message. Defaults to "INFO".
-            timeout (int | float, optional): The timeout for the gRPC request in seconds. Defaults to 60.
+            text: The message to log.
+            severity: The log severity, such as ``INFO`` or ``ERROR``.
+            logger: The server logger target.
+            target: The target node for the message.
+            execute_along_path: Whether to execute along the target path.
+            execute_on_all_subsequent_children_in_path: Whether to execute on all
+                subsequent children in the target path.
+            timeout: The gRPC request timeout in seconds.
 
         Returns:
-            None
+            The response from the process manager.
 
         Raises:
             grpc.RpcError: If the gRPC request fails.
         """
-        request = LogOnServerRequest(
+        request = SendLogRequest(
             token=self.token,
             text=text,
             severity=severity,
-            target="",
-            execute_along_path=False,
-            execute_on_all_subsequent_children_in_path=False,
+            logger=logger,
+            target=target,
+            execute_along_path=execute_along_path,
+            execute_on_all_subsequent_children_in_path=execute_on_all_subsequent_children_in_path,
         )
         request.token.CopyFrom(self.token)
-        response: LogOnServerResponse = self.stub.log_on_server(
-            request, timeout=timeout
-        )
+        response: SendLogResponse = self.stub.send_log(request, timeout=timeout)
         return response

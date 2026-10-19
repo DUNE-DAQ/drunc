@@ -1,9 +1,9 @@
 import getpass
-from time import sleep
 from typing import Callable
 
 import click
 from click.decorators import FC
+from druncschema.common_pb2 import LoggerTarget
 from druncschema.process_manager_pb2 import LogRequest, ProcessQuery
 from rich.markup import escape
 from rich.panel import Panel
@@ -13,10 +13,21 @@ from drunc.process_manager.interface.cli_argument import (
     validate_conf_string,
 )
 from drunc.process_manager.interface.context import ProcessManagerContext
+from drunc.process_manager.process_manager_driver import ProcessManagerDriver
 from drunc.process_manager.utils import tabulate_process_instance_list
 from drunc.unified_shell.context import UnifiedShellContext
-from drunc.utils.shell_utils import InterruptedCommand, log_pm_cmd
-from drunc.utils.utils import get_logger, resolve_context_peer
+from drunc.utils.shell_utils import InterruptedCommand, format_table_width, log_pm_cmd
+from drunc.utils.shell_utils import wait as shell_wait
+from drunc.utils.utils import get_logger, log_echo, resolve_context_peer
+
+
+def _pm_driver(
+    obj: ProcessManagerContext | UnifiedShellContext,
+) -> ProcessManagerDriver:
+    driver = obj.get_driver("process_manager")
+    if not isinstance(driver, ProcessManagerDriver):
+        raise RuntimeError("Process manager driver is not initialized")
+    return driver
 
 
 @click.command("boot")
@@ -216,13 +227,19 @@ def dummy_boot(
 
 
 @click.command("wait")
-@click.argument("sleep_time", type=int, default=1)
+@click.argument("sleep_time", type=int)
+@click.option(
+    "--progress-steps",
+    type=int,
+    default=None,
+    help="Number of progress updates to print when --progress is set.",
+)
 @click.pass_obj
-def wait(obj: ProcessManagerContext, sleep_time: int) -> None:
+def wait(
+    obj: ProcessManagerContext, sleep_time: int, progress_steps: int | None
+) -> None:
     log = get_logger("process_manager.wait")
-    log.info(f"Command [green]wait[/green] running for {sleep_time} seconds.")
-    sleep(sleep_time)  # seconds
-    log.info(f"Command [green]wait[/green] ran for {sleep_time} seconds.")
+    shell_wait(log, sleep_time, progress_steps)
 
 
 @click.command("terminate")
@@ -233,8 +250,14 @@ def wait(obj: ProcessManagerContext, sleep_time: int) -> None:
     default=None,
     help="Table width. Default is automatically calculated",
 )
+@click.option(
+    "--fit",
+    is_flag=True,
+    default=False,
+    help="Restrict the table to the available terminal width.",
+)
 @click.pass_obj
-def terminate(obj: ProcessManagerContext, width: int | None) -> None:
+def terminate(obj: ProcessManagerContext, width: int | None, fit: bool) -> None:
     """
     Terminate the process manager and all its managed processes.
 
@@ -243,6 +266,7 @@ def terminate(obj: ProcessManagerContext, width: int | None) -> None:
             information.
         width: The width of the table to display the terminated processes. If None, the
             width will be automatically calculated.
+        fit: Whether to restrict the table to the available terminal width.
 
     Returns:
         None
@@ -257,9 +281,11 @@ def terminate(obj: ProcessManagerContext, width: int | None) -> None:
     result = pm_driver.terminate()
     if not result:
         return
-    obj.print(
-        tabulate_process_instance_list(result, "Terminated process", False, width=width)
-    )  # rich tables require console printing
+    table = tabulate_process_instance_list(
+        result, "Terminated process", False, width=width
+    )
+    table = format_table_width(obj, table, fit)
+    obj.print(table, soft_wrap=not fit)
     obj.delete_driver("controller")
 
 
@@ -284,6 +310,12 @@ def kill_decorators(f: FC) -> Callable[[FC], FC]:
         help="Table width. Default is automatically calculated",
     )(f)
     f = click.option(
+        "--fit",
+        is_flag=True,
+        default=False,
+        help="Restrict the table to the available terminal width.",
+    )(f)
+    f = click.option(
         "--crash",
         is_flag=True,
         default=False,
@@ -296,7 +328,9 @@ def kill_decorators(f: FC) -> Callable[[FC], FC]:
 @add_query_options(at_least_one=True)
 @kill_decorators
 @click.pass_obj
-def kill(obj: ProcessManagerContext, query: ProcessQuery, width: int | None) -> None:
+def kill(
+    obj: ProcessManagerContext, query: ProcessQuery, width: int | None, fit: bool
+) -> None:
     """
     Kill processes matching the given query.
 
@@ -306,6 +340,7 @@ def kill(obj: ProcessManagerContext, query: ProcessQuery, width: int | None) -> 
         query: The query to match processes to be killed.
         width: The width of the table to display the killed processes. If None, the
             width will be automatically calculated.
+        fit: Whether to expand the table to the available terminal width.
 
     Returns:
         None
@@ -314,13 +349,14 @@ def kill(obj: ProcessManagerContext, query: ProcessQuery, width: int | None) -> 
         Exception: If any exception occurs during the kill process.
     """
     log_pm_cmd(obj)
-    return kill_impl(obj, query, width)
+    return kill_impl(obj, query, width, fit)
 
 
 def kill_impl(
     obj: ProcessManagerContext | UnifiedShellContext,
     query: ProcessQuery,
     width: int | None,
+    fit: bool = False,
 ) -> None:
     """
     Implementation of the 'kill' command.
@@ -331,6 +367,7 @@ def kill_impl(
         query: The query to match processes to be killed.
         width: The width of the table to display the killed processes. If None, the
             width will be automatically calculated.
+        fit: Whether to expand the table to the available terminal width.
 
     Returns:
         None
@@ -344,9 +381,9 @@ def kill_impl(
     result = pm_driver.kill(query)
     if not result:
         return
-    obj.print(
-        tabulate_process_instance_list(result, "Killed process", False, width=width)
-    )  # rich tables require console printing
+    table = tabulate_process_instance_list(result, "Killed process", False, width=width)
+    table = format_table_width(obj, table, fit)
+    obj.print(table, soft_wrap=not fit)
 
 
 def flush_decorators(f: FC) -> Callable[[FC], FC]:
@@ -369,6 +406,12 @@ def flush_decorators(f: FC) -> Callable[[FC], FC]:
         default=None,
         help="Table width. Default is automatically calculated",
     )(f)
+    f = click.option(
+        "--fit",
+        is_flag=True,
+        default=False,
+        help="Restrict the table to the available terminal width.",
+    )(f)
     return f
 
 
@@ -376,7 +419,9 @@ def flush_decorators(f: FC) -> Callable[[FC], FC]:
 @add_query_options(at_least_one=False, all_processes_by_default=True)
 @flush_decorators
 @click.pass_obj
-def flush(obj: ProcessManagerContext, query: ProcessQuery, width: int | None) -> None:
+def flush(
+    obj: ProcessManagerContext, query: ProcessQuery, width: int | None, fit: bool
+) -> None:
     """
     Flush processes matching the given query.
 
@@ -386,6 +431,7 @@ def flush(obj: ProcessManagerContext, query: ProcessQuery, width: int | None) ->
         query: The query to match processes to be flushed.
         width: The width of the table to display the flushed processes. If None, the
             width will be automatically calculated.
+        fit: Whether to restrict the table to the available terminal width.
 
     Returns:
         None
@@ -394,13 +440,14 @@ def flush(obj: ProcessManagerContext, query: ProcessQuery, width: int | None) ->
         Exception: If any exception occurs during the flush process.
     """
     log_pm_cmd(obj)
-    return flush_impl(obj, query, width)
+    return flush_impl(obj, query, width, fit)
 
 
 def flush_impl(
     obj: ProcessManagerContext | UnifiedShellContext,
     query: ProcessQuery,
     width: int | None,
+    fit: bool = False,
 ) -> None:
     """
     Implementation of the 'flush' command.
@@ -411,6 +458,7 @@ def flush_impl(
         query: The query to match processes to be flushed.
         width: The width of the table to display the flushed processes. If None, the
             width will be automatically calculated.
+        fit: Whether to restrict the table to the available terminal width.
 
     Returns:
         None
@@ -424,9 +472,11 @@ def flush_impl(
     result = pm_driver.flush(query)
     if not result:
         return
-    obj.print(
-        tabulate_process_instance_list(result, "Flushed process", False, width=width)
-    )  # rich tables require console printing
+    table = tabulate_process_instance_list(
+        result, "Flushed process", False, width=width
+    )
+    table = format_table_width(obj, table, fit)
+    obj.print(table, soft_wrap=not fit)
 
 
 def logs_decorators(f: FC) -> Callable[[FC], FC]:
@@ -610,10 +660,15 @@ def ps_decorators(f: FC) -> Callable[[FC], FC]:
         help="Table width. Default is automatically calculated",
     )(f)
     f = click.option(
+        "--fit",
+        is_flag=True,
+        default=False,
+        help="Restrict the table to the available terminal width.",
+    )(f)
+    f = click.option(
         "-l",
         "--long-format",
         is_flag=True,
-        type=bool,
         default=False,
         help="Whether to have a long output",
     )(f)
@@ -630,6 +685,7 @@ def ps(
     query: ProcessQuery,
     long_format: bool,
     width: int | None,
+    fit: bool,
 ) -> None:
     """
     Display processes matching the given query.
@@ -642,6 +698,7 @@ def ps(
             format.
         width: The width of the table to display the processes. If None, the width will
             be automatically calculated.
+        fit: Whether to restrict the table to the available terminal width.
 
     Returns:
         None
@@ -650,7 +707,7 @@ def ps(
         Exception: If any exception occurs during the process retrieval or display.
     """
     log_pm_cmd(obj)
-    return ps_impl(obj, query, long_format, width)
+    return ps_impl(obj, query, long_format, width, fit)
 
 
 def ps_impl(
@@ -658,6 +715,7 @@ def ps_impl(
     query: ProcessQuery,
     long_format: bool,
     width: int | None,
+    fit: bool = False,
 ) -> None:
     """
     Implementation of the 'ps' command.
@@ -670,6 +728,7 @@ def ps_impl(
             format.
         width: The width of the table to display the processes. If None, the width will
             be automatically calculated.
+        fit: Whether to restrict the table to the available terminal width.
 
     Returns:
         None
@@ -693,16 +752,15 @@ def ps_impl(
     # If there are processes running, tabulate them, otherwise log that there are no
     # processes running.
     if results.values:
-        obj.print(
-            tabulate_process_instance_list(
-                results,
-                title=title,
-                long=long_format,
-                width=width,
-            ),
-            overflow="fold",
-            soft_wrap=True,
+        table = tabulate_process_instance_list(
+            results,
+            title=title,
+            long=long_format,
+            width=width,
         )
+
+        table = format_table_width(obj, table, fit)
+        obj.print(table, soft_wrap=not fit)
     else:
         if session_name:
             log.info(
@@ -712,8 +770,20 @@ def ps_impl(
             log.info("No processes running")
 
 
-@click.command("log")
+@click.command("echo")
 @click.argument("text", required=True)
+@click.option(
+    "--server/--local",
+    default=False,
+    help="Send the message to the server via RPC (default: log locally only).",
+)
+@click.option(
+    "--logger",
+    type=click.Choice(["echo", "main"]),
+    default="echo",
+    callback=lambda context, parameter, value: LoggerTarget.Value(value.upper()),
+    help="Which server-side logger to target when --server is used.",
+)
 @click.option(
     "-s",
     "--severity",
@@ -725,22 +795,19 @@ def ps_impl(
     ),
 )
 @click.pass_obj
-def log_on_server(obj: ProcessManagerContext, text: str, severity: str) -> None:
+def echo(
+    obj: ProcessManagerContext, text: str, server: bool, logger: int, severity: str
+) -> None:
     """
-    Log a message on the server with the specified severity level.
+    Log a message locally or send it to the process manager server.
 
-    Args:
-        obj: The context object containing the process manager driver and other relevant
-            information.
-        text: The log message to be sent to the server.
-        severity: The severity level of the log message. Options are DEBUG, INFO,
-            WARNING, ERROR, CRITICAL. Default is INFO.
-
-    Returns:
-        None
-
-    Raises:
-        Exception: If any exception occurs during the logging process.
+    The selected logger controls the local logger or the server-side logger, depending
+    on whether server mode is enabled.
     """
+    log = get_logger("process_manager.shell")
+    if not server:
+        # Local-only path, no RPC — mirrors the old bare `echo` command.
+        (log_echo if logger == LoggerTarget.ECHO else log).info(text)
+        return
     pm_driver = obj.get_pm_driver()
-    pm_driver.log_on_server(text=text, severity=severity)
+    pm_driver.send_log(text=text, severity=severity, logger=logger)

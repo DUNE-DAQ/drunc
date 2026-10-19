@@ -5,9 +5,10 @@ Defines the common interface for managing remote process lifecycles,
 including process startup, monitoring, termination, and output capture.
 """
 
+import logging
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from typing import Any, Dict, List, Optional
+from typing import Dict, List, Optional
 
 from druncschema.process_manager_pb2 import BootRequest
 
@@ -52,7 +53,7 @@ class ProcessLifetimeManager(ABC):
         self,
         uuid: str,
         timeout: float,
-        logger: Optional[Any] = None,
+        logger: Optional[logging.Logger] = None,
     ) -> bool:
         """
         Wait for a process to terminate within a timeout period.

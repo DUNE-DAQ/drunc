@@ -32,6 +32,7 @@ If are developing a user interface for `drunc`, you can get help here:
 * [Messaging format](https://dune-daq-sw.readthedocs.io/en/latest/packages/drunc/Messaging-format) (valid for all the `drunc` endpoints)
 * [Process manager endpoint description](https://dune-daq-sw.readthedocs.io/en/latest/packages/drunc/Process-manager-interface)
 * [Controller endpoint description](https://dune-daq-sw.readthedocs.io/en/latest/packages/drunc/Controller-interface)
+* [Graph](graph/) (interactive UML class/package diagrams)
 
 There is more developer information in the [drunc wiki](https://github.com/DUNE-DAQ/drunc/wiki).
 

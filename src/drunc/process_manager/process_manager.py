@@ -7,7 +7,7 @@ from collections import Counter
 
 from daqpytools.logging import LogHandlerConf, exceptions, setup_daq_ers_logger
 from druncschema.authoriser_pb2 import ActionType, SystemType
-from druncschema.common_pb2 import LogOnServerRequest, LogOnServerResponse
+from druncschema.common_pb2 import LoggerTarget, SendLogRequest, SendLogResponse
 from druncschema.description_pb2 import CommandDescription, Description
 from druncschema.opmon.process_manager_pb2 import ProcessStatus
 from druncschema.process_manager_pb2 import (
@@ -38,7 +38,7 @@ from drunc.process_manager.configuration import (
     ProcessManagerRunningMode,
     ProcessManagerTypes,
 )
-from drunc.utils.utils import get_logger, pid_info_str
+from drunc.utils.utils import get_logger, log_echo, pid_info_str
 
 
 class BadQuery(DruncCommandException):
@@ -83,11 +83,16 @@ class ProcessManager(abc.ABC, ProcessManagerServicer):
         self.running_mode = ProcessManagerRunningMode.Unknown
 
         dach = DummyAuthoriserConfHandler.from_pyobject(
-            data=self.configuration.authoriser
+            data=getattr(self.configuration, "authoriser", None)
         )
-
-        self.opmon_publisher = self.configuration.opmon_publisher
-        interval_s = self.configuration.opmon_conf["interval_s"]
+        self.opmon_publisher = getattr(self.configuration, "opmon_publisher", None)
+        interval_s = 10.0
+        if getattr(self.configuration, "opmon_conf", None):
+            interval_raw = self.configuration.opmon_conf.get("interval_s", 10.0)
+            try:
+                interval_s = float(interval_raw)
+            except (TypeError, ValueError):
+                interval_s = 10.0
         self.authoriser = DummyAuthoriser(dach, SystemType.PROCESS_MANAGER)
 
         self.process_store = {}  # dict[str, sh.RunningCommand] # str = uuid
@@ -465,36 +470,34 @@ class ProcessManager(abc.ABC, ProcessManagerServicer):
 
         return response
 
-    @authentified_and_authorised(action=ActionType.READ, system=SystemType.CONTROLLER)
-    def log_on_server(
+    @authentified_and_authorised(
+        action=ActionType.READ, system=SystemType.PROCESS_MANAGER
+    )
+    def send_log(
         self,
-        request: LogOnServerRequest,
+        request: SendLogRequest,
         context: ServicerContext,
-    ) -> LogOnServerResponse:
+    ) -> SendLogResponse:
         """
         Log a message on the server with the specified severity.
 
         Args:
-            request: LogOnServerRequest containing the log message and severity.
+            request: SendLogRequest containing the log message and severity.
             context: gRPC ServicerContext (not used).
 
         Returns:
-            LogOnServerResponse indicating the result of the logging operation.
+            SendLogResponse indicating the result of the logging operation.
 
         Raises:
             None
         """
-        # Construct the default response indicating successful execution
-        response = LogOnServerResponse(
-            token=None,
-            flag=ResponseFlag.EXECUTED_SUCCESSFULLY,
-        )
 
-        # Get the log method corresponding to the severity level (e.g., debug, info,
-        # warning, error), and log the message
+        response = SendLogResponse(token=None, flag=ResponseFlag.EXECUTED_SUCCESSFULLY)
+
+        # LoggerTarget.MAIN -> the app's real logger, LoggerTarget.ECHO -> drunc.echo
+        target_log = self.log if request.logger == LoggerTarget.MAIN else log_echo
         level = request.severity.lower()
-        log_method = getattr(self.log, level, self.log.info)
-        log_method(request.text)
+        getattr(target_log, level, target_log.info)(request.text)
         return response
 
     def _ensure_one_process(
@@ -750,6 +753,7 @@ class ProcessManager(abc.ABC, ProcessManagerServicer):
     @staticmethod
     def get(conf, **kwargs):
         log = get_logger("process_manager.get")
+        name = kwargs.pop("name", "process_manager")
 
         if conf.pm_type == ProcessManagerTypes.SSH_SHELL:
             from drunc.process_manager.ssh_process_manager_shell import (
@@ -757,19 +761,19 @@ class ProcessManager(abc.ABC, ProcessManagerServicer):
             )
 
             log.debug("Starting [green]SSH Shell process_manager[/green]")
-            return SSHProcessManagerShell(conf, **kwargs)
+            return SSHProcessManagerShell(conf, name=name, **kwargs)
         elif conf.pm_type == ProcessManagerTypes.K8s:
             from drunc.process_manager.k8s_process_manager import K8sProcessManager
 
             log.debug("Starting [green]K8s process_manager[/green]")
-            return K8sProcessManager(conf, **kwargs)
+            return K8sProcessManager(conf, name=name, **kwargs)
         elif conf.pm_type == ProcessManagerTypes.SSH_PARAMIKO:
             from drunc.process_manager.ssh_process_manager_paramiko_client import (
                 SSHProcessManagerParamikoClient,
             )
 
             log.debug("Starting [green]SSH Paramiko process_manager[/green]")
-            return SSHProcessManagerParamikoClient(conf, **kwargs)
+            return SSHProcessManagerParamikoClient(conf, name=name, **kwargs)
         else:
             log.error(f"ProcessManager type {conf.pm_type} is unsupported!")
             raise RuntimeError(f"ProcessManager type {conf.pm_type} is unsupported!")

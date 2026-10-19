@@ -1,5 +1,4 @@
 import re
-from dataclasses import dataclass, field
 
 import integrationtest.data_classes as data_classes
 import integrationtest.log_file_checks as log_file_checks
@@ -14,6 +13,7 @@ from integ_test_utils import (
     get_status_table_after_echo,
     strip_ansi,
 )
+from pm_test_common import FsmCommandParams
 
 pytest_plugins = "integrationtest.integrationtest_drunc"
 
@@ -72,35 +72,7 @@ conf_dict.config_substitutions.append(
 confgen_arguments = {"MinimalSystem": conf_dict}
 
 
-# ── FSM command dataclass ──────────────────────────────────────────────────────
-
-
-@dataclass
-class FsmCommandParams:
-    marker: str
-    command: str
-    expected_state: str
-    non_controller_substate: str = "idle"
-    command_args: list[str] = field(default_factory=list)
-    run_number: int | None = None
-
-    @property
-    def done_marker(self) -> str:
-        return f"{self.marker}_done"
-
-    @property
-    def full_command(self) -> str:
-        return " ".join([self.command] + self.command_args)
-
-    def to_command_block(self) -> str:
-        return f"""
-echo {self.marker}
-{self.full_command}
-echo {self.marker}_done
-status -w 140
-echo {self.marker}_status_done
-"""
-
+# ── FSM command definitions ─────────────────────────────────────────────────────
 
 _FSM_COMMANDS = [
     FsmCommandParams("test_conf", "conf", "configured"),
@@ -147,13 +119,29 @@ _SHUTDOWN_STATUS_ERROR = (
     "Controller-specific commands cannot be sent until the session is booted"
 )
 
+# Maps each echo marker to the controller it was targeted at (None means no --target, i.e. broadcast).
+_ECHO_SERVER_TARGETS = {
+    "test_of_echo_on_server_full": None,
+    "test_of_echo_on_server_root_controller": "root-controller",
+    # "test_of_echo_on_server_df_controller": "df-controller", ## does not appear to work, but doesn't work in develop anyway..
+}
+
+
+def _echo_server_command_block() -> str:
+    lines = []
+    for marker, target in _ECHO_SERVER_TARGETS.items():
+        target_arg = f" --target {target}" if target else ""
+        lines.append(f"echo --server --logger main{target_arg} {marker}")
+    return "\n" + "\n".join(lines) + "\n"
+
+
 # ── Command list ───────────────────────────────────────────────────────────────
 
 dunerc_command_list = (
     """
 boot
 echo post_boot
-status -w 140
+status 
 echo post_boot_done
 """
     + "".join(p.to_command_block() for p in _FSM_COMMANDS)
@@ -166,11 +154,12 @@ echo post_boot_done
     + _FSM_SEQUENCES["test_stop_run"].to_command_block()
     + "start-run --run-number 3"
     + _FSM_SEQUENCES["test_stop_run"].to_command_block()
+    + _echo_server_command_block()
     + f"""
 echo {_SHUTDOWN_MARKER}
 shutdown
 echo {_SHUTDOWN_MARKER}_done
-status -w 140
+status 
 echo {_SHUTDOWN_MARKER}_status_done
 """
     + "\nterminate"
@@ -267,6 +256,35 @@ def test_log_files(run_dunerc) -> None:
             True,
             ignored_logfile_problems,
         )
+
+
+def _marker_found_in_logs(marker: str, log_files) -> bool:
+    for logname in log_files:
+        with open(logname, errors="ignore") as log_file:
+            if any(marker in line for line in log_file):
+                return True
+    return False
+
+
+@pytest.mark.parametrize(
+    "marker,target",
+    list(_ECHO_SERVER_TARGETS.items()),
+    ids=list(_ECHO_SERVER_TARGETS.keys()),
+)
+def test_echo_on_server(run_dunerc, marker, target) -> None:
+    """Checks that the server-side echo marker appears in the expected log file."""
+    # No --target means the command is sent to the root controller.
+    log_target = target or "root-controller"
+    matching_logs = [
+        logname
+        for logname in run_dunerc.log_files
+        if f"{run_dunerc.daq_session_name}_{log_target}" in str(logname)
+    ]
+    assert matching_logs, f"No {log_target} log file found."
+
+    assert _marker_found_in_logs(marker, matching_logs), (
+        f"'{marker}' not found in log file(s): {matching_logs}"
+    )
 
 
 @pytest.mark.parametrize("params", _FSM_COMMANDS, ids=lambda p: p.marker)

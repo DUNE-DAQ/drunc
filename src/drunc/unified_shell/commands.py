@@ -5,6 +5,7 @@ from typing import cast
 
 import click
 from click.decorators import FC
+from druncschema.common_pb2 import LoggerTarget
 from druncschema.process_manager_pb2 import (
     ProcessInstance,
     ProcessQuery,
@@ -28,8 +29,8 @@ from drunc.process_manager.interface.commands import (
 from drunc.process_manager.interface.context import ProcessManagerContext
 from drunc.process_manager.utils import tabulate_process_instance_list
 from drunc.unified_shell.context import UnifiedShellContext, UnifiedShellMode
-from drunc.utils.shell_utils import InterruptedCommand, log_pm_cmd
-from drunc.utils.utils import get_logger
+from drunc.utils.shell_utils import InterruptedCommand, format_table_width, log_pm_cmd
+from drunc.utils.utils import get_logger, log_echo
 
 
 @click.command("boot")
@@ -227,13 +228,25 @@ def boot(
         sys.exit(1)
 
 
-@click.command("log")
+@click.command("echo")
 @click.argument("text", required=True)
 @click.option(
     "--target-server",
     type=str,
     default="",
     help="Server to use the log command on. Default value of '' will send the log message to all the servers, e.g. the process manager and the root controller.",
+)
+@click.option(
+    "--server/--local",
+    default=False,
+    help="Send the message to the server via RPC (default: log locally only).",
+)
+@click.option(
+    "--logger",
+    type=click.Choice(["echo", "main"]),
+    default="echo",
+    callback=lambda context, parameter, value: LoggerTarget.Value(value.upper()),
+    help="Which server-side logger to target when --server is used.",
 )
 @click.option(
     "-s",
@@ -261,47 +274,46 @@ def boot(
     default=True,
 )
 @click.pass_obj
-def log_on_server(
+def echo(
     obj: ProcessManagerContext,
     text: str,
+    server: bool,
     target_server: str,
-    severity: str,
+    logger: int,
     target: str,
+    severity: str,
     execute_along_path: bool,
     execute_on_all_subsequent_children_in_path: bool,
 ) -> None:
     """
-    Log a message to the specified server.
+    Log a message locally or send it to selected servers.
 
-    This command allows you to send a log message to a specific server or to all servers
-    in the system. You can specify the severity level of the log message.
+    Without server mode, the message is logged locally. In server mode, it can be sent
+    to the process manager, controller, or both.
 
     Args:
-        obj (ProcessManagerContext): The context object containing session information.
-        text (str): The log message text.
-        target_server (str): The server to send the log message to. Default is '' (all servers).
-        severity (str): The severity level of the log message. Default is 'INFO'.
-
-    Returns:
-        None
-
-    Raises:
-        None
+        obj: The unified shell context.
+        text: The log message text.
+        target_server: The server to target, or all servers when empty.
+        logger: The selected logger target.
+        severity: The log severity level.
     """
-    log = get_logger("unified_shell.log_on_server")
+    log = get_logger("unified_shell.echo")
     log.debug("Logging message to server(s)...")
 
+    if not server:
+        (log_echo if logger == LoggerTarget.ECHO else log).info(text)
+        return
+
     if target_server in ["", "process_manager"]:
-        obj.get_pm_driver().log_on_server(
-            text=text,
-            severity=severity,
-        )
+        obj.get_pm_driver().send_log(text=text, severity=severity, logger=logger)
 
     if target_server in ["", "controller"] and obj.has_driver("controller"):
-        obj.get_controller_driver().log_on_server(
+        obj.get_controller_driver().send_log(
             text=text,
             severity=severity,
             target=target,
+            logger=logger,
             execute_along_path=execute_along_path,
             execute_on_all_subsequent_children_in_path=execute_on_all_subsequent_children_in_path,
         )
@@ -315,9 +327,17 @@ def log_on_server(
     default=None,
     help="Table width. Default is automatically calculated",
 )
+@click.option(
+    "--fit",
+    is_flag=True,
+    default=False,
+    help="Restrict the table to the available terminal width.",
+)
 @click.pass_obj
 @click.pass_context
-def terminate(ctx: click.core.Context, obj: UnifiedShellContext, width: int) -> None:
+def terminate(
+    ctx: click.core.Context, obj: UnifiedShellContext, width: int | None, fit: bool
+) -> None:
     """
     Execute the process manager terminate command, but only do this for the current
     session
@@ -331,11 +351,12 @@ def terminate(ctx: click.core.Context, obj: UnifiedShellContext, width: int) -> 
     if not result:
         return
 
-    obj.print(
-        tabulate_process_instance_list(result, "Terminated process", False, width=width)
-    )  # rich tables require console printing
-    # As the session is now terminated, we can delete the controller driver, as it is no
-    # longer needed.
+    table = tabulate_process_instance_list(
+        result, "Terminated process", False, width=width
+    )
+
+    table = format_table_width(obj, table, fit=fit)
+    obj.print(table, soft_wrap=not fit)
     obj.delete_driver("controller")
 
 
@@ -390,10 +411,14 @@ def session_injector(f: FC) -> FC:
 @ps_decorators
 @click.pass_obj
 def ps(
-    obj: UnifiedShellContext, query: ProcessQuery, long_format: bool, width: int
+    obj: UnifiedShellContext,
+    query: ProcessQuery,
+    long_format: bool,
+    width: int | None,
+    fit: bool,
 ) -> None:
     log_pm_cmd(obj)
-    ps_impl(obj, query, long_format, width)
+    ps_impl(obj, query, long_format, width, fit)
 
 
 @click.command("logs")
@@ -416,9 +441,11 @@ def logs(
 @add_query_options_no_session(at_least_one=True)
 @kill_decorators
 @click.pass_obj
-def kill(obj: UnifiedShellContext, query: ProcessQuery, width: int) -> None:
+def kill(
+    obj: UnifiedShellContext, query: ProcessQuery, width: int | None, fit: bool
+) -> None:
     log_pm_cmd(obj)
-    kill_impl(obj, query, width)
+    kill_impl(obj, query, width, fit)
 
 
 @click.command("flush")
@@ -426,9 +453,11 @@ def kill(obj: UnifiedShellContext, query: ProcessQuery, width: int) -> None:
 @add_query_options_no_session(at_least_one=True)
 @flush_decorators
 @click.pass_obj
-def flush(obj: UnifiedShellContext, query: ProcessQuery, width: int) -> None:
+def flush(
+    obj: UnifiedShellContext, query: ProcessQuery, width: int | None, fit: bool
+) -> None:
     log_pm_cmd(obj)
-    flush_impl(obj, query, width)
+    flush_impl(obj, query, width, fit)
 
 
 @click.command("restart")

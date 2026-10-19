@@ -70,7 +70,7 @@ class ProcessWatcherThread(threading.Thread):
         self.logger = logger
         self.__is_monitoring_remotely = False
 
-    def run(self):
+    def run(self) -> None:
         """
         Monitor process, read metadata asynchronously, and invoke callback on exit.
         """
@@ -760,7 +760,7 @@ class SSHProcessLifetimeManagerShell(ProcessLifetimeManager):
                 process_timeouts[uuid] = self.DEFAULT_TIMEOUT_FOR_KILLING_PROCESS
 
         all_exit_statuses: Dict[str, Optional[ExitStatus]] = {}
-        killed_uuids = set()
+        killed_uuids: set[str] = set()
 
         # Execute role-based shutdown in stages
         for role in PROCESS_SHUTDOWN_ORDERING:
@@ -1107,7 +1107,7 @@ class SSHProcessLifetimeManagerShell(ProcessLifetimeManager):
 
         self._cleanup_remote_file(hostname, user, metadata_file)
 
-    def _ssh_client_stderr_logger(self, chunk):
+    def _ssh_client_stderr_logger(self, chunk: bytes | str) -> None:
         """Filter the logging of an SSH client stderr to the
         appropriate log level
         """
@@ -1363,7 +1363,7 @@ class SSHProcessLifetimeManagerShell(ProcessLifetimeManager):
                 return None
             process = self.process_store[uuid].process
 
-        def check_exit_status():
+        def check_exit_status() -> bool:
             return not process.is_alive()
 
         # Wait for process to exit
@@ -1372,9 +1372,12 @@ class SSHProcessLifetimeManagerShell(ProcessLifetimeManager):
         if got_exit:
             try:
                 process.wait()
-                return process.exit_code
+                exit_code = getattr(process, "exit_code", None)
+                if isinstance(exit_code, int):
+                    return exit_code
+                return None
             except sh.ErrorReturnCode as e:
-                return e.exit_code
+                return e.exit_code if isinstance(e.exit_code, int) else None
             except Exception as e:
                 self.log.debug(f"Exception getting exit code for {uuid}: {e}")
                 return None

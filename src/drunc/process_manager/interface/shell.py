@@ -9,6 +9,7 @@ from daqpytools.logging import HandlerType, add_handler, logging_log_levels
 from drunc.process_manager.interface.commands import (
     boot,
     dummy_boot,
+    echo,
     flush,
     kill,
     logs,
@@ -85,7 +86,7 @@ def process_manager_shell(
         # process_manager_shell_log.error(e.message) # TODO: Keep this for production branch, remove this from dev branch
         exit(1)
 
-    ctx.obj.get_driver("process_manager").log_on_server(
+    ctx.obj.get_driver("process_manager").send_log(
         f"{getpass.getuser()} connected from {ctx.obj.shell_id}"
     )
 
@@ -106,7 +107,7 @@ def process_manager_shell(
         """
         Cleanup function to be called when the shell is closed.
         """
-        ctx.obj.get_driver("process_manager").log_on_server(
+        ctx.obj.get_driver("process_manager").send_log(
             f"{getpass.getuser()} disconnecting from {ctx.obj.shell_id}"
         )
         ctx.obj.terminate()
@@ -125,7 +126,9 @@ def process_manager_shell(
         kill,
         flush,
         logs,
+        echo,
         restart,
+        echo,
         ps,
         dummy_boot,
     ]

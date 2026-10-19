@@ -4,7 +4,17 @@ Process metadata management for remote processes.
 
 import json
 from dataclasses import dataclass
-from typing import Any, Dict, Optional
+from typing import Mapping, Optional, TypedDict, cast
+
+
+class ProcessMetadataDict(TypedDict, total=False):
+    pid: Optional[int]
+    hostname: Optional[str]
+    user: Optional[str]
+    started_at: Optional[float]
+    tree_id: Optional[str]
+    role: Optional[str]
+    name: Optional[str]
 
 
 @dataclass
@@ -24,7 +34,7 @@ class ProcessMetadata:
     role: Optional[str] = None
     name: Optional[str] = None
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> ProcessMetadataDict:
         """Convert metadata to dictionary for JSON serialisation."""
         return {
             "pid": self.pid,
@@ -35,26 +45,20 @@ class ProcessMetadata:
             "role": self.role,
             "name": self.name,
         }
-
+    
     @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> "ProcessMetadata":
+    def from_dict(cls, data: Mapping[str, object]) -> "ProcessMetadata":
         """
-        Create ProcessMetadata from dictionary.
-
-        Args:
-            data: Dictionary containing metadata fields
-
-        Returns:
-            ProcessMetadata instance
+        Create ProcessMetadata from dictionary without using Any.
         """
         return cls(
-            pid=data.get("pid"),
-            hostname=data.get("hostname"),
-            user=data.get("user"),
-            started_at=data.get("started_at"),
-            tree_id=data.get("tree_id"),
-            role=data.get("role"),
-            name=data.get("name"),
+            pid=cast(Optional[int], data.get("pid")),
+            hostname=cast(Optional[str], data.get("hostname")),
+            user=cast(Optional[str], data.get("user")),
+            started_at=cast(Optional[float], data.get("started_at")),
+            tree_id=cast(Optional[str], data.get("tree_id")),
+            role=cast(Optional[str], data.get("role")),
+            name=cast(Optional[str], data.get("name")),
         )
 
     def to_json(self) -> str:

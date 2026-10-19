@@ -8,3 +8,4 @@ mkdocstrings
 mkdocstrings-python
 pymdown-extensions
 mkdocs-exclude
+mkdocs-macros-plugin
