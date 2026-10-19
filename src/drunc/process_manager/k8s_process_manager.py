@@ -80,7 +80,7 @@ class K8sPodWatcherThread(threading.Thread):
         threading.Thread.__init__(self)
         self.pm = pm
         self.daemon = True
-        self.processed_uuids = set()
+        self.processed_pods = set()
 
     def run(self) -> None:
         """
@@ -105,12 +105,13 @@ class K8sPodWatcherThread(threading.Thread):
                     status = pod.status
                     phase = status.phase
                     proc_uuid = metadata.labels.get(f"uuid.{self.pm.drunc_label}")
+                    pod_uid = metadata.uid
                     session = metadata.namespace
 
-                    if not proc_uuid:
+                    if not proc_uuid or not pod_uid:
                         continue
 
-                    if proc_uuid in self.processed_uuids:
+                    if pod_uid in self.processed_pods:
                         continue
 
                     self.pm.log.debug(
@@ -153,9 +154,9 @@ class K8sPodWatcherThread(threading.Thread):
                             f"Final result for pod {proc_uuid}: exit_code={exit_code}, reason={reason}"
                         )
 
-                        self.processed_uuids.add(proc_uuid)
+                        self.processed_pods.add(pod_uid)
                         self.pm.notify_termination(
-                            proc_uuid, exit_code, reason, session
+                            proc_uuid, pod_uid, exit_code, reason, session
                         )
 
             except ApiException as e:
@@ -225,12 +226,12 @@ class K8sProcessManager(ProcessManager):
         self.managed_sessions = set()
         self.watchers = []
         self.sessions_pending_deletion = set()
-        # proc_uuid -> (remaining_uuids, event) for its kill_and_wait() batch;
+        # pod_uid -> (remaining_pod_uids, event) for its kill_and_wait() batch;
         # keeps concurrent kills (e.g. different sessions) from sharing state.
         self._pending_deletion_batches: dict[str, tuple[set[str], threading.Event]] = {}
         self._pending_deletion_lock = threading.Lock()
-        # Guards against notify_termination running twice
-        self._notified_uuids: set[str] = set()
+        self._notified_pods: set[str] = set()
+        self._pod_uids: dict[str, str] = {}
         self.final_exit_codes = {}
         # Guards inserts/deletes on boot_request against concurrent iteration
         self.boot_request_lock = threading.Lock()
@@ -367,7 +368,12 @@ class K8sProcessManager(ProcessManager):
             )
 
     def notify_termination(
-        self, proc_uuid: str, exit_code: int, reason: str, session: str
+        self,
+        proc_uuid: str,
+        pod_uid: str,
+        exit_code: int,
+        reason: str,
+        session: str,
     ) -> None:
         """
         Callback for when a pod terminates.
@@ -377,20 +383,25 @@ class K8sProcessManager(ProcessManager):
 
         Args:
             proc_uuid: The UUID string of the terminated process.
+            pod_uid: Kubernetes UID identifying this pod instance.
             exit_code: The integer exit code of the terminated pod.
             reason: A string describing the termination reason (e.g. 'GracefulShutdown', 'PodDeleted').
             session: The Kubernetes namespace (session) the pod belonged to.
         """
         self.log.debug(f"notify_termination called for '{proc_uuid}'.")
 
-        # Only process each uuid's termination once
         with self._pending_deletion_lock:
-            if proc_uuid in self._notified_uuids:
-                return
-            self._notified_uuids.add(proc_uuid)
+            already_notified = pod_uid in self._notified_pods
+            self._notified_pods.add(pod_uid)
+            batch = self._pending_deletion_batches.pop(pod_uid, None)
+            if batch is not None:
+                remaining_pod_uids, batch_event = batch
+                remaining_pod_uids.discard(pod_uid)
+                all_done = not remaining_pod_uids
+                remaining = len(remaining_pod_uids)
 
         # Publish a log message and to kafka for each process that is terminated
-        if proc_uuid in self.boot_request:
+        if not already_notified and proc_uuid in self.boot_request:
             # Get the exit data, and compose a message for tty viewing
             self.final_exit_codes[proc_uuid] = exit_code
             meta = self.boot_request[proc_uuid].process_description.metadata
@@ -413,18 +424,9 @@ class K8sProcessManager(ProcessManager):
                     )
                     self._lcs_state.pop(session, None)
 
-        # Confirm against this uuid's batch
-        with self._pending_deletion_lock:
-            batch = self._pending_deletion_batches.pop(proc_uuid, None)
-            if batch is not None:
-                remaining_uuids, batch_event = batch
-                remaining_uuids.discard(proc_uuid)
-                all_done = not remaining_uuids
-                remaining = len(remaining_uuids)
-
         if batch is not None:
             self.log.debug(
-                f"Watcher confirmed termination of {proc_uuid}. {remaining} pods remaining in this batch."
+                f"Termination confirmed for pod {pod_uid}. {remaining} pods remaining in this batch."
             )
             if all_done:
                 self.log.debug("All pods in this batch terminated, setting event.")
@@ -1710,6 +1712,10 @@ class K8sProcessManager(ProcessManager):
 
             # Execute the pod creation API call
             pod_uid = self._execute_pod_creation_api(session, podname, pod_manifest)
+            proc_uuid = tree_labels.get(f"uuid.{self.drunc_label}")
+            if proc_uuid:
+                with self._pending_deletion_lock:
+                    self._pod_uids[proc_uuid] = pod_uid
 
             # Create associated service
             self._create_associated_service(
@@ -2486,6 +2492,8 @@ class K8sProcessManager(ProcessManager):
         self.log.info(
             f"Starting staged termination for {len(targeted_uuids)} process(es)..."
         )
+        with self._pending_deletion_lock:
+            pod_uid_by_process_uuid = dict(self._pod_uids)
 
         # Define the blocking kill_and_wait helper
         def kill_and_wait(uuids, grace_period=None) -> None:
@@ -2501,12 +2509,27 @@ class K8sProcessManager(ProcessManager):
             for proc_uuid in uuids:
                 self.add_process_to_expected_dead_processes(proc_uuid)
 
-            remaining_uuids = set(uuids)
+            pod_uid_by_uuid = {
+                proc_uuid: pod_uid_by_process_uuid[proc_uuid]
+                for proc_uuid in uuids
+                if proc_uuid in pod_uid_by_process_uuid
+            }
+            missing_pod_uids = set(uuids) - set(pod_uid_by_uuid)
+            if missing_pod_uids:
+                self.log.error(
+                    f"Cannot confirm termination without pod UIDs for: {missing_pod_uids}"
+                )
+                return
+
+            remaining_pod_uids = set(pod_uid_by_uuid.values())
+            proc_uuid_by_pod_uid = {
+                pod_uid: proc_uuid for proc_uuid, pod_uid in pod_uid_by_uuid.items()
+            }
             batch_event = threading.Event()
             with self._pending_deletion_lock:
-                for proc_uuid in uuids:
-                    self._pending_deletion_batches[proc_uuid] = (
-                        remaining_uuids,
+                for pod_uid in remaining_pod_uids:
+                    self._pending_deletion_batches[pod_uid] = (
+                        remaining_pod_uids,
                         batch_event,
                     )
 
@@ -2532,7 +2555,7 @@ class K8sProcessManager(ProcessManager):
             fallback_check_interval = min(
                 self.kill_watch_fallback_poll_interval, wait_timeout
             )
-            while remaining_uuids and time() < deadline:
+            while remaining_pod_uids and time() < deadline:
                 remaining_wait = max(
                     0.0, min(fallback_check_interval, deadline - time())
                 )
@@ -2540,9 +2563,10 @@ class K8sProcessManager(ProcessManager):
                     break
 
                 with self._pending_deletion_lock:
-                    pending_snapshot = list(remaining_uuids)
+                    pending_snapshot = list(remaining_pod_uids)
 
-                for proc_uuid in pending_snapshot:
+                for pod_uid in pending_snapshot:
+                    proc_uuid = proc_uuid_by_pod_uid[pod_uid]
                     if proc_uuid not in self.boot_request:
                         continue
                     pd = self.boot_request[proc_uuid].process_description
@@ -2552,26 +2576,25 @@ class K8sProcessManager(ProcessManager):
                     # Re-check: the watcher may have confirmed it while we
                     # were making the network call above.
                     with self._pending_deletion_lock:
-                        still_pending = proc_uuid in remaining_uuids
+                        still_pending = pod_uid in remaining_pod_uids
                     if not still_pending:
                         continue
 
                     self.log.warning(
                         f'Watch missed termination event for "{pd.metadata.session}.'
-                        f'{pd.metadata.name}" (UUID {proc_uuid}); confirming directly.'
+                        f'{pd.metadata.name}" (pod UID {pod_uid}, UUID {proc_uuid}); confirming directly.'
                     )
                     self.notify_termination(
-                        proc_uuid, -1, "PodDeleted", pd.metadata.session
+                        proc_uuid, pod_uid, -1, "PodDeleted", pd.metadata.session
                     )
 
             with self._pending_deletion_lock:
-                unconfirmed = set(remaining_uuids)
-                # Drop leftover entries so unconfirmed uuids don't linger.
-                for proc_uuid in unconfirmed:
-                    self._pending_deletion_batches.pop(proc_uuid, None)
+                unconfirmed_pod_uids = set(remaining_pod_uids)
+                for pod_uid in unconfirmed_pod_uids:
+                    self._pending_deletion_batches.pop(pod_uid, None)
 
-            if unconfirmed:
-                self.log.warning(f"Timeout. Remaining: {unconfirmed}")
+            if unconfirmed_pod_uids:
+                self.log.warning(f"Timeout. Remaining pod UIDs: {unconfirmed_pod_uids}")
 
         # Execute staged shutdown
         all_pods = []
@@ -2582,6 +2605,12 @@ class K8sProcessManager(ProcessManager):
             all_pods = pod_list.items
         except self._api_error_v1_api as e:
             self.log.error(f"Could not list pods for kill operation: {e}")
+
+        uuid_label_key = f"uuid.{self.drunc_label}"
+        for pod in all_pods:
+            proc_uuid = pod.metadata.labels.get(uuid_label_key)
+            if proc_uuid:
+                pod_uid_by_process_uuid[proc_uuid] = pod.metadata.uid
 
         # Map pods by their role label
         pods_by_role = {
@@ -2594,7 +2623,6 @@ class K8sProcessManager(ProcessManager):
         # For segment-controllers, also track tree-id depth per uuid
         segment_controller_depths: dict[str, int] = {}
 
-        uuid_label_key = f"uuid.{self.drunc_label}"
         role_label_key = f"role.{self.drunc_label}"
         tree_id_label_key = f"tree-id.{self.drunc_label}"
 
@@ -2657,6 +2685,8 @@ class K8sProcessManager(ProcessManager):
                     )
                     final_ret.append(pi)
                     del self.boot_request[proc_uuid]
+                    with self._pending_deletion_lock:
+                        self._pod_uids.pop(proc_uuid, None)
 
         # drop process once it's gone
         for pi in final_ret:
