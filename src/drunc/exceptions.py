@@ -95,9 +95,49 @@ class DruncCommandException(DruncTerminalException):
     grpc_error_code: int = code_pb2.INTERNAL
     reason: str = "COMMAND_ERROR"
 
+
 class DruncNotImplementedException(DruncTerminalException):
     grpc_error_code: int = code_pb2.UNIMPLEMENTED
     reason: str = "NOT_IMPLEMENTED"
+
+
+class ChildCommandExceptionCommon:
+
+    def __init__(
+        self,
+        child_name: str,
+        child_details: list[Message],
+        **kwargs,
+    ) -> None:
+        self.child_name = child_name
+        self._child_details = child_details
+        super().__init__(
+            message=f"Child '{child_name}' failed",
+            **kwargs,
+        )
+
+    @property
+    def child_details(self) -> list[Message]:
+        return self._child_details
+
+
+class ChildCommandNonTerminalException(
+    ChildCommandExceptionCommon,
+    DruncNonTerminalException,
+):
+    """Non-terminal exception for child command failures."""
+    grpc_error_code = code_pb2.FAILED_PRECONDITION
+    reason = "CHILD_COMMAND_ERROR"
+
+
+class ChildCommandTerminalException(
+    ChildCommandExceptionCommon,
+    DruncTerminalException,
+):
+    """Terminal exception for child command failures."""
+    grpc_error_code = code_pb2.INTERNAL
+    reason = "CHILD_COMMAND_TERMINAL_ERROR"
+
 
 
 ######################### Shell Exceptions #########################
