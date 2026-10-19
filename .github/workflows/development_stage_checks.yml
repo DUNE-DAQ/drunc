@@ -9,6 +9,7 @@ concurrency:
 
 jobs:
   lint-with-ruff:
+    name: Ruff linting
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
@@ -25,6 +26,7 @@ jobs:
   # Directories missing __init__.py files are needed by mkdocstrings to generate
   # documentation from python docstrings
   check-init:
+    name: Check __init__.py file presence
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
@@ -57,6 +59,7 @@ jobs:
 
   # Check the links in the documentation are valid and accessible
   check-links:
+    name: Check documentation links
     runs-on: ubuntu-latest
     permissions:
       contents: read

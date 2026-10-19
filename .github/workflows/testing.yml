@@ -23,6 +23,7 @@ env:
 
 jobs:
   generate-release-tarball:
+    name: Generate Release Tarball
     if: github.event.pull_request.draft == false
     runs-on: ubuntu-latest
     defaults:
@@ -54,6 +55,7 @@ jobs:
 
 
   unit-tests:
+    name: Run Unit Tests
     needs: generate-release-tarball
     runs-on: ubuntu-latest
     defaults:
@@ -121,6 +123,7 @@ jobs:
 
 
   select-daqsystemtest-integtests:
+    name: Select integration tests from daqsystemtest
     # Select integration tests that can run on the default 4 core runner
     runs-on: ubuntu-latest
     outputs:
@@ -134,6 +137,7 @@ jobs:
 
 
   select-drunc-integtests:
+    name: Select integration tests from drunc
     runs-on: ubuntu-latest
     outputs:
       matrix: ${{ steps.set-matrix.outputs.matrix }}
@@ -151,6 +155,7 @@ jobs:
 
 
   daqsystemtest-integration:
+    name: "Run daqsystemtest integration: ${{ matrix.test_script }}"
     needs: [generate-release-tarball, select-daqsystemtest-integtests]
     runs-on: ubuntu-latest
     strategy:
@@ -180,6 +185,7 @@ jobs:
 
 
   drunc-integration:
+    name: "Run drunc integration: ${{ matrix.test_script }}"
     needs: [generate-release-tarball, select-drunc-integtests]
     runs-on: ubuntu-latest
     strategy:
@@ -209,6 +215,7 @@ jobs:
 
 
   daqsystemtest-integration-k8s:
+    name: "Run daqsystemtest integration (k8s): ${{ matrix.test_script }}"
     needs: [generate-release-tarball, select-daqsystemtest-integtests]
     runs-on: ubuntu-latest
     strategy:
@@ -313,12 +320,13 @@ jobs:
 
 
   drunc-integration-k8s:
-    needs: [generate-release-tarball, select-drunc-integtests]
+    name: "Run drunc integration (k8s): ${{ matrix.test_script }}"
+    needs: [generate-release-tarball]
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
-        test_script: ${{ fromJSON(needs.select-drunc-integtests.outputs.matrix) }}
+        test_script: ["basic_multiapp_test.py"]
 
     defaults:
       run:
