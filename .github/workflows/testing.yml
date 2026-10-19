@@ -99,6 +99,7 @@ jobs:
 
 
   publish-coverage:
+    name: Publish Coverage of unit tests
     needs: unit-tests
     if: github.event_name == 'push' && needs.unit-tests.result == 'success'
     runs-on: ubuntu-latest
