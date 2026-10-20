@@ -193,6 +193,11 @@ dunerc_commands = (
     echo {_SHUTDOWN_MARKER}_done
     status
     echo {_SHUTDOWN_MARKER}_status_done
+
+
+    terminate
+    boot -no
+    terminate
     """
 ).split()
 
@@ -262,7 +267,7 @@ def test_dunerc_success(run_dunerc) -> None:
 def test_log_files(run_dunerc) -> None:
     """Checks that expected process-manager log files exist and are free of errors."""
     # Check that at least some of the expected log files are present
-    logfile_types = ("df-01", "dfo", "mlt", "ru")
+    logfile_types = ("dfo", "mlt", "ru")
     log_names = tuple(map(str, run_dunerc.log_files))
     missing_logfiles = [
         f"{run_dunerc.daq_session_name}_{logfile_type}"
@@ -273,6 +278,30 @@ def test_log_files(run_dunerc) -> None:
         )
     ]
     assert not missing_logfiles, f"No logfile found for: {', '.join(missing_logfiles)}."
+
+    log_names = tuple(
+        os.path.basename(str(logname)) for logname in run_dunerc.log_files
+    )
+    df01_log_names = [
+        logname
+        for logname in log_names
+        if f"{run_dunerc.daq_session_name}_df-01" in logname
+    ]
+    timestamp_pattern = re.compile(r"_\d{4}-\d{2}-\d{2}-\d{2}-\d{2}-\d{2}\.txt$")
+    timestamped_df01_logs = [
+        logname for logname in df01_log_names if timestamp_pattern.search(logname)
+    ]
+    untimestamped_df01_logs = [
+        logname for logname in df01_log_names if not timestamp_pattern.search(logname)
+    ]
+    assert len(timestamped_df01_logs) == 1, (
+        "Expected exactly one timestamped _df-01 log, "
+        f"found {len(timestamped_df01_logs)}: {timestamped_df01_logs}"
+    )
+    assert len(untimestamped_df01_logs) == 1, (
+        "Expected exactly one untimestamped _df-01 log, "
+        f"found {len(untimestamped_df01_logs)}: {untimestamped_df01_logs}"
+    )
 
     # Check that there are no warnings or errors in the log files
     assert log_file_checks.logs_are_error_free(
