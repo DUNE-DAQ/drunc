@@ -260,7 +260,7 @@ class K8sProcessManager(ProcessManager):
         )
 
         # CONFIGURATION - pod startup management parameters
-        self.kill_timeout = settings.pod_management.get("kill_timeout", 60)
+        self.kill_timeout = settings.pod_management.get("kill_timeout", 30)
         self.pod_ready_timeout = settings.pod_management.get("pod_ready_timeout", 60)
 
         # CONFIGURATION - restart cleanup parameters

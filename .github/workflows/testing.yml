@@ -265,33 +265,27 @@ jobs:
         if: always()
         uses: ./.github/actions/validate-test-pass
 
-      - name: Inspect Kind node pod logs
+      - name: Investigate failure from daqsystemtest (k8s)
         if: failure()
         run: |
-          echo "==================== CONTAINERS LOGS FROM KIND DISK ===================="
+          echo "======================== CONTAINERS LOGS FROM KIND DISK ========================"
           docker exec "$KIND_CONTAINER" bash -c '
             find /var/log/pods -name "*.log" -exec echo "=== Log file: {} ===" \; -exec cat {} \;
           '
 
-      - name: Debug Kubernetes pod state
-        if: failure()
-        run: |
-          echo "=== All Pods across namespaces ==="
+          echo "========================== All Pods across namespaces =========================="
           kubectl get pods -A -o wide
 
-          echo "=== Describe Pods across namespaces ==="
+          echo "======================= Describe Pods across namespaces ========================"
           kubectl describe pods -A || true
 
-          echo "=== Root-controller logs (if any container started) ==="
+          echo "=============== Root-controller logs (if any container started) ================"
           kubectl logs -A -l app=root-controller --all-containers=true || true
 
-      - name: Inspect exited Kind containers
-        if: failure()
-        run: |
-          echo "==================== ALL CONTAINERS (INCLUDING EXITED) ===================="
+          echo "====================== ALL CONTAINERS (INCLUDING EXITED) ======================="
           docker exec "$KIND_CONTAINER" crictl ps -a
 
-          echo "==================== LOGS OF EXITED CONTAINERS ===================="
+          echo "========================== LOGS OF EXITED CONTAINERS ==========================="
           docker exec "$KIND_CONTAINER" bash -c '
             for cid in $(crictl ps -a --state Exited -q); do
               echo "--------------------------------------------------"
@@ -306,22 +300,6 @@ jobs:
           echo "Running secondary check"
           kubectl get events -A --sort-by='.metadata.creationTimestamp'
           echo "Done"
-
-      - name: Inspect generated controller command
-        if: failure()
-        run: |
-          echo "==================== DRUNC POD COMMAND DEFINITION ===================="
-          CONFIG_FILE=$(find "$TEST_DIR" -type f -name "integtest-session-resolved.data.xml" -print -quit)
-          if [[ -n "$CONFIG_FILE" ]]; then
-            grep -C 10 -i "root-controller" "$CONFIG_FILE" || true
-          else
-            echo "No resolved integration-test configuration found under $TEST_DIR"
-          fi
-
-          echo "==================== EXECUTABLE PERMISSIONS CHECK ===================="
-          NIGHTLY_CONTAINER_PATH=$(find /__w -maxdepth 4 -type d -name "NFD_DEV*" | head -n 1)
-          ls -la "$NIGHTLY_CONTAINER_PATH"/.venv/bin/drunc-controller || true
-          ls -la "$NIGHTLY_CONTAINER_PATH"/.venv/bin/drunc || true
 
 
   drunc-integration-k8s:

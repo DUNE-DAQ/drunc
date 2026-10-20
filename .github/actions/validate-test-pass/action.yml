@@ -23,10 +23,19 @@ runs:
         echo "Inspecting log: $LATEST_LOG"
 
         # Check for pytest failure signatures
-        if grep -q -E "(failed ❌|Unhandled exception|COMMAND_ERROR|[1-9][0-9]* failed)" "$LATEST_LOG"; then
-          echo "::error::Integration test failure detected in: $LATEST_LOG"
-          grep -E "([0-9]+ failed|[0-9]+ passed|Unhandled exception|COMMAND_ERROR)" "$LATEST_LOG" || true
-          exit 1
-        fi
+        failure_patterns=(  
+          "failed ❌"  
+          "Unhandled exception"  
+          "COMMAND_ERROR"  
+          "[1-9][0-9]* failed"  
+        )  
+
+        failure_regex="$(IFS='|'; echo "${failure_patterns[*]}")"  
+
+        if grep -q -E "$failure_regex" "$LATEST_LOG"; then  
+          echo "::error::Integration test failure detected in: $LATEST_LOG"  
+          grep -E "([0-9]+ failed|[0-9]+ passed|Unhandled exception|COMMAND_ERROR)" "$LATEST_LOG" || true  
+          exit 1  
+        fi  
 
         echo "Integration test completed successfully."
