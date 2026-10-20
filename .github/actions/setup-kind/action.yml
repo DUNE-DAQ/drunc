@@ -51,6 +51,7 @@ runs:
         NIGHTLY_DIRNAME=$(basename "$NIGHTLY_CONTAINER_PATH")
         NIGHTLY_HOST_PATH="${NIGHTLY_CONTAINER_PATH//\/__w/$HOST_WORKSPACE_PATH}"
 
+        # Create Kind cluster configuration file
         cat <<EOF > /tmp/kind-config.yaml
         kind: Cluster
         apiVersion: kind.x-k8s.io/v1alpha4

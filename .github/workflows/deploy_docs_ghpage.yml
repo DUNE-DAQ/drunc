@@ -10,6 +10,11 @@ jobs:
   docs: 
     timeout-minutes: 15 
     runs-on: ubuntu-latest 
+    concurrency:
+      group: gh-pages-deploy
+      cancel-in-progress: false
+    permissions:
+      contents: write
     env: 
       WIKI_SUBFOLDER: Developer-Wiki
     steps:
@@ -19,6 +24,12 @@ jobs:
       - uses: ts-graphviz/setup-graphviz@v1
       - name: Checkout Main Repository
         uses: actions/checkout@v7
+
+      - name: Checkout Existing Pages Output
+        uses: actions/checkout@v7
+        with:
+          ref: gh-pages
+          path: existing-pages
 
       # Clone the Wiki content  
       - name: Checkout Wiki Content 
@@ -84,8 +95,26 @@ jobs:
           done
           
 
-      - name: Deploy Docs
-        run: mkdocs gh-deploy --force
+      - name: Build Docs
+        run: mkdocs build --site-dir site
+
+      - name: Preserve Coverage Reports
+        run: |
+          if [[ -d existing-pages/coverage ]]; then
+            mkdir -p site/coverage
+            cp -a existing-pages/coverage/. site/coverage/
+          fi
+          if [[ -f existing-pages/CNAME ]]; then
+            cp existing-pages/CNAME site/CNAME
+          fi
+
+      - name: Deploy Combined Pages Site
+        uses: peaceiris/actions-gh-pages@v4
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: site
+          publish_branch: gh-pages
+          keep_files: false
 
       # Check whether the links used in the documentation are valid
       # twiki, indico, amd dunescience excludes are used as they are behind SSOs, leading to timeouts, and errors being thrown by this step

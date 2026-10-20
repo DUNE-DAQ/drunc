@@ -107,6 +107,9 @@ jobs:
     needs: unit-tests
     if: github.event_name == 'push' && needs.unit-tests.result == 'success'
     runs-on: ubuntu-latest
+    concurrency:
+      group: gh-pages-deploy
+      cancel-in-progress: false
     permissions:
       contents: write # Allows actions-gh-pages to push HTML to gh-pages branch
 
@@ -161,6 +164,7 @@ jobs:
 
   daqsystemtest-integration:
     name: "Run daqsystemtest integration: ${{ matrix.test_script }}"
+    if: github.event_name == 'pull_request'
     needs: [generate-release-tarball, select-daqsystemtest-integtests]
     runs-on: ubuntu-latest
     strategy:
@@ -191,6 +195,7 @@ jobs:
 
   drunc-integration:
     name: "Run drunc integration: ${{ matrix.test_script }}"
+    if: github.event_name == 'pull_request'
     needs: [generate-release-tarball, select-drunc-integtests]
     runs-on: ubuntu-latest
     strategy:
@@ -221,6 +226,7 @@ jobs:
 
   daqsystemtest-integration-k8s:
     name: "Run daqsystemtest integration (k8s): ${{ matrix.test_script }}"
+    if: github.event_name == 'pull_request'
     needs: [generate-release-tarball, select-daqsystemtest-integtests]
     runs-on: ubuntu-latest
     strategy:
@@ -304,6 +310,7 @@ jobs:
 
   drunc-integration-k8s:
     name: "Run drunc integration (k8s): ${{ matrix.test_script }}"
+    if: github.event_name == 'pull_request'
     needs: [generate-release-tarball]
     runs-on: ubuntu-latest
     strategy:
