@@ -11,6 +11,7 @@
 ###############################################################
 
 import functools
+import os
 import re
 
 import integrationtest.data_classes as idc
