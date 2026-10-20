@@ -14,7 +14,7 @@ import integrationtest.resource_validation as resource_validation
 import integrationtest.utility_functions as utility_functions
 from daqconf.utils import find_free_port
 from integrationtest.get_pytest_tmpdir import get_pytest_tmpdir
-from integrationtest.verbosity_helper import IntegtestVerbosityLevels
+from integrationtest.verbosity_helper import IntegtestVerbosityLevels  # noqa: F401
 
 print = functools.partial(print, flush=True)  # always flush print() output
 

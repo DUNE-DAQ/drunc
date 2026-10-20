@@ -11,13 +11,11 @@
 ###############################################################
 
 import functools
-import os
 import re
 
 import integrationtest.data_classes as idc
 import integrationtest.log_file_checks as log_file_checks
 import integrationtest.utility_functions as utility_functions
-from integrationtest.verbosity_helper import IntegtestVerbosityLevels
 import pytest
 from daqconf.utils import find_free_port
 from integ_test_utils import (
@@ -29,6 +27,7 @@ from integ_test_utils import (
     require_line_containing,
     strip_ansi,
 )
+from integrationtest.verbosity_helper import IntegtestVerbosityLevels  # noqa: F401
 from pm_test_common import ignored_logfile_problems, make_conf_dict
 
 from drunc.process_manager.oks_parser import get_full_db_path

@@ -5,7 +5,6 @@ from datetime import datetime
 import integrationtest.data_classes as data_classes
 import integrationtest.log_file_checks as log_file_checks
 import integrationtest.utility_functions as utility_functions
-from integrationtest.verbosity_helper import IntegtestVerbosityLevels
 from integ_test_utils import (
     assert_process_presence,
     get_column_for_friendly_name,
@@ -16,6 +15,7 @@ from integ_test_utils import (
     require_pattern_match_index,
     strip_ansi,
 )
+from integrationtest.verbosity_helper import IntegtestVerbosityLevels  # noqa: F401
 
 pytest_plugins = "integrationtest.integrationtest_drunc"
 

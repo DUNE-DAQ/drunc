@@ -3,7 +3,6 @@ import re
 import integrationtest.data_classes as data_classes
 import integrationtest.log_file_checks as log_file_checks
 import integrationtest.utility_functions as utility_functions
-from integrationtest.verbosity_helper import IntegtestVerbosityLevels
 import pytest
 from integ_test_utils import (
     check_execution_report_success,
@@ -14,6 +13,7 @@ from integ_test_utils import (
     get_status_table_after_echo,
     strip_ansi,
 )
+from integrationtest.verbosity_helper import IntegtestVerbosityLevels  # noqa: F401
 from pm_test_common import FsmCommandParams
 
 pytest_plugins = "integrationtest.integrationtest_drunc"
