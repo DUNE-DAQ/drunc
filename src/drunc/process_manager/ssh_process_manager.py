@@ -39,7 +39,6 @@ class SSHProcessManager(ProcessManager):
         configuration: ProcessManagerConfHandler,
         LifetimeManagerClass: type[ProcessLifetimeManager],
         name: str = "process_manager",
-        **kwargs,
     ):
         # Used to prevent races between process exit callbacks and ps/kill/flush queries
         self.boot_request_lock = threading.Lock()
@@ -71,7 +70,6 @@ class SSHProcessManager(ProcessManager):
             configuration=configuration,
             name=name,
             session=self.session,
-            **kwargs,
         )
         # stores the exit statuses for all dead processes by uuid
         self.archived_exit_statuses: dict[str, ExitStatus] = {}
