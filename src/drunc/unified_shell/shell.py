@@ -222,6 +222,7 @@ def unified_shell(
     ctx.obj.configuration_id = configuration_id
     ctx.obj.session_name = session_name
     ctx.obj.no_stop_error_batch_mode = no_stop_error_batch_mode
+    ctx.obj.override_logs = override_logs
 
     # Get the session DAL
     db = conffwk.Configuration(ctx.obj.configuration_file)
@@ -252,7 +253,6 @@ def unified_shell(
         port = mp.Value("i", 0)
 
         ctx.obj.log.debug("[green]Process manager[/green] starting")
-        ctx.obj.override_logs = override_logs
         ctx.obj.pm_process = mp.Process(
             target=run_pm,
             kwargs={

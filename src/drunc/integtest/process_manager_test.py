@@ -1,4 +1,5 @@
 import getpass
+import os
 import re
 from datetime import datetime
 
@@ -138,6 +139,10 @@ echo test_flush_done
 
 terminate
 
+boot -no
+
+terminate
+
 """.split()
 
 
@@ -157,10 +162,6 @@ def test_log_files(run_dunerc) -> None:
     """Checks that expected process-manager log files exist and are free of errors."""
     # Check that at least some of the expected log files are present
     assert any(
-        f"{run_dunerc.daq_session_name}_df-01" in str(logname)
-        for logname in run_dunerc.log_files
-    )
-    assert any(
         f"{run_dunerc.daq_session_name}_dfo" in str(logname)
         for logname in run_dunerc.log_files
     )
@@ -171,6 +172,30 @@ def test_log_files(run_dunerc) -> None:
     assert any(
         f"{run_dunerc.daq_session_name}_ru" in str(logname)
         for logname in run_dunerc.log_files
+    )
+
+    log_names = tuple(
+        os.path.basename(str(logname)) for logname in run_dunerc.log_files
+    )
+    df01_log_names = [
+        logname
+        for logname in log_names
+        if f"{run_dunerc.daq_session_name}_df-01" in logname
+    ]
+    timestamp_pattern = re.compile(r"_\d{4}-\d{2}-\d{2}-\d{2}-\d{2}-\d{2}\.txt$")
+    timestamped_df01_logs = [
+        logname for logname in df01_log_names if timestamp_pattern.search(logname)
+    ]
+    untimestamped_df01_logs = [
+        logname for logname in df01_log_names if not timestamp_pattern.search(logname)
+    ]
+    assert len(timestamped_df01_logs) == 1, (
+        "Expected exactly one timestamped _df-01 log, "
+        f"found {len(timestamped_df01_logs)}: {timestamped_df01_logs}"
+    )
+    assert len(untimestamped_df01_logs) == 1, (
+        "Expected exactly one untimestamped _df-01 log, "
+        f"found {len(untimestamped_df01_logs)}: {untimestamped_df01_logs}"
     )
 
     if check_for_logfile_errors:
