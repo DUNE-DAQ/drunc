@@ -65,9 +65,7 @@ from drunc.controller.utils import (
 from drunc.exceptions import (
     ChildCommandNonTerminalException,
     ChildCommandTerminalException,
-    DruncCommandException,
-    DruncCommandNonTerminalException,
-    DruncTerminalException,
+
 )
 from drunc.fsm.actions.utils import get_dotdrunc_json
 from drunc.fsm.configuration import FSMConfHandler
@@ -610,6 +608,21 @@ class Controller(ControllerServicer):
         response.fsm_flag = FSMResponseFlag.FSM_FAILED
         return response
 
+
+    def _degrade_expert_fsm_command_response(
+            self,
+            child: ChildNode,
+            failure: ChildCommandNonTerminalException,
+        ) -> ExecuteExpertCommandResponse:
+        """Convert a child RPC failure into a failed expert command response."""
+        response = self._degrade_response(
+            ExecuteExpertCommandResponse,
+            child,
+            failure,
+        )
+        response.fsm_flag = FSMResponseFlag.FSM_FAILED
+        return response
+
     
     @staticmethod
     def propagate_concurrently(
@@ -628,8 +641,6 @@ class Controller(ControllerServicer):
             child_list: List of (node, target) for each addressed child.
             indices: Optional list of indices selecting which entries from
                 ``child_list`` to execute.
-            abort_on_child_error: If True, raise an exception immediately when a child fails.
-                If False, continue executing other children even if one fails.
             degrade_response: Callable[[ChildNode, ChildCommandNonTerminalException], T] | None: Optional callable to convert a child failure into a response when abort_on_child_error is False.
 
         Returns:
@@ -655,12 +666,12 @@ class Controller(ControllerServicer):
 
                 if degrade_response is not None:
                     return degrade_response(child, child_error)
-                
-                if abort_on_child_error:
-                    raise ChildCommandTerminalException(
-                        child_name=child.name,
-                        child_details=child_details,
-                    ) from error
+
+                # If degrade_response is None, we consider this a terminal error and raise an exception.
+                raise ChildCommandTerminalException(
+                    child_name=child.name,
+                    child_details=child_details,
+                ) from error
                 
 
         selected_child_list = (
@@ -1143,7 +1154,7 @@ class Controller(ControllerServicer):
                 ),
                 child_list,
                 indices=connected_indices,
-                degrade_response=lambda child, failure: self._degrade_fsm_response(
+                degrade_response=lambda child, failure: self._degrade_fsm_command_response(
                     child,
                     failure,
                     command_name,
@@ -1196,6 +1207,10 @@ class Controller(ControllerServicer):
             ),
             child_list,
             indices=connected_indices,
+            degrade_response=lambda child, failure: self._degrade_expert_fsm_command_response(
+                                child,
+                                failure,
+                            ),
             
         )
         child_responses.extend(
@@ -1252,6 +1267,7 @@ class Controller(ControllerServicer):
             ),
             child_list,
             indices=connected_indices,
+            degrade_response=lambda child, failure: self._degrade_response(IncludeResponse, child, failure)
         )
         # Disconnected children can't be reached via gRPC/REST, but we can still mark
         # them included locally so this controller can route commands to them again.
@@ -1317,6 +1333,8 @@ class Controller(ControllerServicer):
             ),
             child_list,
             indices=connected_indices,
+            degrade_response=lambda child, failure: self._degrade_response(ExcludeResponse, child, failure)
+
         )
         # Disconnected children can't be reached via gRPC/REST, but we can still mark
         # them excluded locally so this controller stops routing commands to them.
@@ -1379,6 +1397,7 @@ class Controller(ControllerServicer):
             ),
             child_list,
             indices=connected_indices,
+            degrade_response=lambda child, failure: self._degrade_response(RecomputeStatusResponse, child, failure),
         )
         child_responses.extend(
             [
@@ -1511,6 +1530,7 @@ class Controller(ControllerServicer):
             ),
             child_list,
             indices=connected_indices,
+            degrade_response=lambda child, failure: self._degrade_response(TakeControlResponse, child, failure),
         )
         child_responses.extend(
             [
@@ -1587,6 +1607,7 @@ class Controller(ControllerServicer):
             ),
             child_list,
             indices=connected_indices,
+            degrade_response=lambda child, failure: self._degrade_response(SurrenderControlResponse, child, failure),
         )
         child_responses.extend(
             [
@@ -1660,6 +1681,7 @@ class Controller(ControllerServicer):
             ),
             child_list,
             indices=connected_indices,
+            degrade_response=lambda child, failure: self._degrade_response(WhoIsInChargeResponse, child, failure),
         )
         child_responses.extend(
             [
@@ -1724,6 +1746,7 @@ class Controller(ControllerServicer):
             ),
             child_list,
             indices=connected_indices,
+            degrade_response=lambda child, failure: self._degrade_response(ToErrorResponse, child, failure),
         )
         child_responses.extend(
             [
@@ -1804,6 +1827,7 @@ class Controller(ControllerServicer):
             ),
             child_list,
             indices=connected_indices,
+            degrade_response=lambda child, failure: self._degrade_response(SendLogResponse, child, failure),
         )
         child_responses.extend(
             [
