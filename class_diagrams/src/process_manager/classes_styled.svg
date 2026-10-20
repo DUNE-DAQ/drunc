@@ -12,7 +12,7 @@
 <!-- drunc.process_manager.oks_parser.AppInfo -->
 <g id="node1" class="node">
 <title>drunc.process_manager.oks_parser.AppInfo</title>
-<g id="a_node1"><a xlink:href="https://github.com/DUNE-DAQ/drunc/blob/7b6e6444a1ae73bb85f53aac832717885727e287/src/drunc/process_manager/oks_parser.py#L152" xlink:title="{AppInfo|args : list[str]&lt;br ALIGN=&quot;LEFT&quot;/&gt;data_path : NotRequired[str]&lt;br ALIGN=&quot;LEFT&quot;/&gt;env : dict[str, str]&lt;br ALIGN=&quot;LEFT&quot;/&gt;host : str&lt;br ALIGN=&quot;LEFT&quot;/&gt;log_path : str&lt;br ALIGN=&quot;LEFT&quot;/&gt;name : str&lt;br ALIGN=&quot;LEFT&quot;/&gt;restriction : str&lt;br ALIGN=&quot;LEFT&quot;/&gt;tree_id : str&lt;br ALIGN=&quot;LEFT&quot;/&gt;type : str&lt;br ALIGN=&quot;LEFT&quot;/&gt;|}" target="_blank">
+<g id="a_node1"><a xlink:href="https://github.com/DUNE-DAQ/drunc/blob/9bfc08bf4c4e33bf96826d83e1c04a7fa5fa6685/src/drunc/process_manager/oks_parser.py#L152" xlink:title="{AppInfo|args : list[str]&lt;br ALIGN=&quot;LEFT&quot;/&gt;data_path : NotRequired[str]&lt;br ALIGN=&quot;LEFT&quot;/&gt;env : dict[str, str]&lt;br ALIGN=&quot;LEFT&quot;/&gt;host : str&lt;br ALIGN=&quot;LEFT&quot;/&gt;log_path : str&lt;br ALIGN=&quot;LEFT&quot;/&gt;name : str&lt;br ALIGN=&quot;LEFT&quot;/&gt;restriction : str&lt;br ALIGN=&quot;LEFT&quot;/&gt;tree_id : str&lt;br ALIGN=&quot;LEFT&quot;/&gt;type : str&lt;br ALIGN=&quot;LEFT&quot;/&gt;|}" target="_blank">
 <polygon fill="#fff4b8" stroke="#8b7355" points="0,-55.5 0,-200.5 155,-200.5 155,-55.5 0,-55.5"/>
 <text text-anchor="start" x="58.5" y="-188.5" font-family="Helvetica,sans-Serif" font-size="10.00">AppInfo</text>
 <polyline fill="none" stroke="#8b7355" points="0,-181.5 155,-181.5 "/>
@@ -33,7 +33,7 @@
 <!-- drunc.process_manager.exceptions.BadConfiguration -->
 <g id="node2" class="node">
 <title>drunc.process_manager.exceptions.BadConfiguration</title>
-<g id="a_node2"><a xlink:href="https://github.com/DUNE-DAQ/drunc/blob/7b6e6444a1ae73bb85f53aac832717885727e287/src/drunc/process_manager/exceptions.py#L9" xlink:title="{BadConfiguration|&lt;br ALIGN=&quot;LEFT&quot;/&gt;|}" target="_blank">
+<g id="a_node2"><a xlink:href="https://github.com/DUNE-DAQ/drunc/blob/9bfc08bf4c4e33bf96826d83e1c04a7fa5fa6685/src/drunc/process_manager/exceptions.py#L9" xlink:title="{BadConfiguration|&lt;br ALIGN=&quot;LEFT&quot;/&gt;|}" target="_blank">
 <polygon fill="#fff4b8" stroke="#8b7355" points="198,-99 198,-157 299,-157 299,-99 198,-99"/>
 <text text-anchor="start" x="206" y="-145" font-family="Helvetica,sans-Serif" font-size="10.00">BadConfiguration</text>
 <polyline fill="none" stroke="#8b7355" points="198,-138 299,-138 "/>
@@ -45,7 +45,7 @@
 <!-- drunc.process_manager.process_manager.BadQuery -->
 <g id="node3" class="node">
 <title>drunc.process_manager.process_manager.BadQuery</title>
-<g id="a_node3"><a xlink:href="https://github.com/DUNE-DAQ/drunc/blob/7b6e6444a1ae73bb85f53aac832717885727e287/src/drunc/process_manager/process_manager.py#L44" xlink:title="{BadQuery|&lt;br ALIGN=&quot;LEFT&quot;/&gt;|}" target="_blank">
+<g id="a_node3"><a xlink:href="https://github.com/DUNE-DAQ/drunc/blob/9bfc08bf4c4e33bf96826d83e1c04a7fa5fa6685/src/drunc/process_manager/process_manager.py#L44" xlink:title="{BadQuery|&lt;br ALIGN=&quot;LEFT&quot;/&gt;|}" target="_blank">
 <polygon fill="#fff4b8" stroke="#8b7355" points="342,-99 342,-157 407,-157 407,-99 342,-99"/>
 <text text-anchor="start" x="350" y="-145" font-family="Helvetica,sans-Serif" font-size="10.00">BadQuery</text>
 <polyline fill="none" stroke="#8b7355" points="342,-138 407,-138 "/>
@@ -57,7 +57,7 @@
 <!-- drunc.process_manager.k8s_process_manager_settings.CheckingConfig -->
 <g id="node4" class="node">
 <title>drunc.process_manager.k8s_process_manager_settings.CheckingConfig</title>
-<g id="a_node4"><a xlink:href="https://github.com/DUNE-DAQ/drunc/blob/7b6e6444a1ae73bb85f53aac832717885727e287/src/drunc/process_manager/k8s_process_manager_settings.py#L41" xlink:title="{CheckingConfig|host_cache_expiry : int&lt;br ALIGN=&quot;LEFT&quot;/&gt;pod_status_check_sleep : int&lt;br ALIGN=&quot;LEFT&quot;/&gt;service_startup_timeout : int&lt;br ALIGN=&quot;LEFT&quot;/&gt;socket_retry_timeout : int \| float&lt;br ALIGN=&quot;LEFT&quot;/&gt;watcher_retry_sleep : int&lt;br ALIGN=&quot;LEFT&quot;/&gt;|}" target="_blank">
+<g id="a_node4"><a xlink:href="https://github.com/DUNE-DAQ/drunc/blob/9bfc08bf4c4e33bf96826d83e1c04a7fa5fa6685/src/drunc/process_manager/k8s_process_manager_settings.py#L41" xlink:title="{CheckingConfig|host_cache_expiry : int&lt;br ALIGN=&quot;LEFT&quot;/&gt;pod_status_check_sleep : int&lt;br ALIGN=&quot;LEFT&quot;/&gt;service_startup_timeout : int&lt;br ALIGN=&quot;LEFT&quot;/&gt;socket_retry_timeout : int \| float&lt;br ALIGN=&quot;LEFT&quot;/&gt;watcher_retry_sleep : int&lt;br ALIGN=&quot;LEFT&quot;/&gt;|}" target="_blank">
 <polygon fill="#fff4b8" stroke="#8b7355" points="237,-431.5 237,-532.5 410,-532.5 410,-431.5 237,-431.5"/>
 <text text-anchor="start" x="285.5" y="-520.5" font-family="Helvetica,sans-Serif" font-size="10.00">CheckingConfig</text>
 <polyline fill="none" stroke="#8b7355" points="237,-513.5 410,-513.5 "/>
@@ -74,7 +74,7 @@
 <!-- drunc.process_manager.k8s_process_manager_settings.CleanupConfig -->
 <g id="node5" class="node">
 <title>drunc.process_manager.k8s_process_manager_settings.CleanupConfig</title>
-<g id="a_node5"><a xlink:href="https://github.com/DUNE-DAQ/drunc/blob/7b6e6444a1ae73bb85f53aac832717885727e287/src/drunc/process_manager/k8s_process_manager_settings.py#L35" xlink:title="{CleanupConfig|kill_watch_fallback_poll_interval : int \| float&lt;br ALIGN=&quot;LEFT&quot;/&gt;restart_cleanup_polling : int \| float&lt;br ALIGN=&quot;LEFT&quot;/&gt;restart_cleanup_time : int \| float&lt;br ALIGN=&quot;LEFT&quot;/&gt;|}" target="_blank">
+<g id="a_node5"><a xlink:href="https://github.com/DUNE-DAQ/drunc/blob/9bfc08bf4c4e33bf96826d83e1c04a7fa5fa6685/src/drunc/process_manager/k8s_process_manager_settings.py#L35" xlink:title="{CleanupConfig|kill_watch_fallback_poll_interval : int \| float&lt;br ALIGN=&quot;LEFT&quot;/&gt;restart_cleanup_polling : int \| float&lt;br ALIGN=&quot;LEFT&quot;/&gt;restart_cleanup_time : int \| float&lt;br ALIGN=&quot;LEFT&quot;/&gt;|}" target="_blank">
 <polygon fill="#fff4b8" stroke="#8b7355" points="453,-442.5 453,-521.5 682,-521.5 682,-442.5 453,-442.5"/>
 <text text-anchor="start" x="532" y="-509.5" font-family="Helvetica,sans-Serif" font-size="10.00">CleanupConfig</text>
 <polyline fill="none" stroke="#8b7355" points="453,-502.5 682,-502.5 "/>
@@ -89,7 +89,7 @@
 <!-- drunc.process_manager.oks_parser.EnvironmentVariableCannotBeSet -->
 <g id="node6" class="node">
 <title>drunc.process_manager.oks_parser.EnvironmentVariableCannotBeSet</title>
-<g id="a_node6"><a xlink:href="https://github.com/DUNE-DAQ/drunc/blob/7b6e6444a1ae73bb85f53aac832717885727e287/src/drunc/process_manager/oks_parser.py#L112" xlink:title="{EnvironmentVariableCannotBeSet|&lt;br ALIGN=&quot;LEFT&quot;/&gt;|}" target="_blank">
+<g id="a_node6"><a xlink:href="https://github.com/DUNE-DAQ/drunc/blob/9bfc08bf4c4e33bf96826d83e1c04a7fa5fa6685/src/drunc/process_manager/oks_parser.py#L112" xlink:title="{EnvironmentVariableCannotBeSet|&lt;br ALIGN=&quot;LEFT&quot;/&gt;|}" target="_blank">
 <polygon fill="#fff4b8" stroke="#8b7355" points="788.5,-99 788.5,-157 970.5,-157 970.5,-99 788.5,-99"/>
 <text text-anchor="start" x="796.5" y="-145" font-family="Helvetica,sans-Serif" font-size="10.00">EnvironmentVariableCannotBeSet</text>
 <polyline fill="none" stroke="#8b7355" points="788.5,-138 970.5,-138 "/>
@@ -101,7 +101,7 @@
 <!-- drunc.process_manager.k8s_process_manager_settings.HostConfig -->
 <g id="node7" class="node">
 <title>drunc.process_manager.k8s_process_manager_settings.HostConfig</title>
-<g id="a_node7"><a xlink:href="https://github.com/DUNE-DAQ/drunc/blob/7b6e6444a1ae73bb85f53aac832717885727e287/src/drunc/process_manager/k8s_process_manager_settings.py#L56" xlink:title="{HostConfig|limits : dict[str, str]&lt;br ALIGN=&quot;LEFT&quot;/&gt;requests : dict[str, str]&lt;br ALIGN=&quot;LEFT&quot;/&gt;|}" target="_blank">
+<g id="a_node7"><a xlink:href="https://github.com/DUNE-DAQ/drunc/blob/9bfc08bf4c4e33bf96826d83e1c04a7fa5fa6685/src/drunc/process_manager/k8s_process_manager_settings.py#L56" xlink:title="{HostConfig|limits : dict[str, str]&lt;br ALIGN=&quot;LEFT&quot;/&gt;requests : dict[str, str]&lt;br ALIGN=&quot;LEFT&quot;/&gt;|}" target="_blank">
 <polygon fill="#fff4b8" stroke="#8b7355" points="1177,-94 1177,-162 1302,-162 1302,-94 1177,-94"/>
 <text text-anchor="start" x="1212.5" y="-150" font-family="Helvetica,sans-Serif" font-size="10.00">HostConfig</text>
 <polyline fill="none" stroke="#8b7355" points="1177,-143 1302,-143 "/>
@@ -115,7 +115,7 @@
 <!-- drunc.process_manager.k8s_process_manager.K8sPodWatcherThread -->
 <g id="node8" class="node">
 <title>drunc.process_manager.k8s_process_manager.K8sPodWatcherThread</title>
-<g id="a_node8"><a xlink:href="https://github.com/DUNE-DAQ/drunc/blob/7b6e6444a1ae73bb85f53aac832717885727e287/src/drunc/process_manager/k8s_process_manager.py#L72" xlink:title="{K8sPodWatcherThread|daemon : bool&lt;br ALIGN=&quot;LEFT&quot;/&gt;pm&lt;br ALIGN=&quot;LEFT&quot;/&gt;processed_uuids : set&lt;br ALIGN=&quot;LEFT&quot;/&gt;|run(): None&lt;br ALIGN=&quot;LEFT&quot;/&gt;}" target="_blank">
+<g id="a_node8"><a xlink:href="https://github.com/DUNE-DAQ/drunc/blob/9bfc08bf4c4e33bf96826d83e1c04a7fa5fa6685/src/drunc/process_manager/k8s_process_manager.py#L72" xlink:title="{K8sPodWatcherThread|daemon : bool&lt;br ALIGN=&quot;LEFT&quot;/&gt;pm&lt;br ALIGN=&quot;LEFT&quot;/&gt;processed_uuids : set&lt;br ALIGN=&quot;LEFT&quot;/&gt;|run(): None&lt;br ALIGN=&quot;LEFT&quot;/&gt;}" target="_blank">
 <polygon fill="#fff4b8" stroke="#8b7355" points="1427.5,-88.5 1427.5,-167.5 1553.5,-167.5 1553.5,-88.5 1427.5,-88.5"/>
 <text text-anchor="start" x="1435.5" y="-155.5" font-family="Helvetica,sans-Serif" font-size="10.00">K8sPodWatcherThread</text>
 <polyline fill="none" stroke="#8b7355" points="1427.5,-148.5 1553.5,-148.5 "/>
@@ -130,7 +130,7 @@
 <!-- drunc.process_manager.k8s_process_manager.K8sProcessManager -->
 <g id="node9" class="node">
 <title>drunc.process_manager.k8s_process_manager.K8sProcessManager</title>
-<g id="a_node9"><a xlink:href="https://github.com/DUNE-DAQ/drunc/blob/7b6e6444a1ae73bb85f53aac832717885727e287/src/drunc/process_manager/k8s_process_manager.py#L178" xlink:title="{K8sProcessManager|boot_request_lock : lock&lt;br ALIGN=&quot;LEFT&quot;/&gt;drunc_label&lt;br ALIGN=&quot;LEFT&quot;/&gt;final_exit_codes : dict&lt;br ALIGN=&quot;LEFT&quot;/&gt;headless_discovery_port&lt;br ALIGN=&quot;LEFT&quot;/&gt;home_path_base&lt;br ALIGN=&quot;LEFT&quot;/&gt;kill_timeout&lt;br ALIGN=&quot;LEFT&quot;/&gt;kill_watch_fallback_poll_interval&lt;br ALIGN=&quot;LEFT&quot;/&gt;log : NoneType, RootLogger&lt;br ALIGN=&quot;LEFT&quot;/&gt;managed_sessions : set&lt;br ALIGN=&quot;LEFT&quot;/&gt;perf_selector&lt;br ALIGN=&quot;LEFT&quot;/&gt;pm_type : K8s&lt;br ALIGN=&quot;LEFT&quot;/&gt;pod_ready_timeout&lt;br ALIGN=&quot;LEFT&quot;/&gt;pod_status_check_sleep&lt;br ALIGN=&quot;LEFT&quot;/&gt;restart_cleanup_polling&lt;br ALIGN=&quot;LEFT&quot;/&gt;restart_cleanup_time&lt;br ALIGN=&quot;LEFT&quot;/&gt;service_startup_timeout&lt;br ALIGN=&quot;LEFT&quot;/&gt;session&lt;br ALIGN=&quot;LEFT&quot;/&gt;sessions_pending_deletion : set&lt;br ALIGN=&quot;LEFT&quot;/&gt;socket_retry_timeout&lt;br ALIGN=&quot;LEFT&quot;/&gt;volume_configs&lt;br ALIGN=&quot;LEFT&quot;/&gt;watcher_retry_sleep&lt;br ALIGN=&quot;LEFT&quot;/&gt;watchers : list&lt;br ALIGN=&quot;LEFT&quot;/&gt;|is_alive(podname: str, session: str): bool&lt;br ALIGN=&quot;LEFT&quot;/&gt;notify_termination(proc_uuid: str, exit_code: int, reason: str, session: str): None&lt;br ALIGN=&quot;LEFT&quot;/&gt;}" target="_blank">
+<g id="a_node9"><a xlink:href="https://github.com/DUNE-DAQ/drunc/blob/9bfc08bf4c4e33bf96826d83e1c04a7fa5fa6685/src/drunc/process_manager/k8s_process_manager.py#L178" xlink:title="{K8sProcessManager|boot_request_lock : lock&lt;br ALIGN=&quot;LEFT&quot;/&gt;drunc_label&lt;br ALIGN=&quot;LEFT&quot;/&gt;final_exit_codes : dict&lt;br ALIGN=&quot;LEFT&quot;/&gt;headless_discovery_port&lt;br ALIGN=&quot;LEFT&quot;/&gt;home_path_base&lt;br ALIGN=&quot;LEFT&quot;/&gt;kill_timeout&lt;br ALIGN=&quot;LEFT&quot;/&gt;kill_watch_fallback_poll_interval&lt;br ALIGN=&quot;LEFT&quot;/&gt;log : NoneType, RootLogger&lt;br ALIGN=&quot;LEFT&quot;/&gt;managed_sessions : set&lt;br ALIGN=&quot;LEFT&quot;/&gt;perf_selector&lt;br ALIGN=&quot;LEFT&quot;/&gt;pm_type : K8s&lt;br ALIGN=&quot;LEFT&quot;/&gt;pod_ready_timeout&lt;br ALIGN=&quot;LEFT&quot;/&gt;pod_status_check_sleep&lt;br ALIGN=&quot;LEFT&quot;/&gt;restart_cleanup_polling&lt;br ALIGN=&quot;LEFT&quot;/&gt;restart_cleanup_time&lt;br ALIGN=&quot;LEFT&quot;/&gt;service_startup_timeout&lt;br ALIGN=&quot;LEFT&quot;/&gt;session&lt;br ALIGN=&quot;LEFT&quot;/&gt;sessions_pending_deletion : set&lt;br ALIGN=&quot;LEFT&quot;/&gt;socket_retry_timeout&lt;br ALIGN=&quot;LEFT&quot;/&gt;volume_configs&lt;br ALIGN=&quot;LEFT&quot;/&gt;watcher_retry_sleep&lt;br ALIGN=&quot;LEFT&quot;/&gt;watchers : list&lt;br ALIGN=&quot;LEFT&quot;/&gt;|is_alive(podname: str, session: str): bool&lt;br ALIGN=&quot;LEFT&quot;/&gt;notify_termination(proc_uuid: str, exit_code: int, reason: str, session: str): None&lt;br ALIGN=&quot;LEFT&quot;/&gt;}" target="_blank">
 <polygon fill="#fff4b8" stroke="#8b7355" points="1135,-332.5 1135,-631.5 1538,-631.5 1538,-332.5 1135,-332.5"/>
 <text text-anchor="start" x="1287" y="-619.5" font-family="Helvetica,sans-Serif" font-size="10.00">K8sProcessManager</text>
 <polyline fill="none" stroke="#8b7355" points="1135,-612.5 1538,-612.5 "/>
@@ -165,7 +165,7 @@
 <!-- drunc.process_manager.process_manager.ProcessManager -->
 <g id="node15" class="node">
 <title>drunc.process_manager.process_manager.ProcessManager</title>
-<g id="a_node15"><a xlink:href="https://github.com/DUNE-DAQ/drunc/blob/7b6e6444a1ae73bb85f53aac832717885727e287/src/drunc/process_manager/process_manager.py#L49" xlink:title="{ProcessManager|authoriser : DummyAuthoriser&lt;br ALIGN=&quot;LEFT&quot;/&gt;boot_request : dict&lt;br ALIGN=&quot;LEFT&quot;/&gt;commands : list&lt;br ALIGN=&quot;LEFT&quot;/&gt;configuration&lt;br ALIGN=&quot;LEFT&quot;/&gt;dead_process_lock : lock&lt;br ALIGN=&quot;LEFT&quot;/&gt;ers_handler_initialized : bool&lt;br ALIGN=&quot;LEFT&quot;/&gt;expected_dead_applications : dict&lt;br ALIGN=&quot;LEFT&quot;/&gt;handlerconf : LogHandlerConf&lt;br ALIGN=&quot;LEFT&quot;/&gt;log : NoneType, RootLogger&lt;br ALIGN=&quot;LEFT&quot;/&gt;name : str&lt;br ALIGN=&quot;LEFT&quot;/&gt;opmon_publisher&lt;br ALIGN=&quot;LEFT&quot;/&gt;pm_type : Unknown&lt;br ALIGN=&quot;LEFT&quot;/&gt;process_store : dict&lt;br ALIGN=&quot;LEFT&quot;/&gt;running_mode : Unknown&lt;br ALIGN=&quot;LEFT&quot;/&gt;session : str&lt;br ALIGN=&quot;LEFT&quot;/&gt;stop_event : Event&lt;br ALIGN=&quot;LEFT&quot;/&gt;thread : Thread&lt;br ALIGN=&quot;LEFT&quot;/&gt;|add_process_to_expected_dead_processes(uuid: str, unexpected: bool): None&lt;br ALIGN=&quot;LEFT&quot;/&gt;boot(request: BootRequest, context: ServicerContext): ProcessInstanceList&lt;br ALIGN=&quot;LEFT&quot;/&gt;clear_dead_processes(): None&lt;br ALIGN=&quot;LEFT&quot;/&gt;describe(request: Request, context: ServicerContext): Description&lt;br ALIGN=&quot;LEFT&quot;/&gt;flush(request: ProcessQuery, context: ServicerContext): ProcessInstanceList&lt;br ALIGN=&quot;LEFT&quot;/&gt;get(conf)&lt;br ALIGN=&quot;LEFT&quot;/&gt;get_log_path()&lt;br ALIGN=&quot;LEFT&quot;/&gt;kill(request: ProcessQuery, context: ServicerContext): ProcessInstanceList&lt;br ALIGN=&quot;LEFT&quot;/&gt;logs(request: LogRequest, context: ServicerContext): LogLines&lt;br ALIGN=&quot;LEFT&quot;/&gt;mark_all_processes_as_expected_dead(): None&lt;br ALIGN=&quot;LEFT&quot;/&gt;ps(request: ProcessQuery, context: ServicerContext): ProcessInstanceList&lt;br ALIGN=&quot;LEFT&quot;/&gt;publish(q: ProcessQuery, interval_s: float)&lt;br ALIGN=&quot;LEFT&quot;/&gt;remove_process_from_expected_dead_processes(uuid: str): None&lt;br ALIGN=&quot;LEFT&quot;/&gt;restart(request: ProcessQuery, context: ServicerContext): ProcessInstanceList&lt;br ALIGN=&quot;LEFT&quot;/&gt;send_log(request: SendLogRequest, context: ServicerContext): SendLogResponse&lt;br ALIGN=&quot;LEFT&quot;/&gt;set_running_mode(running_mode)&lt;br ALIGN=&quot;LEFT&quot;/&gt;terminate(request: Request, context: ServicerContext): ProcessInstanceList&lt;br ALIGN=&quot;LEFT&quot;/&gt;}" target="_blank">
+<g id="a_node15"><a xlink:href="https://github.com/DUNE-DAQ/drunc/blob/9bfc08bf4c4e33bf96826d83e1c04a7fa5fa6685/src/drunc/process_manager/process_manager.py#L49" xlink:title="{ProcessManager|authoriser : DummyAuthoriser&lt;br ALIGN=&quot;LEFT&quot;/&gt;boot_request : dict&lt;br ALIGN=&quot;LEFT&quot;/&gt;commands : list&lt;br ALIGN=&quot;LEFT&quot;/&gt;configuration&lt;br ALIGN=&quot;LEFT&quot;/&gt;dead_process_lock : lock&lt;br ALIGN=&quot;LEFT&quot;/&gt;ers_handler_initialized : bool&lt;br ALIGN=&quot;LEFT&quot;/&gt;expected_dead_applications : dict&lt;br ALIGN=&quot;LEFT&quot;/&gt;handlerconf : LogHandlerConf&lt;br ALIGN=&quot;LEFT&quot;/&gt;log : NoneType, RootLogger&lt;br ALIGN=&quot;LEFT&quot;/&gt;name : str&lt;br ALIGN=&quot;LEFT&quot;/&gt;opmon_publisher&lt;br ALIGN=&quot;LEFT&quot;/&gt;pm_type : Unknown&lt;br ALIGN=&quot;LEFT&quot;/&gt;process_store : dict&lt;br ALIGN=&quot;LEFT&quot;/&gt;running_mode : Unknown&lt;br ALIGN=&quot;LEFT&quot;/&gt;session : str&lt;br ALIGN=&quot;LEFT&quot;/&gt;stop_event : Event&lt;br ALIGN=&quot;LEFT&quot;/&gt;thread : Thread&lt;br ALIGN=&quot;LEFT&quot;/&gt;|add_process_to_expected_dead_processes(uuid: str, unexpected: bool): None&lt;br ALIGN=&quot;LEFT&quot;/&gt;boot(request: BootRequest, context: ServicerContext): ProcessInstanceList&lt;br ALIGN=&quot;LEFT&quot;/&gt;clear_dead_processes(): None&lt;br ALIGN=&quot;LEFT&quot;/&gt;describe(request: Request, context: ServicerContext): Description&lt;br ALIGN=&quot;LEFT&quot;/&gt;flush(request: ProcessQuery, context: ServicerContext): ProcessInstanceList&lt;br ALIGN=&quot;LEFT&quot;/&gt;get(conf)&lt;br ALIGN=&quot;LEFT&quot;/&gt;get_log_path()&lt;br ALIGN=&quot;LEFT&quot;/&gt;kill(request: ProcessQuery, context: ServicerContext): ProcessInstanceList&lt;br ALIGN=&quot;LEFT&quot;/&gt;logs(request: LogRequest, context: ServicerContext): LogLines&lt;br ALIGN=&quot;LEFT&quot;/&gt;mark_all_processes_as_expected_dead(): None&lt;br ALIGN=&quot;LEFT&quot;/&gt;ps(request: ProcessQuery, context: ServicerContext): ProcessInstanceList&lt;br ALIGN=&quot;LEFT&quot;/&gt;publish(q: ProcessQuery, interval_s: float)&lt;br ALIGN=&quot;LEFT&quot;/&gt;remove_process_from_expected_dead_processes(uuid: str): None&lt;br ALIGN=&quot;LEFT&quot;/&gt;restart(request: ProcessQuery, context: ServicerContext): ProcessInstanceList&lt;br ALIGN=&quot;LEFT&quot;/&gt;send_log(request: SendLogRequest, context: ServicerContext): SendLogResponse&lt;br ALIGN=&quot;LEFT&quot;/&gt;set_running_mode(running_mode)&lt;br ALIGN=&quot;LEFT&quot;/&gt;terminate(request: Request, context: ServicerContext): ProcessInstanceList&lt;br ALIGN=&quot;LEFT&quot;/&gt;}" target="_blank">
 <polygon fill="#fff4b8" stroke="#8b7355" points="1572,-708.5 1572,-1117.5 1985,-1117.5 1985,-708.5 1572,-708.5"/>
 <text text-anchor="start" x="1738" y="-1105.5" font-family="Helvetica,sans-Serif" font-size="10.00">ProcessManager</text>
 <polyline fill="none" stroke="#8b7355" points="1572,-1098.5 1985,-1098.5 "/>
@@ -216,7 +216,7 @@
 <!-- drunc.process_manager.k8s_process_manager_settings.K8sProcessManagerSettings -->
 <g id="node10" class="node">
 <title>drunc.process_manager.k8s_process_manager_settings.K8sProcessManagerSettings</title>
-<g id="a_node10"><a xlink:href="https://github.com/DUNE-DAQ/drunc/blob/7b6e6444a1ae73bb85f53aac832717885727e287/src/drunc/process_manager/k8s_process_manager_settings.py#L202" xlink:title="{K8sProcessManagerSettings|checking&lt;br ALIGN=&quot;LEFT&quot;/&gt;cleanup&lt;br ALIGN=&quot;LEFT&quot;/&gt;home_path_base : str \| None&lt;br ALIGN=&quot;LEFT&quot;/&gt;host_configs : dict[str, HostConfig]&lt;br ALIGN=&quot;LEFT&quot;/&gt;labels : dict[str, str]&lt;br ALIGN=&quot;LEFT&quot;/&gt;pod_management&lt;br ALIGN=&quot;LEFT&quot;/&gt;readout_app_selector : str&lt;br ALIGN=&quot;LEFT&quot;/&gt;service&lt;br ALIGN=&quot;LEFT&quot;/&gt;volumes : list[VolumeConfig]&lt;br ALIGN=&quot;LEFT&quot;/&gt;|from_raw(raw: object): &#39;K8sProcessManagerSettings&#39;&lt;br ALIGN=&quot;LEFT&quot;/&gt;}" target="_blank">
+<g id="a_node10"><a xlink:href="https://github.com/DUNE-DAQ/drunc/blob/9bfc08bf4c4e33bf96826d83e1c04a7fa5fa6685/src/drunc/process_manager/k8s_process_manager_settings.py#L202" xlink:title="{K8sProcessManagerSettings|checking&lt;br ALIGN=&quot;LEFT&quot;/&gt;cleanup&lt;br ALIGN=&quot;LEFT&quot;/&gt;home_path_base : str \| None&lt;br ALIGN=&quot;LEFT&quot;/&gt;host_configs : dict[str, HostConfig]&lt;br ALIGN=&quot;LEFT&quot;/&gt;labels : dict[str, str]&lt;br ALIGN=&quot;LEFT&quot;/&gt;pod_management&lt;br ALIGN=&quot;LEFT&quot;/&gt;readout_app_selector : str&lt;br ALIGN=&quot;LEFT&quot;/&gt;service&lt;br ALIGN=&quot;LEFT&quot;/&gt;volumes : list[VolumeConfig]&lt;br ALIGN=&quot;LEFT&quot;/&gt;|from_raw(raw: object): &#39;K8sProcessManagerSettings&#39;&lt;br ALIGN=&quot;LEFT&quot;/&gt;}" target="_blank">
 <polygon fill="#fff4b8" stroke="#8b7355" points="450.5,-55.5 450.5,-200.5 724.5,-200.5 724.5,-55.5 450.5,-55.5"/>
 <text text-anchor="start" x="518" y="-188.5" font-family="Helvetica,sans-Serif" font-size="10.00">K8sProcessManagerSettings</text>
 <polyline fill="none" stroke="#8b7355" points="450.5,-181.5 724.5,-181.5 "/>
@@ -251,7 +251,7 @@
 <!-- drunc.process_manager.k8s_process_manager_settings.PodManagementConfig -->
 <g id="node13" class="node">
 <title>drunc.process_manager.k8s_process_manager_settings.PodManagementConfig</title>
-<g id="a_node13"><a xlink:href="https://github.com/DUNE-DAQ/drunc/blob/7b6e6444a1ae73bb85f53aac832717885727e287/src/drunc/process_manager/k8s_process_manager_settings.py#L30" xlink:title="{PodManagementConfig|kill_timeout : int \| float&lt;br ALIGN=&quot;LEFT&quot;/&gt;pod_ready_timeout : int \| float&lt;br ALIGN=&quot;LEFT&quot;/&gt;|}" target="_blank">
+<g id="a_node13"><a xlink:href="https://github.com/DUNE-DAQ/drunc/blob/9bfc08bf4c4e33bf96826d83e1c04a7fa5fa6685/src/drunc/process_manager/k8s_process_manager_settings.py#L30" xlink:title="{PodManagementConfig|kill_timeout : int \| float&lt;br ALIGN=&quot;LEFT&quot;/&gt;pod_ready_timeout : int \| float&lt;br ALIGN=&quot;LEFT&quot;/&gt;|}" target="_blank">
 <polygon fill="#fff4b8" stroke="#8b7355" points="725.5,-448 725.5,-516 889.5,-516 889.5,-448 725.5,-448"/>
 <text text-anchor="start" x="750.5" y="-504" font-family="Helvetica,sans-Serif" font-size="10.00">PodManagementConfig</text>
 <polyline fill="none" stroke="#8b7355" points="725.5,-497 889.5,-497 "/>
@@ -272,7 +272,7 @@
 <!-- drunc.process_manager.k8s_process_manager_settings.ServiceConfig -->
 <g id="node26" class="node">
 <title>drunc.process_manager.k8s_process_manager_settings.ServiceConfig</title>
-<g id="a_node26"><a xlink:href="https://github.com/DUNE-DAQ/drunc/blob/7b6e6444a1ae73bb85f53aac832717885727e287/src/drunc/process_manager/k8s_process_manager_settings.py#L26" xlink:title="{ServiceConfig|headless_discovery_port : int&lt;br ALIGN=&quot;LEFT&quot;/&gt;|}" target="_blank">
+<g id="a_node26"><a xlink:href="https://github.com/DUNE-DAQ/drunc/blob/9bfc08bf4c4e33bf96826d83e1c04a7fa5fa6685/src/drunc/process_manager/k8s_process_manager_settings.py#L26" xlink:title="{ServiceConfig|headless_discovery_port : int&lt;br ALIGN=&quot;LEFT&quot;/&gt;|}" target="_blank">
 <polygon fill="#fff4b8" stroke="#8b7355" points="933,-453.5 933,-510.5 1092,-510.5 1092,-453.5 933,-453.5"/>
 <text text-anchor="start" x="979" y="-498.5" font-family="Helvetica,sans-Serif" font-size="10.00">ServiceConfig</text>
 <polyline fill="none" stroke="#8b7355" points="933,-491.5 1092,-491.5 "/>
@@ -292,7 +292,7 @@
 <!-- drunc.process_manager.process_manager_json_conf.OpMonConfig -->
 <g id="node11" class="node">
 <title>drunc.process_manager.process_manager_json_conf.OpMonConfig</title>
-<g id="a_node11"><a xlink:href="https://github.com/DUNE-DAQ/drunc/blob/7b6e6444a1ae73bb85f53aac832717885727e287/src/drunc/process_manager/process_manager_json_conf.py#L28" xlink:title="{OpMonConfig|interval_s : int \| float&lt;br ALIGN=&quot;LEFT&quot;/&gt;level : str&lt;br ALIGN=&quot;LEFT&quot;/&gt;path : str&lt;br ALIGN=&quot;LEFT&quot;/&gt;type : str&lt;br ALIGN=&quot;LEFT&quot;/&gt;|}" target="_blank">
+<g id="a_node11"><a xlink:href="https://github.com/DUNE-DAQ/drunc/blob/9bfc08bf4c4e33bf96826d83e1c04a7fa5fa6685/src/drunc/process_manager/process_manager_json_conf.py#L28" xlink:title="{OpMonConfig|interval_s : int \| float&lt;br ALIGN=&quot;LEFT&quot;/&gt;level : str&lt;br ALIGN=&quot;LEFT&quot;/&gt;path : str&lt;br ALIGN=&quot;LEFT&quot;/&gt;type : str&lt;br ALIGN=&quot;LEFT&quot;/&gt;|}" target="_blank">
 <polygon fill="#fff4b8" stroke="#8b7355" points="2435,-83 2435,-173 2552,-173 2552,-83 2435,-83"/>
 <text text-anchor="start" x="2460.5" y="-161" font-family="Helvetica,sans-Serif" font-size="10.00">OpMonConfig</text>
 <polyline fill="none" stroke="#8b7355" points="2435,-154 2552,-154 "/>
@@ -308,7 +308,7 @@
 <!-- drunc.process_manager.process_manager_json_conf.OpMonUri -->
 <g id="node12" class="node">
 <title>drunc.process_manager.process_manager_json_conf.OpMonUri</title>
-<g id="a_node12"><a xlink:href="https://github.com/DUNE-DAQ/drunc/blob/7b6e6444a1ae73bb85f53aac832717885727e287/src/drunc/process_manager/process_manager_json_conf.py#L37" xlink:title="{OpMonUri|path : str&lt;br ALIGN=&quot;LEFT&quot;/&gt;type : str&lt;br ALIGN=&quot;LEFT&quot;/&gt;|}" target="_blank">
+<g id="a_node12"><a xlink:href="https://github.com/DUNE-DAQ/drunc/blob/9bfc08bf4c4e33bf96826d83e1c04a7fa5fa6685/src/drunc/process_manager/process_manager_json_conf.py#L37" xlink:title="{OpMonUri|path : str&lt;br ALIGN=&quot;LEFT&quot;/&gt;type : str&lt;br ALIGN=&quot;LEFT&quot;/&gt;|}" target="_blank">
 <polygon fill="#fff4b8" stroke="#8b7355" points="2595,-94 2595,-162 2660,-162 2660,-94 2595,-94"/>
 <text text-anchor="start" x="2603" y="-150" font-family="Helvetica,sans-Serif" font-size="10.00">OpMonUri</text>
 <polyline fill="none" stroke="#8b7355" points="2595,-143 2660,-143 "/>
@@ -322,7 +322,7 @@
 <!-- drunc.process_manager.utils.PrCtlError -->
 <g id="node14" class="node">
 <title>drunc.process_manager.utils.PrCtlError</title>
-<g id="a_node14"><a xlink:href="https://github.com/DUNE-DAQ/drunc/blob/7b6e6444a1ae73bb85f53aac832717885727e287/src/drunc/process_manager/utils.py#L337" xlink:title="{PrCtlError|&lt;br ALIGN=&quot;LEFT&quot;/&gt;|}" target="_blank">
+<g id="a_node14"><a xlink:href="https://github.com/DUNE-DAQ/drunc/blob/9bfc08bf4c4e33bf96826d83e1c04a7fa5fa6685/src/drunc/process_manager/utils.py#L337" xlink:title="{PrCtlError|&lt;br ALIGN=&quot;LEFT&quot;/&gt;|}" target="_blank">
 <polygon fill="#fff4b8" stroke="#8b7355" points="2703,-99 2703,-157 2766,-157 2766,-99 2703,-99"/>
 <text text-anchor="start" x="2711" y="-145" font-family="Helvetica,sans-Serif" font-size="10.00">PrCtlError</text>
 <polyline fill="none" stroke="#8b7355" points="2703,-138 2766,-138 "/>
@@ -334,7 +334,7 @@
 <!-- drunc.process_manager.configuration.ProcessManagerConfHandler -->
 <g id="node16" class="node">
 <title>drunc.process_manager.configuration.ProcessManagerConfHandler</title>
-<g id="a_node16"><a xlink:href="https://github.com/DUNE-DAQ/drunc/blob/7b6e6444a1ae73bb85f53aac832717885727e287/src/drunc/process_manager/configuration.py#L51" xlink:title="{ProcessManagerConfHandler|authoriser : NoneType&lt;br ALIGN=&quot;LEFT&quot;/&gt;broadcaster : NoneType&lt;br ALIGN=&quot;LEFT&quot;/&gt;command_address : str&lt;br ALIGN=&quot;LEFT&quot;/&gt;environment : dict[str, str]&lt;br ALIGN=&quot;LEFT&quot;/&gt;image&lt;br ALIGN=&quot;LEFT&quot;/&gt;initial_data&lt;br ALIGN=&quot;LEFT&quot;/&gt;kill_timeout&lt;br ALIGN=&quot;LEFT&quot;/&gt;log : NoneType, RootLogger&lt;br ALIGN=&quot;LEFT&quot;/&gt;log_path : str&lt;br ALIGN=&quot;LEFT&quot;/&gt;opmon_conf : OpMonConfig \| None&lt;br ALIGN=&quot;LEFT&quot;/&gt;opmon_publisher : NoneType, OpMonPublisher \| KafkaOpMonPublisher \| None&lt;br ALIGN=&quot;LEFT&quot;/&gt;opmon_uri : OpMonUri \| None&lt;br ALIGN=&quot;LEFT&quot;/&gt;pm_type : K8s, SSH_PARAMIKO, SSH_SHELL, Unknown&lt;br ALIGN=&quot;LEFT&quot;/&gt;settings&lt;br ALIGN=&quot;LEFT&quot;/&gt;type : PyObject&lt;br ALIGN=&quot;LEFT&quot;/&gt;|from_json(path: str, session_name: str \| None, log_path: str): Self&lt;br ALIGN=&quot;LEFT&quot;/&gt;get_log_path(): str&lt;br ALIGN=&quot;LEFT&quot;/&gt;populate_from_conf_data(data: ProcessManagerJsonConfData): None&lt;br ALIGN=&quot;LEFT&quot;/&gt;}" target="_blank">
+<g id="a_node16"><a xlink:href="https://github.com/DUNE-DAQ/drunc/blob/9bfc08bf4c4e33bf96826d83e1c04a7fa5fa6685/src/drunc/process_manager/configuration.py#L51" xlink:title="{ProcessManagerConfHandler|authoriser : NoneType&lt;br ALIGN=&quot;LEFT&quot;/&gt;broadcaster : NoneType&lt;br ALIGN=&quot;LEFT&quot;/&gt;command_address : str&lt;br ALIGN=&quot;LEFT&quot;/&gt;environment : dict[str, str]&lt;br ALIGN=&quot;LEFT&quot;/&gt;image&lt;br ALIGN=&quot;LEFT&quot;/&gt;initial_data&lt;br ALIGN=&quot;LEFT&quot;/&gt;kill_timeout&lt;br ALIGN=&quot;LEFT&quot;/&gt;log : NoneType, RootLogger&lt;br ALIGN=&quot;LEFT&quot;/&gt;log_path : str&lt;br ALIGN=&quot;LEFT&quot;/&gt;opmon_conf : OpMonConfig \| None&lt;br ALIGN=&quot;LEFT&quot;/&gt;opmon_publisher : NoneType, OpMonPublisher \| KafkaOpMonPublisher \| None&lt;br ALIGN=&quot;LEFT&quot;/&gt;opmon_uri : OpMonUri \| None&lt;br ALIGN=&quot;LEFT&quot;/&gt;pm_type : K8s, SSH_PARAMIKO, SSH_SHELL, Unknown&lt;br ALIGN=&quot;LEFT&quot;/&gt;settings&lt;br ALIGN=&quot;LEFT&quot;/&gt;type : PyObject&lt;br ALIGN=&quot;LEFT&quot;/&gt;|from_json(path: str, session_name: str \| None, log_path: str): Self&lt;br ALIGN=&quot;LEFT&quot;/&gt;get_log_path(): str&lt;br ALIGN=&quot;LEFT&quot;/&gt;populate_from_conf_data(data: ProcessManagerJsonConfData): None&lt;br ALIGN=&quot;LEFT&quot;/&gt;}" target="_blank">
 <polygon fill="#fff4b8" stroke="#8b7355" points="1581.5,-365.5 1581.5,-598.5 1975.5,-598.5 1975.5,-365.5 1581.5,-365.5"/>
 <text text-anchor="start" x="1707.5" y="-586.5" font-family="Helvetica,sans-Serif" font-size="10.00">ProcessManagerConfHandler</text>
 <polyline fill="none" stroke="#8b7355" points="1581.5,-579.5 1975.5,-579.5 "/>
@@ -370,7 +370,7 @@
 <!-- drunc.process_manager.interface.context.ProcessManagerContext -->
 <g id="node17" class="node">
 <title>drunc.process_manager.interface.context.ProcessManagerContext</title>
-<g id="a_node17"><a xlink:href="https://github.com/DUNE-DAQ/drunc/blob/7b6e6444a1ae73bb85f53aac832717885727e287/src/drunc/process_manager/interface/context.py#L13" xlink:title="{ProcessManagerContext|address : str&lt;br ALIGN=&quot;LEFT&quot;/&gt;shell_id : str&lt;br ALIGN=&quot;LEFT&quot;/&gt;status_receiver : NoneType&lt;br ALIGN=&quot;LEFT&quot;/&gt;|create_drivers(): MutableMapping[str, object]&lt;br ALIGN=&quot;LEFT&quot;/&gt;create_token(): Token&lt;br ALIGN=&quot;LEFT&quot;/&gt;reset(): None&lt;br ALIGN=&quot;LEFT&quot;/&gt;terminate(): None&lt;br ALIGN=&quot;LEFT&quot;/&gt;}" target="_blank">
+<g id="a_node17"><a xlink:href="https://github.com/DUNE-DAQ/drunc/blob/9bfc08bf4c4e33bf96826d83e1c04a7fa5fa6685/src/drunc/process_manager/interface/context.py#L13" xlink:title="{ProcessManagerContext|address : str&lt;br ALIGN=&quot;LEFT&quot;/&gt;shell_id : str&lt;br ALIGN=&quot;LEFT&quot;/&gt;status_receiver : NoneType&lt;br ALIGN=&quot;LEFT&quot;/&gt;|create_drivers(): MutableMapping[str, object]&lt;br ALIGN=&quot;LEFT&quot;/&gt;create_token(): Token&lt;br ALIGN=&quot;LEFT&quot;/&gt;reset(): None&lt;br ALIGN=&quot;LEFT&quot;/&gt;terminate(): None&lt;br ALIGN=&quot;LEFT&quot;/&gt;}" target="_blank">
 <polygon fill="#fff4b8" stroke="#8b7355" points="2809.5,-72 2809.5,-184 3047.5,-184 3047.5,-72 2809.5,-72"/>
 <text text-anchor="start" x="2869" y="-172" font-family="Helvetica,sans-Serif" font-size="10.00">ProcessManagerContext</text>
 <polyline fill="none" stroke="#8b7355" points="2809.5,-165 3047.5,-165 "/>
@@ -388,7 +388,7 @@
 <!-- drunc.process_manager.process_manager_driver.ProcessManagerDriver -->
 <g id="node18" class="node">
 <title>drunc.process_manager.process_manager_driver.ProcessManagerDriver</title>
-<g id="a_node18"><a xlink:href="https://github.com/DUNE-DAQ/drunc/blob/7b6e6444a1ae73bb85f53aac832717885727e287/src/drunc/process_manager/process_manager_driver.py#L56" xlink:title="{ProcessManagerDriver|address : str&lt;br ALIGN=&quot;LEFT&quot;/&gt;channel : _Channel&lt;br ALIGN=&quot;LEFT&quot;/&gt;controller_address : str&lt;br ALIGN=&quot;LEFT&quot;/&gt;log : NoneType, RootLogger&lt;br ALIGN=&quot;LEFT&quot;/&gt;stub&lt;br ALIGN=&quot;LEFT&quot;/&gt;token&lt;br ALIGN=&quot;LEFT&quot;/&gt;|boot(conf_file: str, conf_id: str, user: str, session_name: str, log_level: str \| None, override_logs: bool, timeout: int \| float, sleep_between_app_boot: int \| float): Iterator[ProcessInstanceList]&lt;br ALIGN=&quot;LEFT&quot;/&gt;check_port_conflicts(db: conffwk.Configuration, session_dal: &#39;conffwk.dal.Session&#39;): tuple[conffwk.Configuration, &#39;conffwk.dal.Session&#39;]&lt;br ALIGN=&quot;LEFT&quot;/&gt;close(): None&lt;br ALIGN=&quot;LEFT&quot;/&gt;describe(timeout: int \| float): Description&lt;br ALIGN=&quot;LEFT&quot;/&gt;dummy_boot(user: str, session_name: str, n_processes: int, sleep: int, n_sleeps: int, timeout: int \| float): Iterator[ProcessInstanceList]&lt;br ALIGN=&quot;LEFT&quot;/&gt;flush(request: ProcessQuery, timeout: int \| float): ProcessInstanceList&lt;br ALIGN=&quot;LEFT&quot;/&gt;kill(request: ProcessQuery, timeout: int \| float): ProcessInstanceList&lt;br ALIGN=&quot;LEFT&quot;/&gt;logs(request: LogRequest, timeout: int \| float): LogLines \| None&lt;br ALIGN=&quot;LEFT&quot;/&gt;ps(request: ProcessQuery, timeout: int \| float): ProcessInstanceList&lt;br ALIGN=&quot;LEFT&quot;/&gt;resolve_localhost(session_dal)&lt;br ALIGN=&quot;LEFT&quot;/&gt;restart(request: ProcessQuery, timeout: int \| float): ProcessInstanceList&lt;br ALIGN=&quot;LEFT&quot;/&gt;send_log(text: str, severity: str, logger: int, target: str, execute_along_path: bool, execute_on_all_subsequent_children_in_path: bool, timeout: int \| float): SendLogResponse&lt;br ALIGN=&quot;LEFT&quot;/&gt;terminate(timeout: int \| float): ProcessInstanceList&lt;br ALIGN=&quot;LEFT&quot;/&gt;update_controller_logs(ctrl_dal: &#39;conffwk.dal.Session&#39;, level: str)&lt;br ALIGN=&quot;LEFT&quot;/&gt;}" target="_blank">
+<g id="a_node18"><a xlink:href="https://github.com/DUNE-DAQ/drunc/blob/9bfc08bf4c4e33bf96826d83e1c04a7fa5fa6685/src/drunc/process_manager/process_manager_driver.py#L56" xlink:title="{ProcessManagerDriver|address : str&lt;br ALIGN=&quot;LEFT&quot;/&gt;channel : _Channel&lt;br ALIGN=&quot;LEFT&quot;/&gt;controller_address : str&lt;br ALIGN=&quot;LEFT&quot;/&gt;log : NoneType, RootLogger&lt;br ALIGN=&quot;LEFT&quot;/&gt;stub&lt;br ALIGN=&quot;LEFT&quot;/&gt;token&lt;br ALIGN=&quot;LEFT&quot;/&gt;|boot(conf_file: str, conf_id: str, user: str, session_name: str, log_level: str \| None, override_logs: bool, timeout: int \| float, sleep_between_app_boot: int \| float): Iterator[ProcessInstanceList]&lt;br ALIGN=&quot;LEFT&quot;/&gt;check_port_conflicts(db: conffwk.Configuration, session_dal: &#39;conffwk.dal.Session&#39;): tuple[conffwk.Configuration, &#39;conffwk.dal.Session&#39;]&lt;br ALIGN=&quot;LEFT&quot;/&gt;close(): None&lt;br ALIGN=&quot;LEFT&quot;/&gt;describe(timeout: int \| float): Description&lt;br ALIGN=&quot;LEFT&quot;/&gt;dummy_boot(user: str, session_name: str, n_processes: int, sleep: int, n_sleeps: int, timeout: int \| float): Iterator[ProcessInstanceList]&lt;br ALIGN=&quot;LEFT&quot;/&gt;flush(request: ProcessQuery, timeout: int \| float): ProcessInstanceList&lt;br ALIGN=&quot;LEFT&quot;/&gt;kill(request: ProcessQuery, timeout: int \| float): ProcessInstanceList&lt;br ALIGN=&quot;LEFT&quot;/&gt;logs(request: LogRequest, timeout: int \| float): LogLines \| None&lt;br ALIGN=&quot;LEFT&quot;/&gt;ps(request: ProcessQuery, timeout: int \| float): ProcessInstanceList&lt;br ALIGN=&quot;LEFT&quot;/&gt;resolve_localhost(session_dal)&lt;br ALIGN=&quot;LEFT&quot;/&gt;restart(request: ProcessQuery, timeout: int \| float): ProcessInstanceList&lt;br ALIGN=&quot;LEFT&quot;/&gt;send_log(text: str, severity: str, logger: int, target: str, execute_along_path: bool, execute_on_all_subsequent_children_in_path: bool, timeout: int \| float): SendLogResponse&lt;br ALIGN=&quot;LEFT&quot;/&gt;terminate(timeout: int \| float): ProcessInstanceList&lt;br ALIGN=&quot;LEFT&quot;/&gt;update_controller_logs(ctrl_dal: &#39;conffwk.dal.Session&#39;, level: str)&lt;br ALIGN=&quot;LEFT&quot;/&gt;}" target="_blank">
 <polygon fill="#fff4b8" stroke="#8b7355" points="3091,-0.5 3091,-255.5 4018,-255.5 4018,-0.5 3091,-0.5"/>
 <text text-anchor="start" x="3499" y="-243.5" font-family="Helvetica,sans-Serif" font-size="10.00">ProcessManagerDriver</text>
 <polyline fill="none" stroke="#8b7355" points="3091,-236.5 4018,-236.5 "/>
@@ -419,7 +419,7 @@
 <!-- drunc.process_manager.process_manager_json_conf.ProcessManagerJsonConfData -->
 <g id="node19" class="node">
 <title>drunc.process_manager.process_manager_json_conf.ProcessManagerJsonConfData</title>
-<g id="a_node19"><a xlink:href="https://github.com/DUNE-DAQ/drunc/blob/7b6e6444a1ae73bb85f53aac832717885727e287/src/drunc/process_manager/process_manager_json_conf.py#L101" xlink:title="{ProcessManagerJsonConfData|environment : dict[str, str]&lt;br ALIGN=&quot;LEFT&quot;/&gt;image : str&lt;br ALIGN=&quot;LEFT&quot;/&gt;kill_timeout : float&lt;br ALIGN=&quot;LEFT&quot;/&gt;opmon_conf : OpMonConfig \| None&lt;br ALIGN=&quot;LEFT&quot;/&gt;opmon_uri : OpMonUri \| None&lt;br ALIGN=&quot;LEFT&quot;/&gt;settings&lt;br ALIGN=&quot;LEFT&quot;/&gt;type : str&lt;br ALIGN=&quot;LEFT&quot;/&gt;|from_raw(raw: object): &#39;ProcessManagerJsonConfData&#39;&lt;br ALIGN=&quot;LEFT&quot;/&gt;}" target="_blank">
+<g id="a_node19"><a xlink:href="https://github.com/DUNE-DAQ/drunc/blob/9bfc08bf4c4e33bf96826d83e1c04a7fa5fa6685/src/drunc/process_manager/process_manager_json_conf.py#L101" xlink:title="{ProcessManagerJsonConfData|environment : dict[str, str]&lt;br ALIGN=&quot;LEFT&quot;/&gt;image : str&lt;br ALIGN=&quot;LEFT&quot;/&gt;kill_timeout : float&lt;br ALIGN=&quot;LEFT&quot;/&gt;opmon_conf : OpMonConfig \| None&lt;br ALIGN=&quot;LEFT&quot;/&gt;opmon_uri : OpMonUri \| None&lt;br ALIGN=&quot;LEFT&quot;/&gt;settings&lt;br ALIGN=&quot;LEFT&quot;/&gt;type : str&lt;br ALIGN=&quot;LEFT&quot;/&gt;|from_raw(raw: object): &#39;ProcessManagerJsonConfData&#39;&lt;br ALIGN=&quot;LEFT&quot;/&gt;}" target="_blank">
 <polygon fill="#fff4b8" stroke="#8b7355" points="1637.5,-66.5 1637.5,-189.5 1919.5,-189.5 1919.5,-66.5 1637.5,-66.5"/>
 <text text-anchor="start" x="1705" y="-177.5" font-family="Helvetica,sans-Serif" font-size="10.00">ProcessManagerJsonConfData</text>
 <polyline fill="none" stroke="#8b7355" points="1637.5,-170.5 1919.5,-170.5 "/>
@@ -445,7 +445,7 @@
 <!-- drunc.process_manager.configuration.ProcessManagerRunningMode -->
 <g id="node20" class="node">
 <title>drunc.process_manager.configuration.ProcessManagerRunningMode</title>
-<g id="a_node20"><a xlink:href="https://github.com/DUNE-DAQ/drunc/blob/7b6e6444a1ae73bb85f53aac832717885727e287/src/drunc/process_manager/configuration.py#L45" xlink:title="{ProcessManagerRunningMode|name&lt;br ALIGN=&quot;LEFT&quot;/&gt;|}" target="_blank">
+<g id="a_node20"><a xlink:href="https://github.com/DUNE-DAQ/drunc/blob/9bfc08bf4c4e33bf96826d83e1c04a7fa5fa6685/src/drunc/process_manager/configuration.py#L45" xlink:title="{ProcessManagerRunningMode|name&lt;br ALIGN=&quot;LEFT&quot;/&gt;|}" target="_blank">
 <polygon fill="#fff4b8" stroke="#8b7355" points="4061.5,-99.5 4061.5,-156.5 4225.5,-156.5 4225.5,-99.5 4061.5,-99.5"/>
 <text text-anchor="start" x="4069.5" y="-144.5" font-family="Helvetica,sans-Serif" font-size="10.00">ProcessManagerRunningMode</text>
 <polyline fill="none" stroke="#8b7355" points="4061.5,-137.5 4225.5,-137.5 "/>
@@ -458,7 +458,7 @@
 <!-- drunc.process_manager.configuration.ProcessManagerTypes -->
 <g id="node21" class="node">
 <title>drunc.process_manager.configuration.ProcessManagerTypes</title>
-<g id="a_node21"><a xlink:href="https://github.com/DUNE-DAQ/drunc/blob/7b6e6444a1ae73bb85f53aac832717885727e287/src/drunc/process_manager/configuration.py#L38" xlink:title="{ProcessManagerTypes|name&lt;br ALIGN=&quot;LEFT&quot;/&gt;|}" target="_blank">
+<g id="a_node21"><a xlink:href="https://github.com/DUNE-DAQ/drunc/blob/9bfc08bf4c4e33bf96826d83e1c04a7fa5fa6685/src/drunc/process_manager/configuration.py#L38" xlink:title="{ProcessManagerTypes|name&lt;br ALIGN=&quot;LEFT&quot;/&gt;|}" target="_blank">
 <polygon fill="#fff4b8" stroke="#8b7355" points="4269,-99.5 4269,-156.5 4394,-156.5 4394,-99.5 4269,-99.5"/>
 <text text-anchor="start" x="4277" y="-144.5" font-family="Helvetica,sans-Serif" font-size="10.00">ProcessManagerTypes</text>
 <polyline fill="none" stroke="#8b7355" points="4269,-137.5 4394,-137.5 "/>
@@ -471,7 +471,7 @@
 <!-- drunc.process_manager.ssh_process_manager.SSHProcessManager -->
 <g id="node22" class="node">
 <title>drunc.process_manager.ssh_process_manager.SSHProcessManager</title>
-<g id="a_node22"><a xlink:href="https://github.com/DUNE-DAQ/drunc/blob/7b6e6444a1ae73bb85f53aac832717885727e287/src/drunc/process_manager/ssh_process_manager.py#L34" xlink:title="{SSHProcessManager|archived_exit_statuses : dict[str, ExitStatus]&lt;br ALIGN=&quot;LEFT&quot;/&gt;boot_request_lock : lock&lt;br ALIGN=&quot;LEFT&quot;/&gt;disable_host_key_check : bool&lt;br ALIGN=&quot;LEFT&quot;/&gt;disable_localhost_host_key_check : bool&lt;br ALIGN=&quot;LEFT&quot;/&gt;log : NoneType, RootLogger&lt;br ALIGN=&quot;LEFT&quot;/&gt;pm_type : SSH_SHELL&lt;br ALIGN=&quot;LEFT&quot;/&gt;session&lt;br ALIGN=&quot;LEFT&quot;/&gt;ssh_lifetime_manager : Optional[ProcessLifetimeManager]&lt;br ALIGN=&quot;LEFT&quot;/&gt;|kill_processes(uuids: list): ProcessInstanceList&lt;br ALIGN=&quot;LEFT&quot;/&gt;notify_join(name, session, user, exit_status: ExitStatus)&lt;br ALIGN=&quot;LEFT&quot;/&gt;}" target="_blank">
+<g id="a_node22"><a xlink:href="https://github.com/DUNE-DAQ/drunc/blob/9bfc08bf4c4e33bf96826d83e1c04a7fa5fa6685/src/drunc/process_manager/ssh_process_manager.py#L34" xlink:title="{SSHProcessManager|archived_exit_statuses : dict[str, ExitStatus]&lt;br ALIGN=&quot;LEFT&quot;/&gt;boot_request_lock : lock&lt;br ALIGN=&quot;LEFT&quot;/&gt;disable_host_key_check : bool&lt;br ALIGN=&quot;LEFT&quot;/&gt;disable_localhost_host_key_check : bool&lt;br ALIGN=&quot;LEFT&quot;/&gt;log : NoneType, RootLogger&lt;br ALIGN=&quot;LEFT&quot;/&gt;pm_type : SSH_SHELL&lt;br ALIGN=&quot;LEFT&quot;/&gt;session&lt;br ALIGN=&quot;LEFT&quot;/&gt;ssh_lifetime_manager : Optional[ProcessLifetimeManager]&lt;br ALIGN=&quot;LEFT&quot;/&gt;|kill_processes(uuids: list): ProcessInstanceList&lt;br ALIGN=&quot;LEFT&quot;/&gt;notify_join(name, session, user, exit_status: ExitStatus)&lt;br ALIGN=&quot;LEFT&quot;/&gt;}" target="_blank">
 <polygon fill="#fff4b8" stroke="#8b7355" points="2018.5,-409.5 2018.5,-554.5 2322.5,-554.5 2322.5,-409.5 2018.5,-409.5"/>
 <text text-anchor="start" x="2120.5" y="-542.5" font-family="Helvetica,sans-Serif" font-size="10.00">SSHProcessManager</text>
 <polyline fill="none" stroke="#8b7355" points="2018.5,-535.5 2322.5,-535.5 "/>
@@ -498,7 +498,7 @@
 <!-- drunc.process_manager.ssh_process_manager_paramiko_client.SSHProcessManagerParamikoClient -->
 <g id="node23" class="node">
 <title>drunc.process_manager.ssh_process_manager_paramiko_client.SSHProcessManagerParamikoClient</title>
-<g id="a_node23"><a xlink:href="https://github.com/DUNE-DAQ/drunc/blob/7b6e6444a1ae73bb85f53aac832717885727e287/src/drunc/process_manager/ssh_process_manager_paramiko_client.py#L11" xlink:title="{SSHProcessManagerParamikoClient|&lt;br ALIGN=&quot;LEFT&quot;/&gt;|}" target="_blank">
+<g id="a_node23"><a xlink:href="https://github.com/DUNE-DAQ/drunc/blob/9bfc08bf4c4e33bf96826d83e1c04a7fa5fa6685/src/drunc/process_manager/ssh_process_manager_paramiko_client.py#L11" xlink:title="{SSHProcessManagerParamikoClient|&lt;br ALIGN=&quot;LEFT&quot;/&gt;|}" target="_blank">
 <polygon fill="#fff4b8" stroke="#8b7355" points="2018.5,-99 2018.5,-157 2208.5,-157 2208.5,-99 2018.5,-99"/>
 <text text-anchor="start" x="2026.5" y="-145" font-family="Helvetica,sans-Serif" font-size="10.00">SSHProcessManagerParamikoClient</text>
 <polyline fill="none" stroke="#8b7355" points="2018.5,-138 2208.5,-138 "/>
@@ -516,7 +516,7 @@
 <!-- drunc.process_manager.ssh_process_manager_settings.SSHProcessManagerSettings -->
 <g id="node24" class="node">
 <title>drunc.process_manager.ssh_process_manager_settings.SSHProcessManagerSettings</title>
-<g id="a_node24"><a xlink:href="https://github.com/DUNE-DAQ/drunc/blob/7b6e6444a1ae73bb85f53aac832717885727e287/src/drunc/process_manager/ssh_process_manager_settings.py#L20" xlink:title="{SSHProcessManagerSettings|disable_host_key_check : bool&lt;br ALIGN=&quot;LEFT&quot;/&gt;disable_localhost_host_key_check : bool&lt;br ALIGN=&quot;LEFT&quot;/&gt;|from_raw(raw: object): &#39;SSHProcessManagerSettings&#39;&lt;br ALIGN=&quot;LEFT&quot;/&gt;}" target="_blank">
+<g id="a_node24"><a xlink:href="https://github.com/DUNE-DAQ/drunc/blob/9bfc08bf4c4e33bf96826d83e1c04a7fa5fa6685/src/drunc/process_manager/ssh_process_manager_settings.py#L20" xlink:title="{SSHProcessManagerSettings|disable_host_key_check : bool&lt;br ALIGN=&quot;LEFT&quot;/&gt;disable_localhost_host_key_check : bool&lt;br ALIGN=&quot;LEFT&quot;/&gt;|from_raw(raw: object): &#39;SSHProcessManagerSettings&#39;&lt;br ALIGN=&quot;LEFT&quot;/&gt;}" target="_blank">
 <polygon fill="#fff4b8" stroke="#8b7355" points="4437,-94 4437,-162 4712,-162 4712,-94 4437,-94"/>
 <text text-anchor="start" x="4504.5" y="-150" font-family="Helvetica,sans-Serif" font-size="10.00">SSHProcessManagerSettings</text>
 <polyline fill="none" stroke="#8b7355" points="4437,-143 4712,-143 "/>
@@ -530,7 +530,7 @@
 <!-- drunc.process_manager.ssh_process_manager_shell.SSHProcessManagerShell -->
 <g id="node25" class="node">
 <title>drunc.process_manager.ssh_process_manager_shell.SSHProcessManagerShell</title>
-<g id="a_node25"><a xlink:href="https://github.com/DUNE-DAQ/drunc/blob/7b6e6444a1ae73bb85f53aac832717885727e287/src/drunc/process_manager/ssh_process_manager_shell.py#L8" xlink:title="{SSHProcessManagerShell|&lt;br ALIGN=&quot;LEFT&quot;/&gt;|}" target="_blank">
+<g id="a_node25"><a xlink:href="https://github.com/DUNE-DAQ/drunc/blob/9bfc08bf4c4e33bf96826d83e1c04a7fa5fa6685/src/drunc/process_manager/ssh_process_manager_shell.py#L8" xlink:title="{SSHProcessManagerShell|&lt;br ALIGN=&quot;LEFT&quot;/&gt;|}" target="_blank">
 <polygon fill="#fff4b8" stroke="#8b7355" points="2251.5,-99 2251.5,-157 2391.5,-157 2391.5,-99 2251.5,-99"/>
 <text text-anchor="start" x="2259.5" y="-145" font-family="Helvetica,sans-Serif" font-size="10.00">SSHProcessManagerShell</text>
 <polyline fill="none" stroke="#8b7355" points="2251.5,-138 2391.5,-138 "/>
@@ -548,7 +548,7 @@
 <!-- drunc.process_manager.exceptions.UnknownProcessManagerType -->
 <g id="node27" class="node">
 <title>drunc.process_manager.exceptions.UnknownProcessManagerType</title>
-<g id="a_node27"><a xlink:href="https://github.com/DUNE-DAQ/drunc/blob/7b6e6444a1ae73bb85f53aac832717885727e287/src/drunc/process_manager/exceptions.py#L4" xlink:title="{UnknownProcessManagerType|&lt;br ALIGN=&quot;LEFT&quot;/&gt;|}" target="_blank">
+<g id="a_node27"><a xlink:href="https://github.com/DUNE-DAQ/drunc/blob/9bfc08bf4c4e33bf96826d83e1c04a7fa5fa6685/src/drunc/process_manager/exceptions.py#L4" xlink:title="{UnknownProcessManagerType|&lt;br ALIGN=&quot;LEFT&quot;/&gt;|}" target="_blank">
 <polygon fill="#fff4b8" stroke="#8b7355" points="4755,-99 4755,-157 4920,-157 4920,-99 4755,-99"/>
 <text text-anchor="start" x="4763" y="-145" font-family="Helvetica,sans-Serif" font-size="10.00">UnknownProcessManagerType</text>
 <polyline fill="none" stroke="#8b7355" points="4755,-138 4920,-138 "/>
@@ -560,7 +560,7 @@
 <!-- drunc.process_manager.k8s_process_manager_settings.VolumeConfig -->
 <g id="node28" class="node">
 <title>drunc.process_manager.k8s_process_manager_settings.VolumeConfig</title>
-<g id="a_node28"><a xlink:href="https://github.com/DUNE-DAQ/drunc/blob/7b6e6444a1ae73bb85f53aac832717885727e287/src/drunc/process_manager/k8s_process_manager_settings.py#L49" xlink:title="{VolumeConfig|host_path : str&lt;br ALIGN=&quot;LEFT&quot;/&gt;mount_path : str&lt;br ALIGN=&quot;LEFT&quot;/&gt;name : str&lt;br ALIGN=&quot;LEFT&quot;/&gt;read_only : bool&lt;br ALIGN=&quot;LEFT&quot;/&gt;|}" target="_blank">
+<g id="a_node28"><a xlink:href="https://github.com/DUNE-DAQ/drunc/blob/9bfc08bf4c4e33bf96826d83e1c04a7fa5fa6685/src/drunc/process_manager/k8s_process_manager_settings.py#L49" xlink:title="{VolumeConfig|host_path : str&lt;br ALIGN=&quot;LEFT&quot;/&gt;mount_path : str&lt;br ALIGN=&quot;LEFT&quot;/&gt;name : str&lt;br ALIGN=&quot;LEFT&quot;/&gt;read_only : bool&lt;br ALIGN=&quot;LEFT&quot;/&gt;|}" target="_blank">
 <polygon fill="#fff4b8" stroke="#8b7355" points="4963,-83 4963,-173 5060,-173 5060,-83 4963,-83"/>
 <text text-anchor="start" x="4977.5" y="-161" font-family="Helvetica,sans-Serif" font-size="10.00">VolumeConfig</text>
 <polyline fill="none" stroke="#8b7355" points="4963,-154 5060,-154 "/>
@@ -576,7 +576,7 @@
 <!-- drunc.process_manager.k8s_process_manager._LcsSessionState -->
 <g id="node29" class="node">
 <title>drunc.process_manager.k8s_process_manager._LcsSessionState</title>
-<g id="a_node29"><a xlink:href="https://github.com/DUNE-DAQ/drunc/blob/7b6e6444a1ae73bb85f53aac832717885727e287/src/drunc/process_manager/k8s_process_manager.py#L57" xlink:title="{_LcsSessionState|cluster_ip : str \| None&lt;br ALIGN=&quot;LEFT&quot;/&gt;is_booted : bool&lt;br ALIGN=&quot;LEFT&quot;/&gt;node_port : int \| None&lt;br ALIGN=&quot;LEFT&quot;/&gt;podname : str \| None&lt;br ALIGN=&quot;LEFT&quot;/&gt;|}" target="_blank">
+<g id="a_node29"><a xlink:href="https://github.com/DUNE-DAQ/drunc/blob/9bfc08bf4c4e33bf96826d83e1c04a7fa5fa6685/src/drunc/process_manager/k8s_process_manager.py#L57" xlink:title="{_LcsSessionState|cluster_ip : str \| None&lt;br ALIGN=&quot;LEFT&quot;/&gt;is_booted : bool&lt;br ALIGN=&quot;LEFT&quot;/&gt;node_port : int \| None&lt;br ALIGN=&quot;LEFT&quot;/&gt;podname : str \| None&lt;br ALIGN=&quot;LEFT&quot;/&gt;|}" target="_blank">
 <polygon fill="#fff4b8" stroke="#8b7355" points="5103.5,-83 5103.5,-173 5225.5,-173 5225.5,-83 5103.5,-83"/>
 <text text-anchor="start" x="5122" y="-161" font-family="Helvetica,sans-Serif" font-size="10.00">_LcsSessionState</text>
 <polyline fill="none" stroke="#8b7355" points="5103.5,-154 5225.5,-154 "/>

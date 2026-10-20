@@ -12,7 +12,7 @@
 <!-- drunc.session_manager -->
 <g id="node1" class="node">
 <title>drunc.session_manager</title>
-<g id="a_node1"><a xlink:href="https://github.com/DUNE-DAQ/drunc/blob/7b6e6444a1ae73bb85f53aac832717885727e287/src/drunc/session_manager/__init__.py" xlink:title="drunc.session_manager" target="_blank">
+<g id="a_node1"><a xlink:href="https://github.com/DUNE-DAQ/drunc/blob/9bfc08bf4c4e33bf96826d83e1c04a7fa5fa6685/src/drunc/session_manager/__init__.py" xlink:title="drunc.session_manager" target="_blank">
 <polygon fill="#fff4b8" stroke="#8b7355" points="132,-36 0,-36 0,0 132,0 132,-36"/>
 <text text-anchor="middle" x="66" y="-15.5" font-family="Helvetica,sans-Serif" font-size="10.00">drunc.session_manager</text>
 </a>
@@ -21,7 +21,7 @@
 <!-- drunc.session_manager.configuration -->
 <g id="node2" class="node">
 <title>drunc.session_manager.configuration</title>
-<g id="a_node2"><a xlink:href="https://github.com/DUNE-DAQ/drunc/blob/7b6e6444a1ae73bb85f53aac832717885727e287/src/drunc/session_manager/configuration.py" xlink:title="drunc.session_manager.configuration" target="_blank">
+<g id="a_node2"><a xlink:href="https://github.com/DUNE-DAQ/drunc/blob/9bfc08bf4c4e33bf96826d83e1c04a7fa5fa6685/src/drunc/session_manager/configuration.py" xlink:title="drunc.session_manager.configuration" target="_blank">
 <polygon fill="#fff4b8" stroke="#8b7355" points="407,-238 209,-238 209,-202 407,-202 407,-238"/>
 <text text-anchor="middle" x="308" y="-217.5" font-family="Helvetica,sans-Serif" font-size="10.00">drunc.session_manager.configuration</text>
 </a>
@@ -30,7 +30,7 @@
 <!-- drunc.session_manager.exceptions -->
 <g id="node3" class="node">
 <title>drunc.session_manager.exceptions</title>
-<g id="a_node3"><a xlink:href="https://github.com/DUNE-DAQ/drunc/blob/7b6e6444a1ae73bb85f53aac832717885727e287/src/drunc/session_manager/exceptions.py" xlink:title="drunc.session_manager.exceptions" target="_blank">
+<g id="a_node3"><a xlink:href="https://github.com/DUNE-DAQ/drunc/blob/9bfc08bf4c4e33bf96826d83e1c04a7fa5fa6685/src/drunc/session_manager/exceptions.py" xlink:title="drunc.session_manager.exceptions" target="_blank">
 <polygon fill="#fff4b8" stroke="#8b7355" points="672,-36 484,-36 484,0 672,0 672,-36"/>
 <text text-anchor="middle" x="578" y="-15.5" font-family="Helvetica,sans-Serif" font-size="10.00">drunc.session_manager.exceptions</text>
 </a>
@@ -39,7 +39,7 @@
 <!-- drunc.session_manager.interface -->
 <g id="node4" class="node">
 <title>drunc.session_manager.interface</title>
-<g id="a_node4"><a xlink:href="https://github.com/DUNE-DAQ/drunc/blob/7b6e6444a1ae73bb85f53aac832717885727e287/src/drunc/session_manager/interface/__init__.py" xlink:title="drunc.session_manager.interface" target="_blank">
+<g id="a_node4"><a xlink:href="https://github.com/DUNE-DAQ/drunc/blob/9bfc08bf4c4e33bf96826d83e1c04a7fa5fa6685/src/drunc/session_manager/interface/__init__.py" xlink:title="drunc.session_manager.interface" target="_blank">
 <polygon fill="#fff4b8" stroke="#8b7355" points="893,-36 715,-36 715,0 893,0 893,-36"/>
 <text text-anchor="middle" x="804" y="-15.5" font-family="Helvetica,sans-Serif" font-size="10.00">drunc.session_manager.interface</text>
 </a>
@@ -48,7 +48,7 @@
 <!-- drunc.session_manager.interface.commands -->
 <g id="node5" class="node">
 <title>drunc.session_manager.interface.commands</title>
-<g id="a_node5"><a xlink:href="https://github.com/DUNE-DAQ/drunc/blob/7b6e6444a1ae73bb85f53aac832717885727e287/src/drunc/session_manager/interface/commands.py" xlink:title="drunc.session_manager.interface.commands" target="_blank">
+<g id="a_node5"><a xlink:href="https://github.com/DUNE-DAQ/drunc/blob/9bfc08bf4c4e33bf96826d83e1c04a7fa5fa6685/src/drunc/session_manager/interface/commands.py" xlink:title="drunc.session_manager.interface.commands" target="_blank">
 <polygon fill="#fff4b8" stroke="#8b7355" points="1155.5,-137 920.5,-137 920.5,-101 1155.5,-101 1155.5,-137"/>
 <text text-anchor="middle" x="1038" y="-116.5" font-family="Helvetica,sans-Serif" font-size="10.00">drunc.session_manager.interface.commands</text>
 </a>
@@ -57,7 +57,7 @@
 <!-- drunc.session_manager.interface.context -->
 <g id="node6" class="node">
 <title>drunc.session_manager.interface.context</title>
-<g id="a_node6"><a xlink:href="https://github.com/DUNE-DAQ/drunc/blob/7b6e6444a1ae73bb85f53aac832717885727e287/src/drunc/session_manager/interface/context.py" xlink:title="drunc.session_manager.interface.context" target="_blank">
+<g id="a_node6"><a xlink:href="https://github.com/DUNE-DAQ/drunc/blob/9bfc08bf4c4e33bf96826d83e1c04a7fa5fa6685/src/drunc/session_manager/interface/context.py" xlink:title="drunc.session_manager.interface.context" target="_blank">
 <polygon fill="#fff4b8" stroke="#8b7355" points="1435,-36 1217,-36 1217,0 1435,0 1435,-36"/>
 <text text-anchor="middle" x="1326" y="-15.5" font-family="Helvetica,sans-Serif" font-size="10.00">drunc.session_manager.interface.context</text>
 </a>
@@ -66,7 +66,7 @@
 <!-- drunc.session_manager.session_manager_driver -->
 <g id="node10" class="node">
 <title>drunc.session_manager.session_manager_driver</title>
-<g id="a_node10"><a xlink:href="https://github.com/DUNE-DAQ/drunc/blob/7b6e6444a1ae73bb85f53aac832717885727e287/src/drunc/session_manager/session_manager_driver.py" xlink:title="drunc.session_manager.session_manager_driver" target="_blank">
+<g id="a_node10"><a xlink:href="https://github.com/DUNE-DAQ/drunc/blob/9bfc08bf4c4e33bf96826d83e1c04a7fa5fa6685/src/drunc/session_manager/session_manager_driver.py" xlink:title="drunc.session_manager.session_manager_driver" target="_blank">
 <polygon fill="#fff4b8" stroke="#8b7355" points="1453,-137 1199,-137 1199,-101 1453,-101 1453,-137"/>
 <text text-anchor="middle" x="1326" y="-116.5" font-family="Helvetica,sans-Serif" font-size="10.00">drunc.session_manager.session_manager_driver</text>
 </a>
@@ -81,7 +81,7 @@
 <!-- drunc.session_manager.interface.session_manager -->
 <g id="node7" class="node">
 <title>drunc.session_manager.interface.session_manager</title>
-<g id="a_node7"><a xlink:href="https://github.com/DUNE-DAQ/drunc/blob/7b6e6444a1ae73bb85f53aac832717885727e287/src/drunc/session_manager/interface/session_manager.py" xlink:title="drunc.session_manager.interface.session_manager" target="_blank">
+<g id="a_node7"><a xlink:href="https://github.com/DUNE-DAQ/drunc/blob/9bfc08bf4c4e33bf96826d83e1c04a7fa5fa6685/src/drunc/session_manager/interface/session_manager.py" xlink:title="drunc.session_manager.interface.session_manager" target="_blank">
 <polygon fill="#fff4b8" stroke="#8b7355" points="441,-36 175,-36 175,0 441,0 441,-36"/>
 <text text-anchor="middle" x="308" y="-15.5" font-family="Helvetica,sans-Serif" font-size="10.00">drunc.session_manager.interface.session_manager</text>
 </a>
@@ -96,7 +96,7 @@
 <!-- drunc.session_manager.session_manager -->
 <g id="node9" class="node">
 <title>drunc.session_manager.session_manager</title>
-<g id="a_node9"><a xlink:href="https://github.com/DUNE-DAQ/drunc/blob/7b6e6444a1ae73bb85f53aac832717885727e287/src/drunc/session_manager/session_manager.py" xlink:title="drunc.session_manager.session_manager" target="_blank">
+<g id="a_node9"><a xlink:href="https://github.com/DUNE-DAQ/drunc/blob/9bfc08bf4c4e33bf96826d83e1c04a7fa5fa6685/src/drunc/session_manager/session_manager.py" xlink:title="drunc.session_manager.session_manager" target="_blank">
 <polygon fill="#fff4b8" stroke="#8b7355" points="506,-137 286,-137 286,-101 506,-101 506,-137"/>
 <text text-anchor="middle" x="396" y="-116.5" font-family="Helvetica,sans-Serif" font-size="10.00">drunc.session_manager.session_manager</text>
 </a>
@@ -111,7 +111,7 @@
 <!-- drunc.session_manager.interface.shell -->
 <g id="node8" class="node">
 <title>drunc.session_manager.interface.shell</title>
-<g id="a_node8"><a xlink:href="https://github.com/DUNE-DAQ/drunc/blob/7b6e6444a1ae73bb85f53aac832717885727e287/src/drunc/session_manager/interface/shell.py" xlink:title="drunc.session_manager.interface.shell" target="_blank">
+<g id="a_node8"><a xlink:href="https://github.com/DUNE-DAQ/drunc/blob/9bfc08bf4c4e33bf96826d83e1c04a7fa5fa6685/src/drunc/session_manager/interface/shell.py" xlink:title="drunc.session_manager.interface.shell" target="_blank">
 <polygon fill="#fff4b8" stroke="#8b7355" points="1140,-36 936,-36 936,0 1140,0 1140,-36"/>
 <text text-anchor="middle" x="1038" y="-15.5" font-family="Helvetica,sans-Serif" font-size="10.00">drunc.session_manager.interface.shell</text>
 </a>

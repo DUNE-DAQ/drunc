@@ -12,7 +12,7 @@
 <!-- drunc.unified_shell -->
 <g id="node1" class="node">
 <title>drunc.unified_shell</title>
-<g id="a_node1"><a xlink:href="https://github.com/DUNE-DAQ/drunc/blob/7b6e6444a1ae73bb85f53aac832717885727e287/src/drunc/unified_shell/__init__.py" xlink:title="drunc.unified_shell" target="_blank">
+<g id="a_node1"><a xlink:href="https://github.com/DUNE-DAQ/drunc/blob/9bfc08bf4c4e33bf96826d83e1c04a7fa5fa6685/src/drunc/unified_shell/__init__.py" xlink:title="drunc.unified_shell" target="_blank">
 <polygon fill="#fff4b8" stroke="#8b7355" points="120.5,-36 12.5,-36 12.5,0 120.5,0 120.5,-36"/>
 <text text-anchor="middle" x="66.5" y="-15.5" font-family="Helvetica,sans-Serif" font-size="10.00">drunc.unified_shell</text>
 </a>
@@ -21,7 +21,7 @@
 <!-- drunc.unified_shell.commands -->
 <g id="node2" class="node">
 <title>drunc.unified_shell.commands</title>
-<g id="a_node2"><a xlink:href="https://github.com/DUNE-DAQ/drunc/blob/7b6e6444a1ae73bb85f53aac832717885727e287/src/drunc/unified_shell/commands.py" xlink:title="drunc.unified_shell.commands" target="_blank">
+<g id="a_node2"><a xlink:href="https://github.com/DUNE-DAQ/drunc/blob/9bfc08bf4c4e33bf96826d83e1c04a7fa5fa6685/src/drunc/unified_shell/commands.py" xlink:title="drunc.unified_shell.commands" target="_blank">
 <polygon fill="#fff4b8" stroke="#8b7355" points="165,-137 0,-137 0,-101 165,-101 165,-137"/>
 <text text-anchor="middle" x="82.5" y="-116.5" font-family="Helvetica,sans-Serif" font-size="10.00">drunc.unified_shell.commands</text>
 </a>
@@ -30,7 +30,7 @@
 <!-- drunc.unified_shell.context -->
 <g id="node3" class="node">
 <title>drunc.unified_shell.context</title>
-<g id="a_node3"><a xlink:href="https://github.com/DUNE-DAQ/drunc/blob/7b6e6444a1ae73bb85f53aac832717885727e287/src/drunc/unified_shell/context.py" xlink:title="drunc.unified_shell.context" target="_blank">
+<g id="a_node3"><a xlink:href="https://github.com/DUNE-DAQ/drunc/blob/9bfc08bf4c4e33bf96826d83e1c04a7fa5fa6685/src/drunc/unified_shell/context.py" xlink:title="drunc.unified_shell.context" target="_blank">
 <polygon fill="#fff4b8" stroke="#8b7355" points="304.5,-238 156.5,-238 156.5,-202 304.5,-202 304.5,-238"/>
 <text text-anchor="middle" x="230.5" y="-217.5" font-family="Helvetica,sans-Serif" font-size="10.00">drunc.unified_shell.context</text>
 </a>
@@ -45,7 +45,7 @@
 <!-- drunc.unified_shell.shell -->
 <g id="node4" class="node">
 <title>drunc.unified_shell.shell</title>
-<g id="a_node4"><a xlink:href="https://github.com/DUNE-DAQ/drunc/blob/7b6e6444a1ae73bb85f53aac832717885727e287/src/drunc/unified_shell/shell.py" xlink:title="drunc.unified_shell.shell" target="_blank">
+<g id="a_node4"><a xlink:href="https://github.com/DUNE-DAQ/drunc/blob/9bfc08bf4c4e33bf96826d83e1c04a7fa5fa6685/src/drunc/unified_shell/shell.py" xlink:title="drunc.unified_shell.shell" target="_blank">
 <polygon fill="#fff4b8" stroke="#8b7355" points="297.5,-36 163.5,-36 163.5,0 297.5,0 297.5,-36"/>
 <text text-anchor="middle" x="230.5" y="-15.5" font-family="Helvetica,sans-Serif" font-size="10.00">drunc.unified_shell.shell</text>
 </a>
@@ -66,7 +66,7 @@
 <!-- drunc.unified_shell.shell_utils -->
 <g id="node5" class="node">
 <title>drunc.unified_shell.shell_utils</title>
-<g id="a_node5"><a xlink:href="https://github.com/DUNE-DAQ/drunc/blob/7b6e6444a1ae73bb85f53aac832717885727e287/src/drunc/unified_shell/shell_utils.py" xlink:title="drunc.unified_shell.shell_utils" target="_blank">
+<g id="a_node5"><a xlink:href="https://github.com/DUNE-DAQ/drunc/blob/9bfc08bf4c4e33bf96826d83e1c04a7fa5fa6685/src/drunc/unified_shell/shell_utils.py" xlink:title="drunc.unified_shell.shell_utils" target="_blank">
 <polygon fill="#fff4b8" stroke="#8b7355" points="457,-137 296,-137 296,-101 457,-101 457,-137"/>
 <text text-anchor="middle" x="376.5" y="-116.5" font-family="Helvetica,sans-Serif" font-size="10.00">drunc.unified_shell.shell_utils</text>
 </a>
