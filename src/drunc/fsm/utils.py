@@ -4,15 +4,14 @@ from druncschema.controller_pb2 import (
     Argument,
     FSMCommandDescription,
     FSMCommandsDescription,
+    ScalarArgument,
 )
-from druncschema.generic_pb2 import bool_msg, float_msg, int_msg, string_msg
 
 # prevent confusion with typing.Any
 from google.protobuf.any_pb2 import Any as PbAny
 
 import drunc.fsm.exceptions as fsme
 from drunc.fsm.transition import Transition
-from drunc.utils.grpc_utils import unpack_any
 
 
 def convert_fsm_transition(transitions: list[Transition]) -> FSMCommandsDescription:
@@ -44,7 +43,7 @@ def convert_fsm_transition(transitions: list[Transition]) -> FSMCommandsDescript
 
 
 def decode_fsm_arguments(
-    arguments: MutableMapping[str, PbAny], arguments_format: list[Argument]
+    arguments: MutableMapping[str, ScalarArgument], arguments_format: list[Argument]
 ) -> dict[str, str | int | float | bool]:
     """
     Decodes the arguments of a FSM command.
@@ -66,34 +65,38 @@ def decode_fsm_arguments(
     """
 
     # Added explicit type hints to the nested function
-    def get_argument(name: str, args: MutableMapping[str, PbAny]) -> Optional[PbAny]:
+    def get_argument(
+        name: str, args: MutableMapping[str, ScalarArgument]
+    ) -> Optional[ScalarArgument]:
         for n, k in args.items():
             if n == name:
                 return k
         return None
+    
+    # Map each Argument.Type to the corresponding ScalarArgument oneof field
+    field_names = {
+        Argument.Type.INT: "int_val",
+        Argument.Type.FLOAT: "float_val",
+        Argument.Type.STRING: "string_val",
+        Argument.Type.BOOL: "bool_val",
+    }
 
     # Explicitly type out_dict
     out_dict: dict[str, str | int | float | bool] = {}
 
     for arg in arguments_format:
-        arg_value: Optional[PbAny] = get_argument(arg.name, arguments)
+        arg_value: Optional[ScalarArgument] = get_argument(arg.name, arguments)
 
         if arg.presence == Argument.Presence.MANDATORY and arg_value is None:
             raise fsme.MissingArgument(arg.name, "")
 
+        if arg.type not in field_names:
+            raise fsme.UnhandledArgumentType(str(arg.type))
+
         if arg_value is None:
+            # default_value is also a ScalarArgument, no unpacking needed
             arg_value = arg.default_value
 
-        match arg.type:
-            case Argument.Type.INT:
-                out_dict[arg.name] = unpack_any(arg_value, int_msg).value
-            case Argument.Type.FLOAT:
-                out_dict[arg.name] = unpack_any(arg_value, float_msg).value
-            case Argument.Type.STRING:
-                out_dict[arg.name] = unpack_any(arg_value, string_msg).value
-            case Argument.Type.BOOL:
-                out_dict[arg.name] = unpack_any(arg_value, bool_msg).value
-            case _:
-                raise fsme.UnhandledArgumentType(str(arg.type))
+        out_dict[arg.name] = getattr(arg_value, field_names[arg.type])
 
     return out_dict
