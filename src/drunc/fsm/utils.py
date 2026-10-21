@@ -8,8 +8,6 @@ from druncschema.controller_pb2 import (
 )
 
 # prevent confusion with typing.Any
-from google.protobuf.any_pb2 import Any as PbAny
-
 import drunc.fsm.exceptions as fsme
 from drunc.fsm.transition import Transition
 
