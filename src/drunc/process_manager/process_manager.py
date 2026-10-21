@@ -761,7 +761,7 @@ class ProcessManager(abc.ABC, ProcessManagerServicer):
             )
 
             log.debug("Starting [green]SSH Shell process_manager[/green]")
-            return SSHProcessManagerShell(conf, name=name, **kwargs)
+            return SSHProcessManagerShell(conf, name=name)
         elif conf.pm_type == ProcessManagerTypes.K8s:
             from drunc.process_manager.k8s_process_manager import K8sProcessManager
 
