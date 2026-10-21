@@ -4,21 +4,39 @@
 
 Choose one of the following and complete all substeps.
 
-- Changes only affect the Run Control, are in a single repository, and do not affect the end user.
-  - [ ] Changes are documented in docstrings and code comments
-  - [ ] Wiki has been updated if architectural or endpoint changes
-- Otherwise
-  - [ ] Workflow changes demonstrated in the Change Log (if necessary)
-  - [ ] Wiki has been updated (if necessary)
-  - [ ] #dunedaq-integration Slack channel notified (see below)
+<details>
 
-Once completed, the reviewer can merge the PR.
+<summary>
+Changes only affect the Run Control, are in a single repository, and do not affect the end user
+</summary>
+
+- [ ] Changes are documented in docstrings and code comments
+- [ ] Wiki has been updated if architectural or endpoint changes
+
+</details>
+
 
 <details>
+
+<summary>
+Otherwise
+</summary>
+
+- [ ] Workflow changes demonstrated in the Change Log (if necessary)
+- [ ] Wiki has been updated (if necessary)
+- [ ] #dunedaq-integration Slack channel notified (see below)
+
+
+
+
+<details>
+
 <summary>
 
-## Notification message for a Slack channel
+Notification message for a Slack channel
+
 </summary>
+
 
 Note - this should be to #dunedaq-integration for general workflow that isn't during a release candidate period, and to #daq-release-prep otherwise.
 
@@ -40,6 +58,14 @@ _URL_
 
 
 I will leave time for any comments, otherwise will merge these at the end of the day.
-```
 
 </details>
+
+</details>
+
+
+
+Once completed, the _reviewer_ can merge the PR.
+
+
+

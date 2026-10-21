@@ -1,5 +1,6 @@
 # Description
-Fixes issue # _ISSUE NUMBER_
+
+Closes #_ISSUE NUMBER_
 
 _WHAT DOES THIS PR CHANGE - ONE LINE._
 
@@ -12,7 +13,7 @@ The relevant changes in the user workflow have been documented _here_ (link URL)
 
 ## Type of change
 
-_Delete those that don't apply_
+___DELETE THOSE THAT DONT APPLY___
 
 - New feature / enhancement
 - Optimization
@@ -34,9 +35,24 @@ _LIST COMMANDS TO DEMONSTRATE CHANGE_
 
 ## Checklist prior to "Ready for Review"
 
+_CHOOSE ONE AND COMPLETE ALL STEPS_
+
+<details>
+
+<summary>
+Documentation only
+</summary>
+
 - [ ] Testing skipped as there are no core code changes in this PR, this only relates to documentation/CI workflows
 
----
+</details>
+
+
+<details>
+
+<summary>
+Code changes
+</summary>
 
 Delete inside bullets which doesn't appl, and fill in those in bold italics
 
@@ -51,5 +67,6 @@ Delete inside bullets which doesn't appl, and fill in those in bold italics
 - [ ] Code is clearly commented.
 - [ ] New unit tests have been added, or is documented in # _ISSUE NUMBER_
 
----
+</details>
+
 
