@@ -112,6 +112,7 @@ _FSM_SEQUENCES = {
         run_number=6,
     ),
     "test_stop_run": FsmCommandParams("test_stop_run", "stop-run", "configured"),
+    "test_stop_run_3": FsmCommandParams("test_stop_run_3", "stop-run", "configured"),
 }
 
 _SHUTDOWN_MARKER = "test_shutdown"
@@ -153,7 +154,9 @@ echo post_boot_done
     + _FSM_SEQUENCES["test_start_run"].to_command_block()
     + _FSM_SEQUENCES["test_stop_run"].to_command_block()
     + "start-run --run-number 3"
-    + _FSM_SEQUENCES["test_stop_run"].to_command_block()
+    + _FSM_SEQUENCES[
+        "test_stop_run_3"
+    ].to_command_block()  # Uhh why did I do this again? I'll need to check...
     + _echo_server_command_block()
     + f"""
 echo {_SHUTDOWN_MARKER}
