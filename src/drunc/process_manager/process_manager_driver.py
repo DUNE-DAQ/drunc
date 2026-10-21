@@ -6,7 +6,7 @@ import tempfile
 import time
 from collections.abc import Iterator
 from time import sleep
-from typing import Dict, List
+from typing import List
 from urllib.parse import urlparse
 
 import conffwk
@@ -34,7 +34,7 @@ from drunc.connectivity_service.client import ConnectivityServiceClient
 from drunc.connectivity_service.exceptions import ApplicationLookupUnsuccessful
 from drunc.controller.utils import get_segment_lookup_timeout
 from drunc.exceptions import DruncSetupException, DruncShellException
-from drunc.process_manager.oks_parser import get_full_db_path
+from drunc.process_manager.oks_parser import AppInfo, get_full_db_path
 from drunc.process_manager.utils import format_hostname, get_log_path, get_rte_script
 from drunc.utils.grpc_utils import (
     RichErrorClientInterceptor,
@@ -227,7 +227,7 @@ class ProcessManagerDriver:
         oks_conf: str,
         session_dal: "conffwk.dal.Session",
         session_name: str,
-    ) -> List[Dict]:
+    ) -> list[AppInfo]:
         from drunc.process_manager.oks_parser import collect_apps, collect_infra_apps
 
         env = {
@@ -291,7 +291,7 @@ class ProcessManagerDriver:
 
     def _build_boot_request(
         self,
-        app: Dict,
+        app: AppInfo,
         user: str,
         session_name: str,
         session_dal,

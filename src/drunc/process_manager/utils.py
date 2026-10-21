@@ -1,6 +1,6 @@
-import copy as cp
 import os
 import re
+from collections.abc import Callable
 from functools import update_wrapper
 from typing import cast
 
@@ -121,27 +121,27 @@ def make_tree(values: list[ProcessInstance]) -> list[str]:
     return lines
 
 
-def order_process_by_name(processes: list[ProcessInstance]):
+def order_process_by_name(processes: list[ProcessInstance]) -> list[ProcessInstance]:
     """Given a list of processes, perform a tiered order by the name"""
-    by_session = {}
+    by_session: dict[str, list[ProcessInstance]] = {}
     for process in processes:
         m = process.process_description.metadata
         by_session.setdefault(m.session, []).append(process)
 
-    ordered = []
+    ordered: list[ProcessInstance] = []
     for session in sorted(by_session.keys()):
         session_processes = by_session[session]
-        node_by_id = {}
-        children = {}
-        roots = []
+        node_by_id: dict[str, list[ProcessInstance]] = {}
+        children: dict[str, list[str]] = {}
+        roots: list[str] = []
 
         for process in session_processes:
             tree_id = process.process_description.metadata.tree_id or ""
             node_by_id.setdefault(tree_id, []).append(process)
 
-        for tree_id, processes in node_by_id.items():
+        for tree_id, node_processes in node_by_id.items():
             node_by_id[tree_id] = sorted(
-                processes,
+                node_processes,
                 key=lambda p: (
                     p.process_description.metadata.name,
                     p.uuid.uuid,
@@ -155,11 +155,11 @@ def order_process_by_name(processes: list[ProcessInstance]):
             else:
                 children.setdefault(parent_id, []).append(tree_id)
 
-        def sort_key(tree_id):
+        def sort_key(tree_id: str) -> tuple[str, str]:
             m = node_by_id[tree_id][0].process_description.metadata
             return (m.name, tree_id)
 
-        def walk(tree_id):
+        def walk(tree_id: str) -> None:
             ordered.extend(node_by_id[tree_id])
             for child_id in sorted(children.get(tree_id, []), key=sort_key):
                 walk(child_id)
@@ -252,24 +252,7 @@ def _get_process_exit_status(process: ProcessInstance, process_status: str) -> s
     return "Not available"
 
 
-def strip_env_for_rte(env):
-    env_stripped = cp.deepcopy(env)
-    for key in env.keys():
-        if key in [
-            "PATH",
-            "CET_PLUGIN_PATH",
-            "DUNEDAQ_SHARE_PATH",
-            "LD_LIBRARY_PATH",
-            "LIBRARY_PATH",
-            "PYTHONPATH",
-        ]:
-            del env_stripped[key]
-        if re.search(".*_SHARE", key) and key in env_stripped:
-            del env_stripped[key]
-    return env_stripped
-
-
-def get_version():
+def get_version() -> str:
     version = os.getenv("DUNE_DAQ_BASE_RELEASE")
     if not version:
         raise RuntimeError(
@@ -278,7 +261,7 @@ def get_version():
     return version
 
 
-def get_releases_dir():
+def get_releases_dir() -> str:
     releases_dir = os.getenv("SPACK_RELEASES_DIR")
     if not releases_dir:
         raise RuntimeError(
@@ -287,7 +270,7 @@ def get_releases_dir():
     return releases_dir
 
 
-def release_or_dev():
+def release_or_dev() -> str:
     is_release = os.getenv("DBT_SETUP_RELEASE_SCRIPT_SOURCED")
     if is_release:
         return "rel"
@@ -297,7 +280,7 @@ def release_or_dev():
     return "rel"
 
 
-def get_rte_script():
+def get_rte_script() -> str:
     script = ""
     if release_or_dev() == "rel":
         ver = get_version()
@@ -306,6 +289,10 @@ def get_rte_script():
 
     else:
         dbt_install_dir = os.getenv("DBT_INSTALL_DIR")
+        if not dbt_install_dir:
+            raise DruncSetupException(
+                "Utils: cannot get env DBT_INSTALL_DIR! Exit drunc and\nrun dbt-workarea-env."
+            )
         script = os.path.join(dbt_install_dir, "daq_app_rte.sh")
 
     if not os.path.exists(script):
@@ -318,9 +305,9 @@ def get_log_path(
     session_name: str,
     application_name: str,
     override_logs: bool,
-    app_log_path: str = None,
-    session_log_path: str = None,
-):
+    app_log_path: str | None = None,
+    session_log_path: str | None = None,
+) -> str:
     pwd = os.getcwd()
     if app_log_path == "./":
         app_log_path = pwd
@@ -351,12 +338,12 @@ class PrCtlError(DruncException):
     pass
 
 
-def on_parent_exit(signum):
+def on_parent_exit(signum: int) -> Callable[[], None]:
     """Return a function to be run in a child process which will trigger
     SIGNAME to be sent when the parent process dies
     """
 
-    def set_parent_exit_signal():
+    def set_parent_exit_signal() -> None:
         from ctypes import cdll
 
         # http://linux.die.net/man/2/prctl
@@ -410,7 +397,7 @@ def get_pm_type_from_name(pm_name: str) -> ProcessManagerTypes:
         # OKS or other types - fallback to from_pyobject
         pmch = ProcessManagerConfHandler.from_pyobject(data=path_or_url)
 
-    return getattr(pmch, "pm_type", pmch.type)
+    return pmch.pm_type
 
 
 def format_hostname(hostname: str) -> str:
