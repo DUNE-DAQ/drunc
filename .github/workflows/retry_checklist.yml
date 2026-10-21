@@ -8,6 +8,7 @@ permissions:
   contents: read
   actions: write
   pull-requests: read
+  issues: write
 
 concurrency:
   group: retry-checklist-${{ github.event.issue.number }}
@@ -21,6 +22,17 @@ jobs:
       contains(github.event.comment.body, '/retry-checklist')
     runs-on: ubuntu-latest
     steps:
+      - name: Acknowledge retry command
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          COMMENT_ID: ${{ github.event.comment.id }}
+        run: |
+          gh api --method POST \
+            "repos/${GITHUB_REPOSITORY}/issues/comments/${COMMENT_ID}/reactions" \
+            -f content='+1' \
+            --silent
+      
       - uses: actions/checkout@v4
         with:
           ref: ${{ github.sha }}
