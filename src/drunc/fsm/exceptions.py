@@ -1,7 +1,7 @@
-from drunc.exceptions import DruncCommandException
+from drunc.exceptions import DruncCommandNonTerminalException
 
 
-class FSMException(DruncCommandException):
+class FSMException(DruncCommandNonTerminalException):
     pass
 
 

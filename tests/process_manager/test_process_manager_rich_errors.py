@@ -303,7 +303,7 @@ def test_methods_with_request_unhandled_exception(
 
     assert error_info is not None
     assert rich_error.code == "INTERNAL"
-    assert error_info.reason == "COMMAND_ERROR"
+    assert error_info.reason == "COMMAND_EXECUTION_FAILED"
     assert error_info.domain == f"ProcessManager.{method_name}"
     mock_extract_grpc_rich_error.assert_called_once()
     process_manager_rich_error_test_suite.mock_client_logger.error.assert_called_once()
@@ -354,7 +354,7 @@ def test_methods_without_request_unhandled_exception(
 
     assert error_info is not None
     assert rich_error.code == "INTERNAL"
-    assert error_info.reason == "COMMAND_ERROR"
+    assert error_info.reason == "COMMAND_EXECUTION_FAILED"
     assert error_info.domain == f"ProcessManager.{method_name}"
     mock_extract_grpc_rich_error.assert_called_once()
     process_manager_rich_error_test_suite.mock_client_logger.error.assert_called_once()
