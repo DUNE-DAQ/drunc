@@ -62,14 +62,14 @@
                 "limits":   {"hugepages-2Mi": "64Gi", "cpu": "256", "memory": "2048Gi"},
                 "requests": {"hugepages-2Mi": "64Gi", "cpu": "64", "memory": "512Gi"}
             },
-           "np02-srv-005": {
-                "limits":   {"hugepages-2Mi": "32Gi", "cpu": "24", "memory": "384Gi"},
-                "requests": {"hugepages-2Mi": "32Gi", "cpu": "24", "memory": "384Gi"}
+            "np02-srv-005": {
+                "limits":   {"hugepages-2Mi": "32Gi", "cpu": "48", "memory": "512Gi"},
+                "requests": {"hugepages-2Mi": "32Gi", "cpu": "47", "memory": "512Gi"}
             },
             "np02-srv-005-1": {
-                "limits":   {"hugepages-2Mi": "16Gi", "cpu": "24", "memory": "384Gi"},
-                "requests": {"hugepages-2Mi": "16Gi", "cpu": "24", "memory": "384Gi"}
-            },
+                "limits":   {"hugepages-2Mi": "16Gi", "cpu": "24", "memory": "256Gi"},
+                "requests": {"hugepages-2Mi": "16Gi", "cpu": "24", "memory": "256Gi"}
+            }, 
             "np04-srv-031": {
                 "limits":   {"hugepages-2Mi": "32Gi", "cpu": "128", "memory": "1024Gi"},
                 "requests": {"hugepages-2Mi": "32Gi", "cpu": "32", "memory": "256Gi"}
