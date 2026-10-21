@@ -65,6 +65,8 @@ from drunc.controller.utils import (
 from drunc.exceptions import (
     ChildCommandNonTerminalException,
     ChildCommandTerminalException,
+    DruncNonTerminalException,
+    DruncTerminalException,
 
 )
 from drunc.fsm.actions.utils import get_dotdrunc_json
@@ -72,6 +74,7 @@ from drunc.fsm.configuration import FSMConfHandler
 from drunc.fsm.exceptions import (
     DotDruncJsonIncorrectFormat,
     DotDruncJsonNotFound,
+    FSMTransitionException,
 )
 from drunc.fsm.utils import convert_fsm_transition
 from drunc.utils.grpc_utils import ServerTimeout, extract_grpc_rich_error, pack_to_any
@@ -996,10 +999,13 @@ class Controller(ControllerServicer):
         command_name = command.command_name
 
         fsm_cmd_log = f"FSM command run: {command_name} for target {request.target} "
-        if command_name == "start" and (
-            cmd := self.stateful_node.decode_fsm_arguments(command)
-        ):
-            fsm_cmd_log += f"with arguments {cmd}"
+        if command_name == "start":
+            try:
+                cmd = self.stateful_node.decode_fsm_arguments(command)
+            except FSMTransitionException:
+                cmd = None
+            if cmd:
+                fsm_cmd_log += f"with arguments {cmd}"
         elif command_name == "stop":
             fsm_cmd_log += f"for run number {self.runinfo.get('run', 'unknown')}"
         self.log.info(fsm_cmd_log)
@@ -1062,14 +1068,36 @@ class Controller(ControllerServicer):
 
         # Execute FSM transition on this node.
         if request.target == self.name or request.execute_along_path:
-            fsm_args = self.stateful_node.decode_fsm_arguments(command)
-            fsm_data = self.stateful_node.prepare_transition(
-                transition=transition,
-                transition_args=fsm_args,
-                transition_data=command.data,
-                ctx=self,
-            )
+            try:
+                fsm_args = self.stateful_node.decode_fsm_arguments(command)
+                fsm_data = self.stateful_node.prepare_transition(
+                    transition=transition,
+                    transition_args=fsm_args,
+                    transition_data=command.data,
+                    ctx=self,
+                )
 
+            except FSMTransitionException as e:
+                self.log.error(f"'{self.name}' failed to prepare transition '{command_name}': {e}")
+                response.fsm_flag = FSMResponseFlag.FSM_FAILED
+                response.flag = ResponseFlag.DRUNC_EXCEPTION_THROWN
+                response.error.CopyFrom(
+                    ResponseError(
+                        message=str(e),
+                        details=[pack_to_any(detail) for detail in e.rich_details],
+                    )
+                )
+                fsm_args = None
+                fsm_data = command.data
+            except Exception as error:
+                raise DruncTerminalException(
+                    message=(
+                        f"Unexpected error preparing FSM command "
+                        f"'{command_name}' for '{self.name}': {error}"
+                    ),
+                    domain="Controller.execute_fsm_command",
+                    reason="UNEXPECTED_FSM_PREPARATION_ERROR",
+                ) from error
             # If the command publishes to ELisa Logbook, make sure that .dotdrunc.json
             # is present and well formatted
             using_elisa_logbook = "elisa-logbook" in self.fsm_config.get_actions()

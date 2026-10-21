@@ -68,6 +68,7 @@ class FSMExecutionResponseLike(Protocol):
     name: str
     flag: int
     fsm_flag: int
+    error: object
     children: Sequence["FSMExecutionResponseLike"]
 
 
@@ -963,6 +964,7 @@ def run_one_fsm_command(
     t.add_column("Name")
     t.add_column("Command execution")
     t.add_column("FSM transition")
+    t.add_column("Error")
 
     def bool_to_success(
         flag_message: int, message_type: type[ResponseFlag] | type[FSMResponseFlag]
@@ -988,6 +990,9 @@ def run_one_fsm_command(
     ) -> None:
         executed_command = response.flag == ResponseFlag.EXECUTED_SUCCESSFULLY
 
+        error_text = ""
+        error_text = f"[red]{response.error.message}[/]"
+
         table.add_row(
             prefix + response.name,
             bool_to_success(response.flag, message_type=ResponseFlag),
@@ -996,6 +1001,7 @@ def run_one_fsm_command(
                 if executed_command
                 else "[red]NA[/]"
             ),
+            error_text,
         )
         for child_response in sorted(response.children, key=lambda c: c.name):
             add_to_table(table, child_response, "  " + prefix)
