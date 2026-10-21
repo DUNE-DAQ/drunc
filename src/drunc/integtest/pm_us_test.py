@@ -46,7 +46,7 @@ print = functools.partial(print, flush=True)  # always flush print() output
 
 pytest_plugins = "integrationtest.integrationtest_drunc"
 
-conf_dict = make_conf_dict("pm_us")
+conf_dict = make_conf_dict("pm-us")
 
 confgen_arguments = {"SmallFootprint": conf_dict}
 
@@ -195,6 +195,11 @@ dunerc_commands = (
     echo {_SHUTDOWN_MARKER}_done
     status
     echo {_SHUTDOWN_MARKER}_status_done
+
+
+    terminate
+    boot -no
+    terminate
     """
 ).split()
 
@@ -253,7 +258,7 @@ def test_dunerc_success(run_dunerc, caplog) -> None:
 def test_log_files(run_dunerc) -> None:
     """Checks that expected process-manager log files exist and are free of errors."""
     # Check that at least some of the expected log files are present
-    logfile_types = ("df-01", "dfo", "mlt", "ru")
+    logfile_types = ("dfo", "mlt", "ru")
     log_names = tuple(map(str, run_dunerc.log_files))
     missing_logfiles = [
         f"{run_dunerc.daq_session_name}_{logfile_type}"
@@ -264,6 +269,30 @@ def test_log_files(run_dunerc) -> None:
         )
     ]
     assert not missing_logfiles, f"No logfile found for: {', '.join(missing_logfiles)}."
+
+    log_names = tuple(
+        os.path.basename(str(logname)) for logname in run_dunerc.log_files
+    )
+    df01_log_names = [
+        logname
+        for logname in log_names
+        if f"{run_dunerc.daq_session_name}_df-01" in logname
+    ]
+    timestamp_pattern = re.compile(r"_\d{4}-\d{2}-\d{2}-\d{2}-\d{2}-\d{2}\.txt$")
+    timestamped_df01_logs = [
+        logname for logname in df01_log_names if timestamp_pattern.search(logname)
+    ]
+    untimestamped_df01_logs = [
+        logname for logname in df01_log_names if not timestamp_pattern.search(logname)
+    ]
+    assert len(timestamped_df01_logs) == 1, (
+        "Expected exactly one timestamped _df-01 log, "
+        f"found {len(timestamped_df01_logs)}: {timestamped_df01_logs}"
+    )
+    assert len(untimestamped_df01_logs) == 1, (
+        "Expected exactly one untimestamped _df-01 log, "
+        f"found {len(untimestamped_df01_logs)}: {untimestamped_df01_logs}"
+    )
 
     # Check that there are no warnings or errors in the log files
     assert log_file_checks.logs_are_error_free(
@@ -327,14 +356,14 @@ def test_boot_pm(run_dunerc) -> None:
     lines = strip_ansi(run_dunerc.completed_processes["pm"].stdout).splitlines()
 
     between = get_lines_between_markers(lines, "pre_boot", "post_boot")
-    check_boot_sent_re = "sent boot for session pm_us via unified_shell"
+    check_boot_sent_re = "sent boot for session pm-us via unified_shell"
     assert any(check_boot_sent_re in line for line in between), (
         f"Did not find '{check_boot_sent_re}' between pre_boot and post_boot.\nBetween:\n"
         + "\n".join(between)
     )
 
     check_root_controller_boot = (
-        "Booted 'root-controller' from session 'pm_us' with UUID"
+        "Booted 'root-controller' from session 'pm-us' with UUID"
     )
     assert any(check_root_controller_boot in line for line in between), (
         f"Did not find '{check_root_controller_boot}' between pre_boot and post_boot.\nBetween:\n"
@@ -373,7 +402,7 @@ def test_root_controller_logs(run_dunerc) -> None:
     assert footer_idx > header_idx, "Footer appears before header in stdout."
 
     # 2) Check there are 5 lines between header and footer
-    between = lines[header_idx + 1 : footer_idx]
+    between = [line for line in lines[header_idx + 1 : footer_idx] if line.strip()]
     assert len(between) == 5, (
         f"Expected exactly 5 lines between header and footer, found {len(between)}.\nBetween:\n"
         + "\n".join(between)

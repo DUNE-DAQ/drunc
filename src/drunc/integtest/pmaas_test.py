@@ -175,6 +175,7 @@ us_1_app = idc.DAQControlApplication(
 
 us_2_startup_commands = [
     "drunc-unified-shell",
+    "-no",
     f"grpc://localhost:{pm_port}",
     "<config_data_file>",
     "<config_session_name>",
@@ -262,12 +263,20 @@ def test_log_files(run_dunerc) -> None:
         f"{pms_session_name_2}_df-01" in str(logname)
         for logname in run_dunerc.log_files
     )
-    assert any(
-        f"{us_session_name_1}_df-01" in str(logname) for logname in run_dunerc.log_files
+    log_names = tuple(
+        os.path.basename(str(logname)) for logname in run_dunerc.log_files
     )
     assert any(
-        f"{us_session_name_2}_df-01" in str(logname) for logname in run_dunerc.log_files
-    )
+        re.fullmatch(rf"log_.+_{re.escape(us_session_name_1)}_dfo-01\.txt", logname)
+        for logname in log_names
+    ), f"Expected an untimestamped dfo-01 log for session '{us_session_name_1}'."
+    assert any(
+        re.fullmatch(
+            rf"log_.+_{re.escape(us_session_name_2)}_dfo-01_\d{{4}}-\d{{2}}-\d{{2}}-\d{{2}}-\d{{2}}-\d{{2}}\.txt",
+            logname,
+        )
+        for logname in log_names
+    ), f"Expected a timestamped dfo-01 log for session '{us_session_name_2}'."
 
     assert log_file_checks.logs_are_error_free(
         [
@@ -352,7 +361,7 @@ def test_pms_root_controller_logs_scoped(run_dunerc) -> None:
     assert footer_idx < marker_end_idx, "Scoped logs footer appears after scoped block."
     assert footer_idx > header_idx, "Footer appears before header in stdout."
 
-    between = lines[header_idx + 1 : footer_idx]
+    between = [line for line in lines[header_idx + 1 : footer_idx] if line.strip()]
     assert len(between) == 5, (
         f"Expected exactly 5 lines between header and footer, found {len(between)}.\nBetween:\n"
         + "\n".join(between)

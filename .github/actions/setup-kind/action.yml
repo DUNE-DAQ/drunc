@@ -1,0 +1,234 @@
+name: Setup Kind and Kubectl
+description: Installs Docker CLI, kubectl, kind, and spins up a cluster connected to the CI container
+
+inputs:
+  cluster_name:
+    description: "The name of the kind cluster to create"
+    required: true
+    default: "test-cluster"
+
+runs:
+  using: composite
+  steps:
+    - name: Install Docker CLI prerequisites
+      shell: bash
+      run: |
+        dnf remove -y podman-docker || true
+        dnf install -y dnf-plugins-core
+        dnf config-manager --add-repo https://download.docker.com/linux/centos/docker-ce.repo
+        dnf install -y --allowerasing docker-ce-cli
+        which docker
+        docker info
+
+    - name: Install and configure Kind cluster
+      shell: bash
+      run: |
+        CLUSTER_NAME="${{ inputs.cluster_name }}"
+
+        # Install kubectl
+        curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
+        chmod +x kubectl
+        mv kubectl /usr/local/bin/
+
+        # Install kind
+        curl -Lo ./kind https://kind.sigs.k8s.io/dl/latest/kind-linux-amd64
+        chmod +x ./kind
+        mv ./kind /usr/local/bin/
+
+        # Delete any existing Kind cluster with the same name to start fresh
+        kind delete cluster --name "$CLUSTER_NAME" 2>/dev/null || true
+
+        # Detect the host runner's real path backing /__w
+        HOST_WORKSPACE_PATH=$(docker inspect "$HOSTNAME" --format '{{range .Mounts}}{{if eq .Destination "/__w"}}{{.Source}}{{end}}{{end}}')
+        HOST_WORKSPACE_PATH="${HOST_WORKSPACE_PATH:-/__w}"
+        
+        # Detect the nightly path in the container and translate to host backing path
+        NIGHTLY_CONTAINER_PATH=$(find /__w -maxdepth 4 -type d -name "NFD_DEV*" | head -n 1)
+        if [[ -z "$NIGHTLY_CONTAINER_PATH" ]]; then
+          echo "::error::No NFD_DEV workarea found under /__w"
+          exit 1
+        fi
+        NIGHTLY_DIRNAME=$(basename "$NIGHTLY_CONTAINER_PATH")
+        NIGHTLY_HOST_PATH="${NIGHTLY_CONTAINER_PATH//\/__w/$HOST_WORKSPACE_PATH}"
+
+        # Create Kind cluster configuration file
+        cat <<EOF > /tmp/kind-config.yaml
+        kind: Cluster
+        apiVersion: kind.x-k8s.io/v1alpha4
+        nodes:
+        - role: control-plane
+          kubeadmConfigPatches:
+          - |
+            kind: InitConfiguration
+            nodeRegistration:
+              name: "${HOSTNAME}"
+          extraMounts:
+          - hostPath: ${HOST_WORKSPACE_PATH}
+            containerPath: /__w
+          - hostPath: ${HOST_WORKSPACE_PATH}
+            containerPath: /nfs
+          - hostPath: ${NIGHTLY_HOST_PATH}
+            containerPath: /cvmfs/dunedaq-development.opensciencegrid.org/nightly/${NIGHTLY_DIRNAME}
+        EOF
+
+        # Strip the leading 8 spaces from the heredoc so Kind receives clean YAML
+        sed -i 's/^[ ]\{8\}//' /tmp/kind-config.yaml
+
+        # Create Kind cluster
+        kind create cluster --name "$CLUSTER_NAME" --config /tmp/kind-config.yaml
+
+        # Connect CI container to kind network
+        docker network connect --alias "ci-runner-${HOSTNAME}" kind "$HOSTNAME"
+
+        # Update kubeconfig to point to internal network IP
+        KIND_CONTAINER=$(docker ps --filter "label=io.x-k8s.kind.cluster=${CLUSTER_NAME}" --format '{{.Names}}' | head -n 1)
+        if [[ -z "$KIND_CONTAINER" ]]; then
+          echo "::error::Could not find the Kind node container for cluster '$CLUSTER_NAME'"
+          exit 1
+        fi
+        KIND_IP=$(docker inspect -f '{{.NetworkSettings.Networks.kind.IPAddress}}' "$KIND_CONTAINER")
+        kubectl config set-cluster "kind-${CLUSTER_NAME}" --server="https://${KIND_IP}:6443"
+
+        # Label node with the container hostname so drunc accepts it
+        NODE_NAME=$(kubectl get nodes -o jsonpath='{.items[0].metadata.name}')
+        kubectl label node "$NODE_NAME" "drunc.host=$HOSTNAME" --overwrite || true
+        kubectl label node "$NODE_NAME" "host=$HOSTNAME" --overwrite || true
+
+        # Wait for the node to become Ready
+        kubectl wait --for=condition=Ready "node/${NODE_NAME}" --timeout=90s
+
+        # Create dummy mount directories required by drunc's pod hostPath volumes
+        docker exec "$KIND_CONTAINER" mkdir -p /cvmfs
+
+        # Map container hostname to Kind node IP so NodePort polling reaches the Kind node
+        sed -i "/${HOSTNAME}/d" /etc/hosts 2>/dev/null || true
+        echo -e "${KIND_IP}\t${HOSTNAME}" >> /etc/hosts || {
+          cp /etc/hosts /tmp/hosts.new
+          echo -e "${KIND_IP}\t${HOSTNAME}" >> /tmp/hosts.new
+          cat /tmp/hosts.new > /etc/hosts
+        }
+
+    - name: Configure runner and Kind networking
+      shell: bash
+      run: |
+        # Validate that the Kind cluster and CI runner network are correctly set up
+        KIND_CONTAINER=$(docker ps --filter "label=io.x-k8s.kind.cluster=${{ inputs.cluster_name }}" --format '{{.Names}}' | head -n 1)
+        if [[ -z "$KIND_CONTAINER" ]]; then
+          echo "::error::Could not find the Kind node container for cluster '${{ inputs.cluster_name }}'"
+          exit 1
+        fi
+        KIND_IP=$(docker inspect -f '{{.NetworkSettings.Networks.kind.IPAddress}}' "$KIND_CONTAINER")
+        CI_RUNNER_KIND_IP=$(docker inspect -f '{{.NetworkSettings.Networks.kind.IPAddress}}' "$HOSTNAME")
+        if [[ -z "$KIND_IP" || -z "$CI_RUNNER_KIND_IP" ]]; then
+          echo "::error::Could not determine Kind and CI runner network IPs"
+          exit 1
+        fi
+
+        # Export the Kind and CI runner network information to the GitHub environment
+        {
+          echo "KIND_CONTAINER=$KIND_CONTAINER"
+          echo "KIND_IP=$KIND_IP"
+          echo "CI_RUNNER_KIND_IP=$CI_RUNNER_KIND_IP"
+        } >> "$GITHUB_ENV"
+
+        # Route the Kind pod network through the Kind node IP so the runner can reach pod IPs
+        dnf install -y iproute
+        ip route replace 10.244.0.0/16 via "$KIND_IP"
+
+        # hostNetwork pods reach the runner-hosted integtest connectivity service via localhost, we need to set up DNAT and MASQUERADE rules in the Kind node
+        docker exec "$KIND_CONTAINER" sysctl -w net.ipv4.conf.all.route_localnet=1
+        docker exec "$KIND_CONTAINER" iptables -t nat -C OUTPUT -d 127.0.0.1/32 -p tcp --dport 30000:32767 -j DNAT --to-destination "$CI_RUNNER_KIND_IP" 2>/dev/null || \
+          docker exec "$KIND_CONTAINER" iptables -t nat -A OUTPUT -d 127.0.0.1/32 -p tcp --dport 30000:32767 -j DNAT --to-destination "$CI_RUNNER_KIND_IP"
+        docker exec "$KIND_CONTAINER" iptables -t nat -C POSTROUTING -s 127.0.0.1/32 -d "$CI_RUNNER_KIND_IP" -j MASQUERADE 2>/dev/null || \
+          docker exec "$KIND_CONTAINER" iptables -t nat -A POSTROUTING -s 127.0.0.1/32 -d "$CI_RUNNER_KIND_IP" -j MASQUERADE
+
+    - name: Preload DAQ image into Kind
+      shell: bash
+      run: |
+        CLUSTER_NAME="${{ inputs.cluster_name }}"
+        IMAGE="ghcr.io/dune-daq/nightly-release-alma9:development_v5"
+
+        # 1. Bake workspace symlinks into the image so the pod finds drunc-controller
+        cat <<EOF > Dockerfile.ci
+        FROM $IMAGE
+        USER root
+        RUN mkdir -p /__w && ln -s /nfs/drunc /__w/drunc && ln -s /nfs/_temp /__w/_temp
+        EOF
+        
+        # 2. Tag with :ci-local instead of :latest to prevent 'imagePullPolicy: Always'
+        docker build -t "ghcr.io/dune-daq/alma9:ci-local" -f Dockerfile.ci .
+
+        # 3. Load the shim into Kind
+        kind load docker-image "ghcr.io/dune-daq/alma9:ci-local" --name "$CLUSTER_NAME"
+
+        # 4. Patch drunc to request the local tag so Kubernetes uses the cached 10GB image
+        find /__w -type f \( -name "*.py" -o -name "*.yaml" -o -name "*.json" \) -exec sed -i 's|ghcr.io/dune-daq/alma9:latest|ghcr.io/dune-daq/alma9:ci-local|g' {} + 2>/dev/null || true
+
+    - name: Patch nightly for Kind
+      shell: bash
+      run: |
+        python3 - <<'PY'
+        import os
+        from pathlib import Path
+
+        nightly = Path("nightly")
+        kind_ip = os.environ["KIND_IP"]
+        runner_hostname = os.environ["HOSTNAME"]
+
+        def replace_in_files(paths, old, new, description):
+          changed = 0
+          for path in paths:
+            contents = path.read_text()
+            if old in contents:
+              path.write_text(contents.replace(old, new))
+              changed += 1
+          if not changed:
+            raise SystemExit(f"Kind patch did not match any file: {description}")
+
+        config_files = list(nightly.rglob("k8s.json"))
+        if not config_files:
+          raise SystemExit("No k8s.json files found under nightly")
+        replace_in_files(
+          config_files,
+          '"mount_path": "/cvmfs"',
+          '"mount_path": "/tmp/dummy_cvmfs"',
+          "CVMFS mount path",
+        )
+        for config_file in config_files:
+          contents = config_file.read_text()
+          config_file.write_text(contents.replace("'/cvmfs'", "'/tmp/dummy_cvmfs'"))
+
+        pm_files = list(nightly.rglob("k8s_process_manager.py"))
+        if not pm_files:
+          raise SystemExit("No k8s_process_manager.py files found under nightly")
+        patches = [
+          (
+            "sock.connect_ex((node_name, port))",
+            f"sock.connect_ex(('{kind_ip}', port))",
+            "NodePort TCP readiness host",
+          ),
+          (
+            'url = f"http://{node_name}:{lcs.node_port}"',
+            f'url = f"http://{kind_ip}:{{lcs.node_port}}"',
+            "NodePort HTTP readiness host",
+          ),
+          (
+            'main_command_chain = " && ".join(command_parts)',
+            f'main_command_chain = " && ".join(command_parts).replace(\'{runner_hostname}\', \'{kind_ip}\')',
+            "application bind host",
+          ),
+          (
+            "host_aliases=host_aliases if host_aliases else None,",
+            f"host_aliases=([client.V1HostAlias(ip=host_aliases[0].ip, hostnames=host_aliases[0].hostnames + ['{runner_hostname}'])] + host_aliases[1:]) if host_aliases else None,",
+            "runner hostname to local connection server alias",
+          ),
+        ]
+        for old, new, description in patches:
+          replace_in_files(pm_files, old, new, description)
+        PY
+
+        for venv_bin in nightly/NFD_DEV*/.venv/bin; do
+          if [[ -d "$venv_bin" ]]; then
+            chmod -R +x "$venv_bin"
+          fi
+        done

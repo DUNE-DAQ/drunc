@@ -1,0 +1,348 @@
+name: Run Tests
+
+on:
+  push:
+    branches:
+      - develop
+      - "prep-release/**"
+    paths-ignore:
+      - "docs/**"
+  pull_request:
+    branches:
+      - develop
+      - "prep-release/**"
+    types: [opened, synchronize, reopened, ready_for_review]
+    paths-ignore:
+      - "docs/**"
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.head_ref || github.ref }}
+  cancel-in-progress: true
+
+# Define globals used across multiple jobs
+env:
+  REPO_OWNER: ${{ github.event.pull_request.head.repo.owner.login || github.repository_owner }}
+  HEAD_REF: ${{ github.head_ref || github.ref_name }}
+
+
+jobs:
+  generate-release-tarball:
+    name: Generate Release Tarball
+    if: github.event.pull_request.draft == false
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        shell: bash
+    container:
+      image: ghcr.io/dune-daq/nightly-release-alma9:development_v5
+
+    steps:
+      - name: Checkout workflow repository
+        uses: actions/checkout@v7
+
+      - name: Set up dev nightly
+        uses: ./.github/actions/setup-dev-nightly-with-drunc
+
+      - name: Install zstd
+        run: dnf install -y zstd
+
+      - name: Pack workarea
+        run: tar --zstd -cf /tmp/nightly.tar.zst nightly
+
+      - name: Upload environment artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: nightly-env
+          path: /tmp/nightly.tar.zst
+          compression-level: 0
+          retention-days: 1
+
+
+  unit-tests:
+    name: Run Unit Tests
+    needs: generate-release-tarball
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        shell: bash
+    container:
+      image: ghcr.io/dune-daq/nightly-release-alma9:development_v5
+    permissions:
+      contents: read
+      checks: write # Required for action-junit-report
+
+    steps:
+      - name: Checkout workflow repository
+        uses: actions/checkout@v7
+
+      - name: Initialize Test Environment
+        uses: ./.github/actions/setup-test-runner
+
+      - name: Run unit tests
+        run: |
+          cd nightly/NFD_DEV*
+          source env.sh
+          cd pythoncode/drunc
+          mkdir -p junit
+          pytest --junitxml=junit/test-results.xml --cov=drunc --cov-report=html
+
+      - name: Publish JUnit test report
+        uses: mikepenz/action-junit-report@v6
+        if: ${{ !cancelled() }}
+        with:
+          check_name: "Pytest Results"
+          report_paths: 'nightly/NFD_DEV*/pythoncode/drunc/junit/test-results.xml'
+
+      - name: Upload coverage report (HTML)
+        uses: actions/upload-artifact@v7
+        if: ${{ !cancelled() && github.event_name == 'push' }}
+        with:
+          name: html-coverage-report
+          path: nightly/NFD_DEV*/pythoncode/drunc/htmlcov/
+          retention-days: 1
+
+
+  publish-coverage:
+    name: Publish Coverage of unit tests
+    needs: unit-tests
+    if: github.event_name == 'push' && needs.unit-tests.result == 'success'
+    runs-on: ubuntu-latest
+    concurrency:
+      group: gh-pages-deploy
+      cancel-in-progress: false
+    permissions:
+      contents: write # Allows actions-gh-pages to push HTML to gh-pages branch
+
+    steps:
+      - name: Download HTML coverage artifact
+        uses: actions/download-artifact@v8
+        with:
+          name: html-coverage-report
+          path: htmlcov
+
+      - name: Deploy HTML coverage to GitHub Pages
+        uses: peaceiris/actions-gh-pages@v4
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: htmlcov
+          destination_dir: coverage/${{ github.ref_name }}
+          publish_branch: gh-pages
+          keep_files: true
+
+
+  select-daqsystemtest-integtests:
+    name: Select integration tests from daqsystemtest
+    # Select integration tests that can run on the default 4 core runner
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.set-matrix.outputs.matrix }}
+    steps:
+      - name: Define daqsystemtest matrix
+        id: set-matrix
+        run: |
+          # Output the shared list of test scripts as a JSON array
+          echo 'matrix=["small_footprint_quick_test.py", "fake_data_producer_test.py"]' >> "$GITHUB_OUTPUT"
+
+
+  select-drunc-integtests:
+    name: Select integration tests from drunc
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.set-matrix.outputs.matrix }}
+    steps:
+      - name: Generate test list
+        id: set-matrix
+        run: |
+          # Clone just the drunc repository to read the file list
+          git clone "https://github.com/${REPO_OWNER}/drunc.git" -b "$HEAD_REF" || git clone https://github.com/DUNE-DAQ/drunc.git
+          cd drunc/src/drunc/integtest
+
+          # Find all python files, build a JSON array, and set it as an output variable
+          FILES_JSON=$(ls -1 *_test.py | jq -R -s -c 'split("\n")[:-1]')
+          echo "matrix=$FILES_JSON" >> "$GITHUB_OUTPUT"
+
+
+  daqsystemtest-integration:
+    name: "Run daqsystemtest integration: ${{ matrix.test_script }}"
+    if: github.event_name == 'pull_request'
+    needs: [generate-release-tarball, select-daqsystemtest-integtests]
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        test_script: ${{ fromJSON(needs.select-daqsystemtest-integtests.outputs.matrix) }}
+
+    defaults:
+      run:
+        shell: bash
+    container:
+      image: ghcr.io/dune-daq/nightly-release-alma9:development_v5
+
+    steps:
+      - name: Checkout workflow repository
+        uses: actions/checkout@v7
+
+      - name: Initialize Test Environment
+        uses: ./.github/actions/setup-test-runner
+
+      - name: Run daqsystemtest (${{ matrix.test_script }})
+        run: |
+          cd nightly/NFD_DEV*
+          source env.sh
+          export USER=$(whoami)
+          daqsystemtest_integtest_bundle.sh -k ${{ matrix.test_script }} --verbosity 5 --tmpdir "$TEST_DIR" 2>&1
+
+
+  drunc-integration:
+    name: "Run drunc integration: ${{ matrix.test_script }}"
+    if: github.event_name == 'pull_request'
+    needs: [generate-release-tarball, select-drunc-integtests]
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        test_script: ${{ fromJSON(needs.select-drunc-integtests.outputs.matrix) }}
+    defaults:
+      run:
+        shell: bash
+    container:
+      image: ghcr.io/dune-daq/nightly-release-alma9:development_v5
+
+    steps:
+      - name: Checkout workflow repository
+        uses: actions/checkout@v7
+
+      - name: Initialize Test Environment
+        uses: ./.github/actions/setup-test-runner
+
+      - name: Run drunc (${{ matrix.test_script }})
+        run: |
+          cd nightly/NFD_DEV*
+          source env.sh
+          cd pythoncode/drunc
+          source scripts/setup_drunc_config_path.sh
+          source scripts/drunc_integtest_bundle.sh -k ${{ matrix.test_script }} --verbosity 5 --tmpdir "$TEST_DIR" 2>&1
+
+
+  daqsystemtest-integration-k8s:
+    name: "Run daqsystemtest integration (k8s): ${{ matrix.test_script }}"
+    if: github.event_name == 'pull_request'
+    needs: [generate-release-tarball, select-daqsystemtest-integtests]
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        test_script: ${{ fromJSON(needs.select-daqsystemtest-integtests.outputs.matrix) }}
+
+    defaults:
+      run:
+        shell: bash
+    container:
+      image: ghcr.io/dune-daq/nightly-release-alma9:development_v5
+      options: --cap-add=NET_ADMIN
+      volumes:
+        - /var/run/docker.sock:/var/run/docker.sock
+
+    steps:
+      - name: Checkout workflow repository
+        uses: actions/checkout@v7
+
+      - name: Initialize Test Environment
+        uses: ./.github/actions/setup-test-runner
+
+      - name: Setup Kind and Kubectl
+        uses: ./.github/actions/setup-kind
+        with:
+          cluster_name: daq-k8s-cluster
+
+      - name: Run daqsystemtest (k8s)
+        run: |
+          cd nightly/NFD_DEV*
+          source env.sh
+          export USER=$(whoami)
+
+          daqsystemtest_integtest_bundle.sh \
+            -k "${{ matrix.test_script }}" \
+            --pytest-options "--process-manager-type k8s" \
+            --verbosity 5 \
+            --tmpdir "$TEST_DIR" 2>&1 | tee "$TEST_DIR/bundle_stdout.log"
+
+      - name: Validate test pass
+        if: always()
+        uses: ./.github/actions/validate-test-pass
+
+      - name: Investigate failure from daqsystemtest (k8s)
+        if: failure()
+        run: |
+          echo "======================== CONTAINERS LOGS FROM KIND DISK ========================"
+          docker exec "$KIND_CONTAINER" bash -c '
+            find /var/log/pods -name "*.log" -exec echo "=== Log file: {} ===" \; -exec cat {} \;
+          '
+
+          echo "========================== All Pods across namespaces =========================="
+          kubectl get pods -A -o wide
+
+          echo "======================= Describe Pods across namespaces ========================"
+          kubectl describe pods -A || true
+
+          echo "=============== Root-controller logs (if any container started) ================"
+          kubectl logs -A -l app=root-controller --all-containers=true || true
+
+          echo "====================== ALL CONTAINERS (INCLUDING EXITED) ======================="
+          docker exec "$KIND_CONTAINER" crictl ps -a
+
+          echo "========================== LOGS OF EXITED CONTAINERS ==========================="
+          docker exec "$KIND_CONTAINER" bash -c '
+            for cid in $(crictl ps -a --state Exited -q); do
+              echo "--------------------------------------------------"
+              echo "Container ID: $cid"
+              crictl inspect "$cid" | grep -E "image|name|exitCode|reason" | head -n 10
+              echo "--- STDOUT / STDERR ---"
+              crictl logs "$cid"
+              echo "--------------------------------------------------"
+            done
+          '
+
+          echo "Running secondary check"
+          kubectl get events -A --sort-by='.metadata.creationTimestamp'
+          echo "Done"
+
+
+  drunc-integration-k8s:
+    name: "Run drunc integration (k8s): ${{ matrix.test_script }}"
+    if: github.event_name == 'pull_request'
+    needs: [generate-release-tarball]
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        test_script: ["basic_multiapp_test.py"]
+
+    defaults:
+      run:
+        shell: bash
+    container:
+      image: ghcr.io/dune-daq/nightly-release-alma9:development_v5
+      options: --cap-add=NET_ADMIN
+      volumes:
+        - /var/run/docker.sock:/var/run/docker.sock
+
+    steps:
+      - name: Checkout workflow repository
+        uses: actions/checkout@v7
+
+      - name: Initialize Test Environment
+        uses: ./.github/actions/setup-test-runner
+
+      - name: Setup Kind and Kubectl
+        uses: ./.github/actions/setup-kind
+        with:
+          cluster_name: daq-k8s-cluster
+
+      - name: Run drunc (k8s)
+        run: |
+          cd nightly/NFD_DEV*
+          source env.sh
+          cd pythoncode/drunc
+          source scripts/setup_drunc_config_path.sh
+          source scripts/drunc_integtest_bundle.sh -k ${{ matrix.test_script }} --pytest-options "--process-manager-type k8s" --verbosity 5 --tmpdir "$TEST_DIR" 2>&1
