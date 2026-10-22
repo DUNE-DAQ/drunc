@@ -285,6 +285,8 @@ def echo(
     execute_along_path: bool,
     execute_on_all_subsequent_children_in_path: bool,
 ) -> None:
+    #! OKay we need to rework the target vs target server this is bollocks
+
     """
     Log a message locally or send it to selected servers.
 
@@ -298,17 +300,24 @@ def echo(
         logger: The selected logger target.
         severity: The log severity level.
     """
+
+    # echo --server --logger main --target-server controller --target root-controller/ru-controller hellothereeeeebaybee
+    # above gi ves errors in ru controller
+
     log = get_logger("unified_shell.echo")
-    log.debug("Logging message to server(s)...")
+    log.warning(f"Logging message to server(s)... {target_server} huh")
 
     if not server:
         (log_echo if logger == LoggerTarget.ECHO else log).info(text)
+        log.warning("not server")
         return
 
     if target_server in ["", "process_manager"]:
         obj.get_pm_driver().send_log(text=text, severity=severity, logger=logger)
+        log.warning("pm")
 
     if target_server in ["", "controller"] and obj.has_driver("controller"):
+        log.warning("controller")
         obj.get_controller_driver().send_log(
             text=text,
             severity=severity,
