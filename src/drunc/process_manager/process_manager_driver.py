@@ -6,6 +6,7 @@ import tempfile
 import time
 from collections.abc import Iterator
 from time import sleep
+from types import FrameType
 from typing import List
 from urllib.parse import urlparse
 
@@ -148,7 +149,7 @@ class ProcessManagerDriver:
         )
 
         # Step 5 - track boot timings per host
-        last_boot_on_host_at = {}
+        last_boot_on_host_at: dict[str, float] = {}
         previous_host = None
 
         # Step 6: iterate over boot requests
@@ -776,7 +777,7 @@ To debug it, close drunc and run the following command:
             )
             return final_address
 
-        def keyboard_interrupt_on_sigint(signal, frame):
+        def keyboard_interrupt_on_sigint(signal: int, frame: FrameType | None) -> None:
             self.log.warning("Interrupted")
             raise KeyboardInterrupt
 
@@ -828,7 +829,9 @@ To debug it, close drunc and run the following command:
             response = self.stub.boot(request, timeout=timeout)
             yield response
 
-    def _prepare_exec_and_args_dummy_boot(self, sleep: int, n_sleeps: int) -> list:
+    def _prepare_exec_and_args_dummy_boot(
+        self, sleep: int, n_sleeps: int
+    ) -> list[ProcessDescription.ExecAndArgs]:
         args = [
             ProcessDescription.ExecAndArgs(exec="echo", args=["Starting dummy_boot."])
         ]
@@ -843,7 +846,12 @@ To debug it, close drunc and run the following command:
         return args
 
     def _build_boot_request_dummy_boot(
-        self, user: str, session_name: str, process: int, exec_args: list, pwd: str
+        self,
+        user: str,
+        session_name: str,
+        process: int,
+        exec_args: list[ProcessDescription.ExecAndArgs],
+        pwd: str,
     ) -> BootRequest:
         return BootRequest(
             token=copy_token(self.token),
@@ -943,8 +951,12 @@ To debug it, close drunc and run the following command:
     # ----- logging helpers -----
 
     def _log_controller_lookup_failure(
-        self, session_name, top_controller_name, connection_server, connection_port
-    ):
+        self,
+        session_name: str,
+        top_controller_name: str,
+        connection_server: str,
+        connection_port: int,
+    ) -> None:
         # Logs detailed troubleshooting steps
         self.log.error(
             f"""
@@ -970,8 +982,8 @@ To debug it, close drunc and run the following command:
         )
 
     def _log_controller_interrupt(
-        self, top_controller_name, connection_server, connection_port
-    ):
+        self, top_controller_name: str, connection_server: str, connection_port: int
+    ) -> None:
         # Logs recovery instructions after user interrupts controller lookup
         self.log.warning(
             f"""This shell didn't connect to the {top_controller_name}.
