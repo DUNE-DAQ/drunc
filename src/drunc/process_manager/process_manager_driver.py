@@ -12,6 +12,7 @@ from urllib.parse import urlparse
 
 import conffwk
 import grpc
+from confmodel_dal.dal_protocols import Service, Session
 from daqconf.set_connectivity_service_port import set_connectivity_service_port
 from daqconf.set_rc_controller_port import set_rc_controller_port
 from daqconf.utils import find_free_port
@@ -88,7 +89,7 @@ class ProcessManagerDriver:
         except Exception as e:
             self.log.error(f"Error closing gRPC channel: {e}", exc_info=True)
 
-    def update_controller_logs(self, ctrl_dal: "conffwk.dal.Session", level: str):
+    def update_controller_logs(self, ctrl_dal: Session, level: str) -> Session:
         """
         Update the log level of the controller in the DAL.
         Will automatically capitalise any string to match the configuration schema.
@@ -226,7 +227,7 @@ class ProcessManagerDriver:
     def _collect_all_apps(
         self,
         oks_conf: str,
-        session_dal: "conffwk.dal.Session",
+        session_dal: Session,
         session_name: str,
     ) -> list[AppInfo]:
         from drunc.process_manager.oks_parser import collect_apps, collect_infra_apps
@@ -257,7 +258,7 @@ class ProcessManagerDriver:
         return apps
 
     def _prepare_exec_and_args(
-        self, session_dal, exe: str, args: List[str]
+        self, session_dal: Session, exe: str, args: List[str]
     ) -> List[ProcessDescription.ExecAndArgs]:
         """
         Prepare
@@ -295,7 +296,7 @@ class ProcessManagerDriver:
         app: AppInfo,
         user: str,
         session_name: str,
-        session_dal,
+        session_dal: Session,
         session_log_path: str,
         override_logs: bool,
         pwd: str,
@@ -376,7 +377,7 @@ class ProcessManagerDriver:
         self,
         oks_conf: str,
         user: str,
-        session_dal,
+        session_dal: Session,
         session_name: str,
         override_logs: bool,
     ) -> Iterator[BootRequest]:
@@ -454,8 +455,8 @@ To debug it, close drunc and run the following command:
         return session_dal
 
     def check_port_conflicts(
-        self, db: conffwk.Configuration, session_dal: "conffwk.dal.Session"
-    ) -> tuple[conffwk.Configuration, "conffwk.dal.Session"]:
+        self, db: conffwk.Configuration, session_dal: Session
+    ) -> tuple[conffwk.Configuration, Session]:
         """
         Check that the ports allocated in the configuration file are available. If the
         file is editable, make the changes in the file itself. Otherwise, make the
@@ -491,7 +492,7 @@ To debug it, close drunc and run the following command:
         # Check that the address of the root controller is available, otherwise change
         # it to one that is available
         root_controller_host: str = session_dal.segment.controller.runs_on.runs_on.id
-        root_controller_service_list: int = [
+        root_controller_service_list: list[Service] = [
             service
             for service in session_dal.segment.controller.exposes_service
             if "_control" in service.id
@@ -575,7 +576,7 @@ To debug it, close drunc and run the following command:
         return db, session_dal
 
     def _connect_to_service(
-        self, session_dal: "conffwk.dal.Session", session_name: str
+        self, session_dal: Session, session_name: str
     ) -> ConnectivityServiceClient | None:
         if session_dal.connectivity_service:
             connection_server = session_dal.connectivity_service.host
@@ -589,7 +590,7 @@ To debug it, close drunc and run the following command:
 
     def _discover_controller(
         self,
-        session_dal: "conffwk.dal.Session",
+        session_dal: Session,
         session_name: str,
         csc: ConnectivityServiceClient | None,
         connection_server: str,
