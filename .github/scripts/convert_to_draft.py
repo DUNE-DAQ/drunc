@@ -21,6 +21,7 @@ def main() -> int:
     if not isinstance(node_id, str) or not node_id:
         raise RoutingError("Pull request has no GraphQL node ID")
 
+    # GitHub REST API does not include convert to draft, so we have to use graphql here
     data = api.graphql(
         """
         mutation ConvertToDraft($pullRequestId: ID!) {
