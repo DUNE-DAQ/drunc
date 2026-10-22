@@ -1,7 +1,6 @@
 # DUNE Run Control (drunc)
 
-[![Lint](https://github.com/DUNE-DAQ/drunc/actions/workflows/lint.yml/badge.svg)](https://github.com/DUNE-DAQ/drunc/actions/workflows/lint.yml)
-[![pytest](https://github.com/DUNE-DAQ/drunc/actions/workflows/run_pytest.yml/badge.svg)](https://github.com/DUNE-DAQ/drunc/actions/workflows/run_pytest.yml)
+[![Tests](https://github.com/DUNE-DAQ/drunc/actions/workflows/testing.yml/badge.svg?branch=develop)](https://github.com/DUNE-DAQ/drunc/actions/workflows/testing.yml)
 
 [Develop test coverage report](https://dune-daq.github.io/drunc/coverage/develop/)
 
