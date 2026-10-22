@@ -49,6 +49,7 @@ dev = [
   "types-click-shell",
   "types-paramiko",
   "types-jsonschema",
+  "PyYAML==6.0.2",
 ]
 prod = ["paramiko[gssapi]"]
 test = [
@@ -65,6 +66,7 @@ test = [
   "types-click-shell",
   "types-paramiko",
   "types-jsonschema",
+  "PyYAML==6.0.2",
 ]
 
 [project.scripts]
