@@ -118,7 +118,7 @@ class ChildCommandExceptionCommon:
 
     @property
     def child_details(self) -> list[Message]:
-        return self._child_details
+        return list(self._child_details)
 
 
 class ChildCommandNonTerminalException(

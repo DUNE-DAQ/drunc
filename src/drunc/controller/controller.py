@@ -551,7 +551,7 @@ class Controller(ControllerServicer):
             message=str(failure),
             details=[
                 pack_to_any(detail)
-                for detail in failure.child_details
+                for detail in failure.rich_details
                 ],
             ),
         )
@@ -632,7 +632,6 @@ class Controller(ControllerServicer):
         child_callable: Callable[[ChildNode, str], T],
         child_list: list[tuple[ChildNode, str]],
         indices: list[int] | None = None,
-        abort_on_child_error: bool = False,
         degrade_response: Callable[[ChildNode, ChildCommandNonTerminalException], T] | None = None,
     ) -> list[T]:
         """Propagate commands concurrently to a list of children.
@@ -644,7 +643,7 @@ class Controller(ControllerServicer):
             child_list: List of (node, target) for each addressed child.
             indices: Optional list of indices selecting which entries from
                 ``child_list`` to execute.
-            degrade_response: Callable[[ChildNode, ChildCommandNonTerminalException], T] | None: Optional callable to convert a child failure into a response when abort_on_child_error is False.
+            degrade_response: Callable[[ChildNode, ChildCommandNonTerminalException], T] | None: Optional callable to convert a child failure into a response.
 
         Returns:
             List of responses from each child.
@@ -1089,6 +1088,7 @@ class Controller(ControllerServicer):
                 )
                 fsm_args = None
                 fsm_data = command.data
+                return response
             except Exception as error:
                 raise DruncTerminalException(
                     message=(
@@ -1182,7 +1182,7 @@ class Controller(ControllerServicer):
                 ),
                 child_list,
                 indices=connected_indices,
-                degrade_response=lambda child, failure: self._degrade_fsm_command_response(
+                degrade_response=lambda child, failure: self._degrade_fsm_response(
                     child,
                     failure,
                     command_name,
