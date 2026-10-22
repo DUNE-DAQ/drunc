@@ -44,7 +44,7 @@ jobs:
         uses: ./.github/actions/setup-dev-nightly-with-drunc
 
       - name: Install zstd
-        run: dnf install -y zstd
+        run: dnf install -y --disablerepo=epel zstd
 
       - name: Pack workarea
         run: tar --zstd -cf /tmp/nightly.tar.zst nightly

@@ -14,9 +14,9 @@ runs:
       shell: bash
       run: |
         dnf remove -y podman-docker || true
-        dnf install -y dnf-plugins-core
+        dnf install -y --disablerepo=epel dnf-plugins-core
         dnf config-manager --add-repo https://download.docker.com/linux/centos/docker-ce.repo
-        dnf install -y --allowerasing docker-ce-cli
+        dnf install -y --disablerepo=epel --allowerasing docker-ce-cli
         which docker
         docker info
 
@@ -132,7 +132,7 @@ runs:
         } >> "$GITHUB_ENV"
 
         # Route the Kind pod network through the Kind node IP so the runner can reach pod IPs
-        dnf install -y iproute
+        dnf install -y --disablerepo=epel iproute
         ip route replace 10.244.0.0/16 via "$KIND_IP"
 
         # hostNetwork pods reach the runner-hosted integtest connectivity service via localhost, we need to set up DNAT and MASQUERADE rules in the Kind node
