@@ -158,15 +158,6 @@ def append_summary(text: str) -> None:
             summary.write(text.rstrip() + "\n")
 
 
-_MARKER_KEYS = (
-    "approval",
-    "tracker",
-    "tracker_state_prefix",
-    "checklist_start",
-    "checklist_end",
-)
-
-
 @cache
 def bot_config() -> dict:
     """Load the bot identity and comment markers from pr-bot-comments/bot.yml."""
@@ -181,10 +172,16 @@ def bot_config() -> dict:
     ):
         raise RoutingError("Bot config needs a non-empty bot_login string")
     markers = raw.get("markers")
-    if not isinstance(markers, dict) or not all(
-        isinstance(markers.get(key), str) and markers[key] for key in _MARKER_KEYS
+    if (
+        not isinstance(markers, dict)
+        or not markers
+        or not all(
+            isinstance(key, str) and key and isinstance(value, str) and value
+            for key, value in markers.items()
+        )
     ):
         raise RoutingError(
-            f"Bot config markers must define non-empty strings for: {', '.join(_MARKER_KEYS)}"
+            "Bot config markers must be a non-empty mapping of "
+            "non-empty strings to non-empty strings"
         )
     return raw
