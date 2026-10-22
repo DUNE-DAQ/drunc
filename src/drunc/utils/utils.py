@@ -627,7 +627,7 @@ def get_control_type_and_uri_from_connectivity_service(
 
     else:
         # If a bar was requested but we are in a file, print a static log entry instead
-        if progress_bar:
+        if progress_bar and shared_console is not None:
             shared_console.print(f"[yellow]{title}[/yellow] (Waiting...)")
 
         while elapsed < timeout:
