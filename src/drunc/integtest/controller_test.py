@@ -13,7 +13,6 @@ from integ_test_utils import (
     get_status_table_after_echo,
     strip_ansi,
 )
-from integrationtest.verbosity_helper import IntegtestVerbosityLevels  # noqa: F401
 from pm_test_common import FsmCommandParams
 
 pytest_plugins = "integrationtest.integrationtest_drunc"

@@ -16,7 +16,6 @@ from integ_test_utils import (
     require_pattern_match_index,
     strip_ansi,
 )
-from integrationtest.verbosity_helper import IntegtestVerbosityLevels  # noqa: F401
 
 pytest_plugins = "integrationtest.integrationtest_drunc"
 

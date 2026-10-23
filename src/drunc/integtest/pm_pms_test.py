@@ -27,7 +27,6 @@ from integ_test_utils import (
     require_pattern_match_index,
     strip_ansi,
 )
-from integrationtest.verbosity_helper import IntegtestVerbosityLevels  # noqa: F401
 from pm_test_common import ignored_logfile_problems, make_conf_dict
 
 print = functools.partial(print, flush=True)  # always flush print() output
