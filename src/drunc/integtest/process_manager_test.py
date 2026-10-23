@@ -155,7 +155,7 @@ def test_dunerc_success(run_dunerc, caplog) -> None:
     """Checks that the drunc integration command sequence completes successfully."""
 
     # checks for run control success, problems during pytest setup, etc.
-    utility_functions.basic_checks(run_dunerc, caplog, print_test_name=True)
+    utility_functions.basic_checks(run_dunerc, caplog, print_test_name=False)
 
 
 def test_log_files(run_dunerc) -> None:
@@ -209,6 +209,7 @@ def test_log_files(run_dunerc) -> None:
             True,
             True,
             ignored_logfile_problems,
+            verbosity_helper=run_dunerc.verbosity_helper,
         )
 
 
