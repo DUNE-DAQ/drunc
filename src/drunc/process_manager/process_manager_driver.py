@@ -121,7 +121,6 @@ class ProcessManagerDriver:
         sleep_between_app_boot: (
             int | float
         ) = 0,  # This may be useful if you have are using SSHPM, and have SSHD's maxstartups setting set to a low value.
-        **kwargs,
     ) -> Iterator[ProcessInstanceList]:
         self.log.info(f"Booting session [green]{session_name}[/green]")
 
@@ -160,7 +159,6 @@ class ProcessManagerDriver:
             session_dal=session_dal,
             session_name=session_name,
             override_logs=override_logs,
-            **kwargs,
         ):
             if not request:
                 self.log.error("[red]No boot request was generated, ending boot.[/red]")
@@ -568,7 +566,9 @@ To debug it, close drunc and run the following command:
                 updated_session_dal,
             )
 
-    def _initialise_session(self, conf_file: str, conf_id: str) -> tuple:
+    def _initialise_session(
+        self, conf_file: str, conf_id: str
+    ) -> tuple["conffwk.Configuration", Session]:
         import conffwk  # isort: skip
 
         db = conffwk.Configuration(conf_file)
