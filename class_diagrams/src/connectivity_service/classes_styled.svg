@@ -12,7 +12,7 @@
 <!-- drunc.connectivity_service.exceptions.ApplicationLookupUnsuccessful -->
 <g id="node1" class="node">
 <title>drunc.connectivity_service.exceptions.ApplicationLookupUnsuccessful</title>
-<g id="a_node1"><a xlink:href="https://github.com/DUNE-DAQ/drunc/blob/9bfc08bf4c4e33bf96826d83e1c04a7fa5fa6685/src/drunc/connectivity_service/exceptions.py#L12" xlink:title="{ApplicationLookupUnsuccessful|&lt;br ALIGN=&quot;LEFT&quot;/&gt;|}" target="_blank">
+<g id="a_node1"><a xlink:href="https://github.com/DUNE-DAQ/drunc/blob/0905a2acd037d51f11aa4ea7482233a1b9bc10dd/src/drunc/connectivity_service/exceptions.py#L12" xlink:title="{ApplicationLookupUnsuccessful|&lt;br ALIGN=&quot;LEFT&quot;/&gt;|}" target="_blank">
 <polygon fill="#fff4b8" stroke="#8b7355" points="0,-33 0,-91 170,-91 170,-33 0,-33"/>
 <text text-anchor="start" x="8" y="-79" font-family="Helvetica,sans-Serif" font-size="10.00">ApplicationLookupUnsuccessful</text>
 <polyline fill="none" stroke="#8b7355" points="0,-72 170,-72 "/>
@@ -24,7 +24,7 @@
 <!-- drunc.connectivity_service.exceptions.ApplicationRegistrationUnsuccessful -->
 <g id="node2" class="node">
 <title>drunc.connectivity_service.exceptions.ApplicationRegistrationUnsuccessful</title>
-<g id="a_node2"><a xlink:href="https://github.com/DUNE-DAQ/drunc/blob/9bfc08bf4c4e33bf96826d83e1c04a7fa5fa6685/src/drunc/connectivity_service/exceptions.py#L8" xlink:title="{ApplicationRegistrationUnsuccessful|&lt;br ALIGN=&quot;LEFT&quot;/&gt;|}" target="_blank">
+<g id="a_node2"><a xlink:href="https://github.com/DUNE-DAQ/drunc/blob/0905a2acd037d51f11aa4ea7482233a1b9bc10dd/src/drunc/connectivity_service/exceptions.py#L8" xlink:title="{ApplicationRegistrationUnsuccessful|&lt;br ALIGN=&quot;LEFT&quot;/&gt;|}" target="_blank">
 <polygon fill="#fff4b8" stroke="#8b7355" points="213.5,-33 213.5,-91 408.5,-91 408.5,-33 213.5,-33"/>
 <text text-anchor="start" x="221.5" y="-79" font-family="Helvetica,sans-Serif" font-size="10.00">ApplicationRegistrationUnsuccessful</text>
 <polyline fill="none" stroke="#8b7355" points="213.5,-72 408.5,-72 "/>
@@ -36,7 +36,7 @@
 <!-- drunc.connectivity_service.exceptions.ApplicationRegistryNotPresent -->
 <g id="node3" class="node">
 <title>drunc.connectivity_service.exceptions.ApplicationRegistryNotPresent</title>
-<g id="a_node3"><a xlink:href="https://github.com/DUNE-DAQ/drunc/blob/9bfc08bf4c4e33bf96826d83e1c04a7fa5fa6685/src/drunc/connectivity_service/exceptions.py#L4" xlink:title="{ApplicationRegistryNotPresent|&lt;br ALIGN=&quot;LEFT&quot;/&gt;|}" target="_blank">
+<g id="a_node3"><a xlink:href="https://github.com/DUNE-DAQ/drunc/blob/0905a2acd037d51f11aa4ea7482233a1b9bc10dd/src/drunc/connectivity_service/exceptions.py#L4" xlink:title="{ApplicationRegistryNotPresent|&lt;br ALIGN=&quot;LEFT&quot;/&gt;|}" target="_blank">
 <polygon fill="#fff4b8" stroke="#8b7355" points="452,-33 452,-91 618,-91 618,-33 452,-33"/>
 <text text-anchor="start" x="460" y="-79" font-family="Helvetica,sans-Serif" font-size="10.00">ApplicationRegistryNotPresent</text>
 <polyline fill="none" stroke="#8b7355" points="452,-72 618,-72 "/>
@@ -48,7 +48,7 @@
 <!-- drunc.connectivity_service.exceptions.ApplicationUpdateUnsuccessful -->
 <g id="node4" class="node">
 <title>drunc.connectivity_service.exceptions.ApplicationUpdateUnsuccessful</title>
-<g id="a_node4"><a xlink:href="https://github.com/DUNE-DAQ/drunc/blob/9bfc08bf4c4e33bf96826d83e1c04a7fa5fa6685/src/drunc/connectivity_service/exceptions.py#L16" xlink:title="{ApplicationUpdateUnsuccessful|&lt;br ALIGN=&quot;LEFT&quot;/&gt;|}" target="_blank">
+<g id="a_node4"><a xlink:href="https://github.com/DUNE-DAQ/drunc/blob/0905a2acd037d51f11aa4ea7482233a1b9bc10dd/src/drunc/connectivity_service/exceptions.py#L16" xlink:title="{ApplicationUpdateUnsuccessful|&lt;br ALIGN=&quot;LEFT&quot;/&gt;|}" target="_blank">
 <polygon fill="#fff4b8" stroke="#8b7355" points="661.5,-33 661.5,-91 832.5,-91 832.5,-33 661.5,-33"/>
 <text text-anchor="start" x="669.5" y="-79" font-family="Helvetica,sans-Serif" font-size="10.00">ApplicationUpdateUnsuccessful</text>
 <polyline fill="none" stroke="#8b7355" points="661.5,-72 832.5,-72 "/>
@@ -60,7 +60,7 @@
 <!-- drunc.connectivity_service.client.ConnectivityServiceClient -->
 <g id="node5" class="node">
 <title>drunc.connectivity_service.client.ConnectivityServiceClient</title>
-<g id="a_node5"><a xlink:href="https://github.com/DUNE-DAQ/drunc/blob/9bfc08bf4c4e33bf96826d83e1c04a7fa5fa6685/src/drunc/connectivity_service/client.py#L9" xlink:title="{ConnectivityServiceClient|address&lt;br ALIGN=&quot;LEFT&quot;/&gt;log : NoneType, RootLogger&lt;br ALIGN=&quot;LEFT&quot;/&gt;session : str&lt;br ALIGN=&quot;LEFT&quot;/&gt;|is_ready(timeout: int): bool&lt;br ALIGN=&quot;LEFT&quot;/&gt;publish(uid: str, uri: str, data_type: str): None&lt;br ALIGN=&quot;LEFT&quot;/&gt;resolve(uid_regex: str, data_type: str, ntries: int): dict[str, object]&lt;br ALIGN=&quot;LEFT&quot;/&gt;retract(uid: str, fail_quickly: bool): None&lt;br ALIGN=&quot;LEFT&quot;/&gt;retract_partition(fail_quickly: bool, fail_quietly: bool): None&lt;br ALIGN=&quot;LEFT&quot;/&gt;}" target="_blank">
+<g id="a_node5"><a xlink:href="https://github.com/DUNE-DAQ/drunc/blob/0905a2acd037d51f11aa4ea7482233a1b9bc10dd/src/drunc/connectivity_service/client.py#L9" xlink:title="{ConnectivityServiceClient|address&lt;br ALIGN=&quot;LEFT&quot;/&gt;log : NoneType, RootLogger&lt;br ALIGN=&quot;LEFT&quot;/&gt;session : str&lt;br ALIGN=&quot;LEFT&quot;/&gt;|is_ready(timeout: int): bool&lt;br ALIGN=&quot;LEFT&quot;/&gt;publish(uid: str, uri: str, data_type: str): None&lt;br ALIGN=&quot;LEFT&quot;/&gt;resolve(uid_regex: str, data_type: str, ntries: int): dict[str, object]&lt;br ALIGN=&quot;LEFT&quot;/&gt;retract(uid: str, fail_quickly: bool): None&lt;br ALIGN=&quot;LEFT&quot;/&gt;retract_partition(fail_quickly: bool, fail_quietly: bool): None&lt;br ALIGN=&quot;LEFT&quot;/&gt;}" target="_blank">
 <polygon fill="#fff4b8" stroke="#8b7355" points="875.5,-0.5 875.5,-123.5 1208.5,-123.5 1208.5,-0.5 875.5,-0.5"/>
 <text text-anchor="start" x="978.5" y="-111.5" font-family="Helvetica,sans-Serif" font-size="10.00">ConnectivityServiceClient</text>
 <polyline fill="none" stroke="#8b7355" points="875.5,-104.5 1208.5,-104.5 "/>

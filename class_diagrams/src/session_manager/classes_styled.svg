@@ -12,7 +12,7 @@
 <!-- drunc.session_manager.exceptions.ChangeMeException -->
 <g id="node1" class="node">
 <title>drunc.session_manager.exceptions.ChangeMeException</title>
-<g id="a_node1"><a xlink:href="https://github.com/DUNE-DAQ/drunc/blob/9bfc08bf4c4e33bf96826d83e1c04a7fa5fa6685/src/drunc/session_manager/exceptions.py#L6" xlink:title="{ChangeMeException|&lt;br ALIGN=&quot;LEFT&quot;/&gt;|}" target="_blank">
+<g id="a_node1"><a xlink:href="https://github.com/DUNE-DAQ/drunc/blob/0905a2acd037d51f11aa4ea7482233a1b9bc10dd/src/drunc/session_manager/exceptions.py#L6" xlink:title="{ChangeMeException|&lt;br ALIGN=&quot;LEFT&quot;/&gt;|}" target="_blank">
 <polygon fill="#fff4b8" stroke="#8b7355" points="0,-38.5 0,-96.5 116,-96.5 116,-38.5 0,-38.5"/>
 <text text-anchor="start" x="8" y="-84.5" font-family="Helvetica,sans-Serif" font-size="10.00">ChangeMeException</text>
 <polyline fill="none" stroke="#8b7355" points="0,-77.5 116,-77.5 "/>
@@ -24,7 +24,7 @@
 <!-- drunc.session_manager.session_manager.SessionManager -->
 <g id="node2" class="node">
 <title>drunc.session_manager.session_manager.SessionManager</title>
-<g id="a_node2"><a xlink:href="https://github.com/DUNE-DAQ/drunc/blob/9bfc08bf4c4e33bf96826d83e1c04a7fa5fa6685/src/drunc/session_manager/session_manager.py#L30" xlink:title="{SessionManager|configuration&lt;br ALIGN=&quot;LEFT&quot;/&gt;log : NoneType, RootLogger&lt;br ALIGN=&quot;LEFT&quot;/&gt;name : str&lt;br ALIGN=&quot;LEFT&quot;/&gt;|describe(request: Request, context: ServicerContext): Description&lt;br ALIGN=&quot;LEFT&quot;/&gt;list_all_configs(request: Request, context: ServicerContext): AllConfigKeys&lt;br ALIGN=&quot;LEFT&quot;/&gt;list_all_sessions(request: Request, context: ServicerContext): AllActiveSessions&lt;br ALIGN=&quot;LEFT&quot;/&gt;load_session(request: LoadSessionRequest, context: ServicerContext): LoadSessionResponse&lt;br ALIGN=&quot;LEFT&quot;/&gt;}" target="_blank">
+<g id="a_node2"><a xlink:href="https://github.com/DUNE-DAQ/drunc/blob/0905a2acd037d51f11aa4ea7482233a1b9bc10dd/src/drunc/session_manager/session_manager.py#L30" xlink:title="{SessionManager|configuration&lt;br ALIGN=&quot;LEFT&quot;/&gt;log : NoneType, RootLogger&lt;br ALIGN=&quot;LEFT&quot;/&gt;name : str&lt;br ALIGN=&quot;LEFT&quot;/&gt;|describe(request: Request, context: ServicerContext): Description&lt;br ALIGN=&quot;LEFT&quot;/&gt;list_all_configs(request: Request, context: ServicerContext): AllConfigKeys&lt;br ALIGN=&quot;LEFT&quot;/&gt;list_all_sessions(request: Request, context: ServicerContext): AllActiveSessions&lt;br ALIGN=&quot;LEFT&quot;/&gt;load_session(request: LoadSessionRequest, context: ServicerContext): LoadSessionResponse&lt;br ALIGN=&quot;LEFT&quot;/&gt;}" target="_blank">
 <polygon fill="#fff4b8" stroke="#8b7355" points="50.5,-211.5 50.5,-323.5 521.5,-323.5 521.5,-211.5 50.5,-211.5"/>
 <text text-anchor="start" x="245.5" y="-311.5" font-family="Helvetica,sans-Serif" font-size="10.00">SessionManager</text>
 <polyline fill="none" stroke="#8b7355" points="50.5,-304.5 521.5,-304.5 "/>
@@ -42,7 +42,7 @@
 <!-- drunc.session_manager.configuration.SessionManagerConfHandler -->
 <g id="node3" class="node">
 <title>drunc.session_manager.configuration.SessionManagerConfHandler</title>
-<g id="a_node3"><a xlink:href="https://github.com/DUNE-DAQ/drunc/blob/9bfc08bf4c4e33bf96826d83e1c04a7fa5fa6685/src/drunc/session_manager/configuration.py#L6" xlink:title="{SessionManagerConfHandler|&lt;br ALIGN=&quot;LEFT&quot;/&gt;|&lt;I&gt;populate_from_dict&lt;/I&gt;(data: dict[str, object]): None&lt;br ALIGN=&quot;LEFT&quot;/&gt;}" target="_blank">
+<g id="a_node3"><a xlink:href="https://github.com/DUNE-DAQ/drunc/blob/0905a2acd037d51f11aa4ea7482233a1b9bc10dd/src/drunc/session_manager/configuration.py#L6" xlink:title="{SessionManagerConfHandler|&lt;br ALIGN=&quot;LEFT&quot;/&gt;|&lt;I&gt;populate_from_dict&lt;/I&gt;(data: dict[str, object]): None&lt;br ALIGN=&quot;LEFT&quot;/&gt;}" target="_blank">
 <polygon fill="#fff4b8" stroke="#8b7355" points="159.5,-38.5 159.5,-96.5 412.5,-96.5 412.5,-38.5 159.5,-38.5"/>
 <text text-anchor="start" x="215" y="-84.5" font-family="Helvetica,sans-Serif" font-size="10.00">SessionManagerConfHandler</text>
 <polyline fill="none" stroke="#8b7355" points="159.5,-77.5 412.5,-77.5 "/>
@@ -62,7 +62,7 @@
 <!-- drunc.session_manager.interface.context.SessionManagerContext -->
 <g id="node4" class="node">
 <title>drunc.session_manager.interface.context.SessionManagerContext</title>
-<g id="a_node4"><a xlink:href="https://github.com/DUNE-DAQ/drunc/blob/9bfc08bf4c4e33bf96826d83e1c04a7fa5fa6685/src/drunc/session_manager/interface/context.py#L11" xlink:title="{SessionManagerContext|address : str&lt;br ALIGN=&quot;LEFT&quot;/&gt;shell_id : str&lt;br ALIGN=&quot;LEFT&quot;/&gt;status_receiver : NoneType&lt;br ALIGN=&quot;LEFT&quot;/&gt;|create_drivers(): dict[str, object]&lt;br ALIGN=&quot;LEFT&quot;/&gt;create_token(): Token&lt;br ALIGN=&quot;LEFT&quot;/&gt;reset(address: str)&lt;br ALIGN=&quot;LEFT&quot;/&gt;terminate()&lt;br ALIGN=&quot;LEFT&quot;/&gt;}" target="_blank">
+<g id="a_node4"><a xlink:href="https://github.com/DUNE-DAQ/drunc/blob/0905a2acd037d51f11aa4ea7482233a1b9bc10dd/src/drunc/session_manager/interface/context.py#L11" xlink:title="{SessionManagerContext|address : str&lt;br ALIGN=&quot;LEFT&quot;/&gt;shell_id : str&lt;br ALIGN=&quot;LEFT&quot;/&gt;status_receiver : NoneType&lt;br ALIGN=&quot;LEFT&quot;/&gt;|create_drivers(): dict[str, object]&lt;br ALIGN=&quot;LEFT&quot;/&gt;create_token(): Token&lt;br ALIGN=&quot;LEFT&quot;/&gt;reset(address: str)&lt;br ALIGN=&quot;LEFT&quot;/&gt;terminate()&lt;br ALIGN=&quot;LEFT&quot;/&gt;}" target="_blank">
 <polygon fill="#fff4b8" stroke="#8b7355" points="456,-11.5 456,-123.5 630,-123.5 630,-11.5 456,-11.5"/>
 <text text-anchor="start" x="483.5" y="-111.5" font-family="Helvetica,sans-Serif" font-size="10.00">SessionManagerContext</text>
 <polyline fill="none" stroke="#8b7355" points="456,-104.5 630,-104.5 "/>
@@ -80,7 +80,7 @@
 <!-- drunc.session_manager.session_manager_driver.SessionManagerDriver -->
 <g id="node5" class="node">
 <title>drunc.session_manager.session_manager_driver.SessionManagerDriver</title>
-<g id="a_node5"><a xlink:href="https://github.com/DUNE-DAQ/drunc/blob/9bfc08bf4c4e33bf96826d83e1c04a7fa5fa6685/src/drunc/session_manager/session_manager_driver.py#L23" xlink:title="{SessionManagerDriver|address : str&lt;br ALIGN=&quot;LEFT&quot;/&gt;channel : _Channel&lt;br ALIGN=&quot;LEFT&quot;/&gt;log : NoneType, RootLogger&lt;br ALIGN=&quot;LEFT&quot;/&gt;stub&lt;br ALIGN=&quot;LEFT&quot;/&gt;token&lt;br ALIGN=&quot;LEFT&quot;/&gt;|describe(timeout: int \| float): Description&lt;br ALIGN=&quot;LEFT&quot;/&gt;list_all_configs(timeout: int \| float): AllConfigKeys&lt;br ALIGN=&quot;LEFT&quot;/&gt;list_all_sessions(timeout: int \| float): AllActiveSessions&lt;br ALIGN=&quot;LEFT&quot;/&gt;load_session(file: str, session_id: str, timeout: int \| float): LoadSessionResponse&lt;br ALIGN=&quot;LEFT&quot;/&gt;}" target="_blank">
+<g id="a_node5"><a xlink:href="https://github.com/DUNE-DAQ/drunc/blob/0905a2acd037d51f11aa4ea7482233a1b9bc10dd/src/drunc/session_manager/session_manager_driver.py#L23" xlink:title="{SessionManagerDriver|address : str&lt;br ALIGN=&quot;LEFT&quot;/&gt;channel : _Channel&lt;br ALIGN=&quot;LEFT&quot;/&gt;log : NoneType, RootLogger&lt;br ALIGN=&quot;LEFT&quot;/&gt;stub&lt;br ALIGN=&quot;LEFT&quot;/&gt;token&lt;br ALIGN=&quot;LEFT&quot;/&gt;|describe(timeout: int \| float): Description&lt;br ALIGN=&quot;LEFT&quot;/&gt;list_all_configs(timeout: int \| float): AllConfigKeys&lt;br ALIGN=&quot;LEFT&quot;/&gt;list_all_sessions(timeout: int \| float): AllActiveSessions&lt;br ALIGN=&quot;LEFT&quot;/&gt;load_session(file: str, session_id: str, timeout: int \| float): LoadSessionResponse&lt;br ALIGN=&quot;LEFT&quot;/&gt;}" target="_blank">
 <polygon fill="#fff4b8" stroke="#8b7355" points="673,-0.5 673,-134.5 1077,-134.5 1077,-0.5 673,-0.5"/>
 <text text-anchor="start" x="819.5" y="-122.5" font-family="Helvetica,sans-Serif" font-size="10.00">SessionManagerDriver</text>
 <polyline fill="none" stroke="#8b7355" points="673,-115.5 1077,-115.5 "/>

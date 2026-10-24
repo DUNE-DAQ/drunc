@@ -12,7 +12,7 @@
 <!-- drunc.apps.fake_daqapp_rest.AppCommand -->
 <g id="node1" class="node">
 <title>drunc.apps.fake_daqapp_rest.AppCommand</title>
-<g id="a_node1"><a xlink:href="https://github.com/DUNE-DAQ/drunc/blob/9bfc08bf4c4e33bf96826d83e1c04a7fa5fa6685/src/drunc/apps/fake_daqapp_rest.py#L340" xlink:title="{AppCommand|&lt;br ALIGN=&quot;LEFT&quot;/&gt;|pass_daq_app(daq_app: AppState): type[&#39;AppCommand&#39;]&lt;br ALIGN=&quot;LEFT&quot;/&gt;post(): _CommandResult&lt;br ALIGN=&quot;LEFT&quot;/&gt;}" target="_blank">
+<g id="a_node1"><a xlink:href="https://github.com/DUNE-DAQ/drunc/blob/0905a2acd037d51f11aa4ea7482233a1b9bc10dd/src/drunc/apps/fake_daqapp_rest.py#L340" xlink:title="{AppCommand|&lt;br ALIGN=&quot;LEFT&quot;/&gt;|pass_daq_app(daq_app: AppState): type[&#39;AppCommand&#39;]&lt;br ALIGN=&quot;LEFT&quot;/&gt;post(): _CommandResult&lt;br ALIGN=&quot;LEFT&quot;/&gt;}" target="_blank">
 <polygon fill="#fff4b8" stroke="#8b7355" points="0,-82.5 0,-151.5 295,-151.5 295,-82.5 0,-82.5"/>
 <text text-anchor="start" x="112.5" y="-139.5" font-family="Helvetica,sans-Serif" font-size="10.00">AppCommand</text>
 <polyline fill="none" stroke="#8b7355" points="0,-132.5 295,-132.5 "/>
@@ -25,7 +25,7 @@
 <!-- drunc.apps.fake_daqapp_rest.AppState -->
 <g id="node2" class="node">
 <title>drunc.apps.fake_daqapp_rest.AppState</title>
-<g id="a_node2"><a xlink:href="https://github.com/DUNE-DAQ/drunc/blob/9bfc08bf4c4e33bf96826d83e1c04a7fa5fa6685/src/drunc/apps/fake_daqapp_rest.py#L65" xlink:title="{AppState|appname : str&lt;br ALIGN=&quot;LEFT&quot;/&gt;executing_command : bool&lt;br ALIGN=&quot;LEFT&quot;/&gt;log : NoneType, RootLogger&lt;br ALIGN=&quot;LEFT&quot;/&gt;state : str&lt;br ALIGN=&quot;LEFT&quot;/&gt;|execute_command(req_data: CommandRequest, answer_port: str, answer_host: str \| None, remote_host: str \| None): Response&lt;br ALIGN=&quot;LEFT&quot;/&gt;send_response_to_response_listener(address: str, txt: str, success: bool, data: dict[str, object] \| None): None&lt;br ALIGN=&quot;LEFT&quot;/&gt;}" target="_blank">
+<g id="a_node2"><a xlink:href="https://github.com/DUNE-DAQ/drunc/blob/0905a2acd037d51f11aa4ea7482233a1b9bc10dd/src/drunc/apps/fake_daqapp_rest.py#L65" xlink:title="{AppState|appname : str&lt;br ALIGN=&quot;LEFT&quot;/&gt;executing_command : bool&lt;br ALIGN=&quot;LEFT&quot;/&gt;log : NoneType, RootLogger&lt;br ALIGN=&quot;LEFT&quot;/&gt;state : str&lt;br ALIGN=&quot;LEFT&quot;/&gt;|execute_command(req_data: CommandRequest, answer_port: str, answer_host: str \| None, remote_host: str \| None): Response&lt;br ALIGN=&quot;LEFT&quot;/&gt;send_response_to_response_listener(address: str, txt: str, success: bool, data: dict[str, object] \| None): None&lt;br ALIGN=&quot;LEFT&quot;/&gt;}" target="_blank">
 <polygon fill="#fff4b8" stroke="#8b7355" points="338,-66.5 338,-167.5 973,-167.5 973,-66.5 338,-66.5"/>
 <text text-anchor="start" x="633" y="-155.5" font-family="Helvetica,sans-Serif" font-size="10.00">AppState</text>
 <polyline fill="none" stroke="#8b7355" points="338,-148.5 973,-148.5 "/>
@@ -42,7 +42,7 @@
 <!-- drunc.apps.fake_daqapp_rest.CommandRequest -->
 <g id="node3" class="node">
 <title>drunc.apps.fake_daqapp_rest.CommandRequest</title>
-<g id="a_node3"><a xlink:href="https://github.com/DUNE-DAQ/drunc/blob/9bfc08bf4c4e33bf96826d83e1c04a7fa5fa6685/src/drunc/apps/fake_daqapp_rest.py#L46" xlink:title="{CommandRequest|data : NotRequired[_CmdData]&lt;br ALIGN=&quot;LEFT&quot;/&gt;entry_state : str&lt;br ALIGN=&quot;LEFT&quot;/&gt;exit_state : str&lt;br ALIGN=&quot;LEFT&quot;/&gt;id : str&lt;br ALIGN=&quot;LEFT&quot;/&gt;|}" target="_blank">
+<g id="a_node3"><a xlink:href="https://github.com/DUNE-DAQ/drunc/blob/0905a2acd037d51f11aa4ea7482233a1b9bc10dd/src/drunc/apps/fake_daqapp_rest.py#L46" xlink:title="{CommandRequest|data : NotRequired[_CmdData]&lt;br ALIGN=&quot;LEFT&quot;/&gt;entry_state : str&lt;br ALIGN=&quot;LEFT&quot;/&gt;exit_state : str&lt;br ALIGN=&quot;LEFT&quot;/&gt;id : str&lt;br ALIGN=&quot;LEFT&quot;/&gt;|}" target="_blank">
 <polygon fill="#fff4b8" stroke="#8b7355" points="1016,-72 1016,-162 1183,-162 1183,-72 1016,-72"/>
 <text text-anchor="start" x="1054" y="-150" font-family="Helvetica,sans-Serif" font-size="10.00">CommandRequest</text>
 <polyline fill="none" stroke="#8b7355" points="1016,-143 1183,-143 "/>
@@ -58,7 +58,7 @@
 <!-- drunc.apps.check_np0x_hw_status.HardwareStatus -->
 <g id="node4" class="node">
 <title>drunc.apps.check_np0x_hw_status.HardwareStatus</title>
-<g id="a_node4"><a xlink:href="https://github.com/DUNE-DAQ/drunc/blob/9bfc08bf4c4e33bf96826d83e1c04a7fa5fa6685/src/drunc/apps/check_np0x_hw_status.py#L25" xlink:title="{HardwareStatus|fembs : list[bool]&lt;br ALIGN=&quot;LEFT&quot;/&gt;online : bool&lt;br ALIGN=&quot;LEFT&quot;/&gt;|}" target="_blank">
+<g id="a_node4"><a xlink:href="https://github.com/DUNE-DAQ/drunc/blob/0905a2acd037d51f11aa4ea7482233a1b9bc10dd/src/drunc/apps/check_np0x_hw_status.py#L25" xlink:title="{HardwareStatus|fembs : list[bool]&lt;br ALIGN=&quot;LEFT&quot;/&gt;online : bool&lt;br ALIGN=&quot;LEFT&quot;/&gt;|}" target="_blank">
 <polygon fill="#fff4b8" stroke="#8b7355" points="1226.5,-83 1226.5,-151 1326.5,-151 1326.5,-83 1226.5,-83"/>
 <text text-anchor="start" x="1237" y="-139" font-family="Helvetica,sans-Serif" font-size="10.00">HardwareStatus</text>
 <polyline fill="none" stroke="#8b7355" points="1226.5,-132 1326.5,-132 "/>
@@ -72,7 +72,7 @@
 <!-- drunc.apps.check_np0x_cluster.HostData -->
 <g id="node5" class="node">
 <title>drunc.apps.check_np0x_cluster.HostData</title>
-<g id="a_node5"><a xlink:href="https://github.com/DUNE-DAQ/drunc/blob/9bfc08bf4c4e33bf96826d83e1c04a7fa5fa6685/src/drunc/apps/check_np0x_cluster.py#L13" xlink:title="{HostData|alias : str&lt;br ALIGN=&quot;LEFT&quot;/&gt;cpu_count : str&lt;br ALIGN=&quot;LEFT&quot;/&gt;cpu_model : str&lt;br ALIGN=&quot;LEFT&quot;/&gt;cpu_usage : str&lt;br ALIGN=&quot;LEFT&quot;/&gt;details : NotRequired[str]&lt;br ALIGN=&quot;LEFT&quot;/&gt;is_pingable : bool \| None&lt;br ALIGN=&quot;LEFT&quot;/&gt;key_color : str&lt;br ALIGN=&quot;LEFT&quot;/&gt;model_color : str&lt;br ALIGN=&quot;LEFT&quot;/&gt;nfs_ok : bool&lt;br ALIGN=&quot;LEFT&quot;/&gt;ram_total : str&lt;br ALIGN=&quot;LEFT&quot;/&gt;ram_usage : str&lt;br ALIGN=&quot;LEFT&quot;/&gt;ssh_key : str&lt;br ALIGN=&quot;LEFT&quot;/&gt;ssh_key_color : NotRequired[str]&lt;br ALIGN=&quot;LEFT&quot;/&gt;ssh_key_status : NotRequired[str]&lt;br ALIGN=&quot;LEFT&quot;/&gt;status : NotRequired[str]&lt;br ALIGN=&quot;LEFT&quot;/&gt;total_cores : str&lt;br ALIGN=&quot;LEFT&quot;/&gt;uptime : str&lt;br ALIGN=&quot;LEFT&quot;/&gt;|}" target="_blank">
+<g id="a_node5"><a xlink:href="https://github.com/DUNE-DAQ/drunc/blob/0905a2acd037d51f11aa4ea7482233a1b9bc10dd/src/drunc/apps/check_np0x_cluster.py#L13" xlink:title="{HostData|alias : str&lt;br ALIGN=&quot;LEFT&quot;/&gt;cpu_count : str&lt;br ALIGN=&quot;LEFT&quot;/&gt;cpu_model : str&lt;br ALIGN=&quot;LEFT&quot;/&gt;cpu_usage : str&lt;br ALIGN=&quot;LEFT&quot;/&gt;details : NotRequired[str]&lt;br ALIGN=&quot;LEFT&quot;/&gt;is_pingable : bool \| None&lt;br ALIGN=&quot;LEFT&quot;/&gt;key_color : str&lt;br ALIGN=&quot;LEFT&quot;/&gt;model_color : str&lt;br ALIGN=&quot;LEFT&quot;/&gt;nfs_ok : bool&lt;br ALIGN=&quot;LEFT&quot;/&gt;ram_total : str&lt;br ALIGN=&quot;LEFT&quot;/&gt;ram_usage : str&lt;br ALIGN=&quot;LEFT&quot;/&gt;ssh_key : str&lt;br ALIGN=&quot;LEFT&quot;/&gt;ssh_key_color : NotRequired[str]&lt;br ALIGN=&quot;LEFT&quot;/&gt;ssh_key_status : NotRequired[str]&lt;br ALIGN=&quot;LEFT&quot;/&gt;status : NotRequired[str]&lt;br ALIGN=&quot;LEFT&quot;/&gt;total_cores : str&lt;br ALIGN=&quot;LEFT&quot;/&gt;uptime : str&lt;br ALIGN=&quot;LEFT&quot;/&gt;|}" target="_blank">
 <polygon fill="#fff4b8" stroke="#8b7355" points="1370,-0.5 1370,-233.5 1551,-233.5 1551,-0.5 1370,-0.5"/>
 <text text-anchor="start" x="1437.5" y="-221.5" font-family="Helvetica,sans-Serif" font-size="10.00">HostData</text>
 <polyline fill="none" stroke="#8b7355" points="1370,-214.5 1551,-214.5 "/>
@@ -101,7 +101,7 @@
 <!-- drunc.apps.check_np0x_cluster.TrackingAutoAddPolicy -->
 <g id="node6" class="node">
 <title>drunc.apps.check_np0x_cluster.TrackingAutoAddPolicy</title>
-<g id="a_node6"><a xlink:href="https://github.com/DUNE-DAQ/drunc/blob/9bfc08bf4c4e33bf96826d83e1c04a7fa5fa6685/src/drunc/apps/check_np0x_cluster.py#L92" xlink:title="{TrackingAutoAddPolicy|res_dict&lt;br ALIGN=&quot;LEFT&quot;/&gt;|missing_host_key(client: object, hostname: str, key: object): None&lt;br ALIGN=&quot;LEFT&quot;/&gt;}" target="_blank">
+<g id="a_node6"><a xlink:href="https://github.com/DUNE-DAQ/drunc/blob/0905a2acd037d51f11aa4ea7482233a1b9bc10dd/src/drunc/apps/check_np0x_cluster.py#L92" xlink:title="{TrackingAutoAddPolicy|res_dict&lt;br ALIGN=&quot;LEFT&quot;/&gt;|missing_host_key(client: object, hostname: str, key: object): None&lt;br ALIGN=&quot;LEFT&quot;/&gt;}" target="_blank">
 <polygon fill="#fff4b8" stroke="#8b7355" points="1291.5,-310.5 1291.5,-367.5 1629.5,-367.5 1629.5,-310.5 1291.5,-310.5"/>
 <text text-anchor="start" x="1404.5" y="-355.5" font-family="Helvetica,sans-Serif" font-size="10.00">TrackingAutoAddPolicy</text>
 <polyline fill="none" stroke="#8b7355" points="1291.5,-348.5 1629.5,-348.5 "/>
