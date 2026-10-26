@@ -960,7 +960,10 @@ class Controller(ControllerServicer):
             except ServerTimeout as e:
                 response.fsm_flag = FSMResponseFlag.FSM_FAILED
                 self.stateful_node.to_error()
-                self.log.error(f"FSM command '{command_name}' failed: {e}")
+                self.log.error(
+                    f"FSM command '{command_name}' failed: {e}",
+                    extra=self.handlerconf.ERS,
+                )
                 return response
 
             # Finish propagating FSM transition to children.
