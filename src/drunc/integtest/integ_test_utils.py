@@ -23,12 +23,12 @@ import pytest
 
 ANSI_ESCAPE_RE = re.compile(r"\x1B\[[0-9;]*[A-Za-z]")
 
-# Define a regex for parsing UUIDs from the ps table in the drunc logsx
+# Define a regex for parsing UUIDs from the ps table in the drunc logs
 UUID_RE = re.compile(
     r"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
 )
 
-# For the failure mode testing, reuqire drunc to be a part of DUNEDAQ_DB_PATH
+# For failure-mode testing, require drunc to be part of DUNEDAQ_DB_PATH
 db_path_env = os.getenv("DUNEDAQ_DB_PATH", "")
 drunc_missing = not any(
     "drunc" == segment for path in db_path_env.split(":") for segment in path.split("/")
@@ -110,11 +110,13 @@ def check_file_containing(
     For each line in `lines`, check if the file contains the line.
 
     Example:
-        >>> file = PosixPath("test_file.txt")
-        >>> file.write_text("Hello\\nWorld\\n")
-        >>> check_file_containing(["Hello", "World"], file)
+        >>> from tempfile import TemporaryDirectory
+        >>> with TemporaryDirectory() as directory:
+        ...     file = PosixPath(directory) / "test_file.txt"
+        ...     _ = file.write_text("Hello\\nWorld\\n", encoding="utf-8")
+        ...     print(check_file_containing(["Hello", "World"], file))
+        ...     print(check_file_containing(["Hello", "Missing"], file))
         True
-        >>> check_file_containing(["Hello", "Missing"], file)
         False
 
     Args:
@@ -175,8 +177,9 @@ def require_line_containing(
 def require_echo_marker_index(
     lines: list[str], echo_marker: str, *, start_idx: int = 0
 ) -> int:
-    """Assert and return index of a `drunc.echo` line ending with `echo_marker`.
-    This is hardcoded since echo is a specific callable function with its own logger.
+    """Return the unique exact `drunc.echo` marker at or after `start_idx`.
+
+    Repeated markers require an explicit start index that selects one occurrence.
 
     Example:
         >>> lines = [
@@ -186,11 +189,25 @@ def require_echo_marker_index(
         >>> require_echo_marker_index(lines, "test_recovery_post")
         0
     """
-    return require_line_index(
-        lines,
-        lambda line: "drunc.echo" in line and line.rstrip().endswith(echo_marker),
-        error_message=(f"Could not find drunc.echo marker '{echo_marker}' in stdout."),
-        start_idx=start_idx,
+    indices = [
+        index
+        for index in range(start_idx, len(lines))
+        if re.search(r"\bdrunc\.echo\b", strip_ansi(lines[index]))
+        and _matches_marker(lines[index], echo_marker)
+    ]
+    assert indices, f"Could not find drunc.echo marker '{echo_marker}' in stdout."
+    assert len(indices) == 1, (
+        f"Ambiguous drunc.echo marker '{echo_marker}' at lines {indices}; "
+        "use unique markers or select an occurrence with start_idx."
+    )
+    return indices[0]
+
+
+def _matches_marker(line: str, marker: str) -> bool:
+    """Match a complete marker token at the end of a normalised log line."""
+    return (
+        re.search(r"(?<!\S)" + re.escape(marker) + r"\s*$", strip_ansi(line))
+        is not None
     )
 
 
@@ -261,17 +278,17 @@ def get_lines_between_markers(
 ) -> list[str]:
     """Return lines found strictly between two marker lines.
 
-    Marker matching uses substring containment via `require_line_containing`.
+    Match complete marker tokens at the end of normalised log lines.
     """
-    start_line_idx = require_line_containing(
+    start_line_idx = require_line_index(
         lines,
-        start_marker,
+        lambda line: _matches_marker(line, start_marker),
         error_message=f"Did not find the '{start_marker}' header line in stdout.",
         start_idx=start_idx,
     )
-    end_line_idx = require_line_containing(
+    end_line_idx = require_line_index(
         lines,
-        end_marker,
+        lambda line: _matches_marker(line, end_marker),
         error_message=f"Did not find the '{end_marker}' footer line in stdout.",
         start_idx=start_line_idx + 1,
     )
@@ -382,7 +399,7 @@ def get_table_columns(table_type: str) -> list[str]:
         list of expected table entries
 
     Raises:
-        None
+        ValueError: If the table type is unknown.
     """
     if table_type not in _TABLE_COLUMNS:
         raise ValueError(f"Unknown table type: {table_type}")
@@ -392,36 +409,43 @@ def get_table_columns(table_type: str) -> list[str]:
 def _parse_table_from_index(
     lines: list[str], start_idx: int, table_type: str
 ) -> list[dict[str, str]]:
-    """Parse a Unicode box table starting after `start_idx`, mapping cells to `columns`.
+    """Parse data rows after a title, requiring consistent widths and a closing border.
 
-    Expects rows that start with `│` and stops at a line starting with `└`.
-    Rows with fewer cells than `columns` are silently skipped.
+    Rich header rows use `┃`; data rows use `│`. Short process tables
+    have six columns, or seven when an exit-status column is present.
+    Malformed, truncated and empty tables raise AssertionError.
     """
     rows: list[dict[str, str]] = []
     columns = get_table_columns(table_type)
     column_len = len(columns)
-    header_row = True
-
-    for line in lines[start_idx + 1 :]:
-        stripped = line.strip()
+    for line_index, line in enumerate(lines[start_idx + 1 :], start=start_idx + 1):
+        stripped = strip_ansi(line).strip()
         if stripped.startswith("└"):
-            break
+            assert rows, (
+                f"No data rows found in {table_type} table after line {start_idx}."
+            )
+            return rows
         if not stripped.startswith("│"):
             continue
-        cells = [cell.strip() for cell in stripped.strip("│").split("│")]
-
-        # ps tables can omit the exit-status column if nothing died; detect the
-        # narrower shape from the first data row.
-        if header_row and table_type == "ps" and len(cells) < column_len:
+        assert stripped.endswith("│"), (
+            f"Malformed {table_type} row at line {line_index}: {line!r}."
+        )
+        cells = [cell.strip() for cell in stripped[1:-1].split("│")]
+        if not rows and table_type == "ps":
+            assert len(cells) in (6, 7), (
+                f"Expected 6 or 7 columns in ps table at line {line_index}, "
+                f"got {len(cells)}: {line!r}."
+            )
             columns = columns[: len(cells)]
-            column_len = len(cells)
-
-        if len(cells) < column_len:
-            continue
-        header_row = False
+            column_len = len(columns)
+        assert len(cells) == column_len, (
+            f"Expected {column_len} columns in {table_type} table at line {line_index}, "
+            f"got {len(cells)}: {line!r}."
+        )
         rows.append(dict(zip(columns, cells)))
-
-    return rows
+    raise AssertionError(
+        f"Missing closing border in {table_type} table after line {start_idx}."
+    )
 
 
 def _get_table_after_echo(
@@ -430,34 +454,44 @@ def _get_table_after_echo(
     header_keyword: str,
     table_type: str,
 ) -> list[dict[str, str]]:
-    """Return parsed table rows found after `echo_marker`, anchored by `header_keyword`.
+    """Extract the first matching table after a unique echo marker.
 
-    Args:
-        stdout:          Raw stdout string (ANSI stripping is handled internally).
-        echo_marker:     The drunc.echo marker to anchor the search.
-        header_keyword:  Substring identifying the table header line.
-        columns:         Ordered column names to map to each cell.
-
-    Returns:
-        Parsed rows as a list of dicts. Empty list if no table is found.
+    Input is a list of stdout lines; ANSI styling is removed internally.
+    Missing or malformed tables raise AssertionError. Only explicit
+    no-process output returns an empty list for a process listing.
+    Subsequent echo markers do not implicitly bound the search.
     """
+    lines = [strip_ansi(line) for line in lines]
     echo_idx = require_echo_marker_index(lines, echo_marker)
-
+    section = lines[echo_idx + 1 :]
+    title_pattern = {
+        "ps": r"Processes running(?: in session .+)?",
+        "status": r"(?:\S+\s+)?status",
+        "exec_report": r"\S+ execution report",
+        "run_info": r"Run Info",
+    }[table_type]
     table_start_idx = find_line_index(
-        lines,
-        lambda line: header_keyword in line,
-        start_idx=echo_idx + 1,
+        section,
+        lambda line: re.fullmatch(title_pattern, line.strip()) is not None,
     )
     if table_start_idx is None:
-        return []
-
-    return _parse_table_from_index(lines, table_start_idx, table_type)
+        if table_type == "ps" and any(
+            re.search(r"\bNo processes running(?: in session .+)?\s*$", line)
+            for line in section
+        ):
+            return []
+        raise AssertionError(
+            f"No '{header_keyword}' table found after '{echo_marker}'.\n"
+            + "\n".join(section)
+        )
+    return _parse_table_from_index(section, table_start_idx, table_type)
 
 
 def get_ps_table_after_echo(lines: list[str], echo_marker: str) -> list[dict[str, str]]:
-    """Return parsed process-table rows found after a specific echo marker.
+    r"""Return parsed process-table rows found after a specific echo marker.
 
-    If no process table is found after the marker, returns an empty list.
+    Explicit no-process output returns an empty list. Missing or malformed
+    tables raise AssertionError. Later echo markers do not bound the search.
 
     Example:
         >>> stdout = (
@@ -466,7 +500,7 @@ def get_ps_table_after_echo(lines: list[str], echo_marker: str) -> list[dict[str
         ...     "│ minimal │ root-controller │ emmuhamm │ localhost │ f201f9c7-b910-4100-bd78-11765a4d2ee1 │ True │ 0 │\n"
         ...     "└"
         ... )
-        >>> table = get_ps_table_after_echo(stdout, "test_recovery_post")
+        >>> table = get_ps_table_after_echo(stdout.splitlines(), "test_recovery_post")
         >>> table[0]["friendly_name"]
         'root-controller'
     """
@@ -476,9 +510,10 @@ def get_ps_table_after_echo(lines: list[str], echo_marker: str) -> list[dict[str
 def get_status_table_after_echo(
     lines: list[str], echo_marker: str
 ) -> list[dict[str, str]]:
-    """Return parsed status-table rows found after a specific echo marker.
+    r"""Return parsed status-table rows found after a specific echo marker.
 
-    If no status table is found after the marker, returns an empty list.
+    Missing or malformed tables raise AssertionError. Later echo markers
+    do not bound the search.
 
     The table is structured as
     | Name | Info | State | Substate | In error | Included | Endpoint |
@@ -487,18 +522,18 @@ def get_status_table_after_echo(
         >>> stdout = (
         ...     "[2026/03/17 10:48:15 UTC] INFO drunc.echo test_status_marker\n"
         ...     "unit-test status\n"
-        ...     "│ root-controller │  │ initial │ initial │ No | Yes │ grpc://np04-srv-029.cern.ch:30006 │\n"
+        ...     "│ root-controller │  │ initial │ initial │ No │ Yes │ grpc://np04-srv-029.cern.ch:30006 │\n"
         ...     "└"
         ... )
-        >>> table = get_status_table_after_echo(stdout, "test_status_marker")
+        >>> table = get_status_table_after_echo(stdout.splitlines(), "test_status_marker")
         >>> expected_row = {
-        ...     "Name": "root-controller",
-        ...     "Info": "",
-        ...     "State": "initial",
-        ...     "Substate": "initial",
-        ...     "In error": "No",
-        ...     "Included": "Yes",
-        ...     "Endpoint": "grpc://np04-srv-029.cern.ch:30006",
+        ...     "name": "root-controller",
+        ...     "info": "",
+        ...     "state": "initial",
+        ...     "substate": "initial",
+        ...     "in_error": "No",
+        ...     "included": "Yes",
+        ...     "endpoint": "grpc://np04-srv-029.cern.ch:30006",
         ... }
         >>> table[0] == expected_row
         True
@@ -507,7 +542,7 @@ def get_status_table_after_echo(
         Parsed rows with keys: name, info, state, substate, in_error, included, endpoint.
 
     Raises:
-        None
+        AssertionError: If the marker or a valid status table is missing.
     """
     return _get_table_after_echo(lines, echo_marker, "status", "status")
 
@@ -517,7 +552,8 @@ def get_execution_report_after_echo(
 ) -> list[dict[str, str]]:
     """Return parsed execution-report rows found after a specific echo marker.
 
-    If no execution report is found after the marker, returns an empty list.
+    Missing or malformed tables raise AssertionError. Later echo markers
+    do not bound the search.
 
     Returns:
         Parsed rows with keys: name, command_execution, fsm_transition.
@@ -578,7 +614,7 @@ def get_rows_by_friendly_name_from_ps_table(
 def get_rows_by_name_from_status_table(
     status_table: list[dict[str, str]], name: str
 ) -> list[dict[str, str]]:
-    """Return all rows whose `Name` matches exactly after stripping."""
+    """Return all rows whose `name` matches exactly after stripping."""
     return get_rows_from_table(status_table, "name", name)
 
 
@@ -605,7 +641,7 @@ def assert_process_presence(
         ...         "user": "daq",
         ...         "host": "localhost",
         ...         "uuid": "f201f9c7-b910-4100-bd78-11765a4d2ee1",
-        ...         "alive": "True",
+        ...         "status": "Alive",
         ...         "exit_code": "0",
         ...     }
         ... ]
