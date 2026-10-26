@@ -807,7 +807,8 @@ def echo(
     log = get_logger("process_manager.shell")
     if not server:
         # Local-only path, no RPC — mirrors the old bare `echo` command.
-        (log_echo if logger == LoggerTarget.ECHO else log).info(text)
+        echo_logger = log_echo if logger == LoggerTarget.ECHO else log
+        getattr(echo_logger, severity.lower(), echo_logger.info)(text)
         return
     pm_driver = obj.get_pm_driver()
     pm_driver.send_log(text=text, severity=severity, logger=logger)
