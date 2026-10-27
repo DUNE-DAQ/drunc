@@ -28,6 +28,8 @@ from druncschema.controller_pb2 import (
 from druncschema.description_pb2 import Description
 from druncschema.generic_pb2 import bool_msg, float_msg, int_msg, string_msg
 from druncschema.request_response_pb2 import ResponseFlag
+from druncschema.controller_pb2 import ExecuteFSMCommandResponse
+from google.protobuf import symbol_database
 from google.protobuf import any_pb2
 from rich.console import Console, ConsoleOptions, Group, RenderResult
 from rich.measure import Measurement
@@ -964,7 +966,6 @@ def run_one_fsm_command(
     t.add_column("Name")
     t.add_column("Command execution")
     t.add_column("FSM transition")
-    t.add_column("Error")
 
     def bool_to_success(
         flag_message: int, message_type: type[ResponseFlag] | type[FSMResponseFlag]
@@ -985,24 +986,26 @@ def run_one_fsm_command(
 
         return f"[dark_green]{flag}[/]" if success else f"[red]{flag}[/]"
 
+
     def add_to_table(
         table: Table, response: FSMExecutionResponseLike, prefix: str = ""
     ) -> None:
         executed_command = response.flag == ResponseFlag.EXECUTED_SUCCESSFULLY
 
-        error_text = ""
-        error_text = f"[red]{response.error.message}[/]"
-
         table.add_row(
             prefix + response.name,
             bool_to_success(response.flag, message_type=ResponseFlag),
-            (
-                bool_to_success(response.fsm_flag, message_type=FSMResponseFlag)
-                if executed_command
-                else "[red]NA[/]"
-            ),
-            error_text,
+            bool_to_success(response.fsm_flag, message_type=FSMResponseFlag),
+
         )
+        if response.HasField("error"):
+            obj.print(
+                Text(
+                    f"{response.name}: {response.error.message}",
+                    style="red",
+                )
+            )
+
         for child_response in sorted(response.children, key=lambda c: c.name):
             add_to_table(table, child_response, "  " + prefix)
 

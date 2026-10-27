@@ -107,17 +107,22 @@ class ChildCommandExceptionCommon:
         self,
         child_name: str,
         child_details: list[Message],
+        child_code: str,
+        child_message: str,
         **kwargs,
     ) -> None:
         self.child_name = child_name
         self._child_details = child_details
         super().__init__(
-            message=f"Child '{child_name}' failed",
+            message=f"Child '{child_name}' failed [{child_code}]: {child_message}",
+            child_name=child_name,
+            child_code=child_code,
+            child_message=child_message,
             **kwargs,
         )
 
     @property
-    def child_details(self) -> list[Message]:
+    def specialised_details(self) -> list[Message]:
         return list(self._child_details)
 
 

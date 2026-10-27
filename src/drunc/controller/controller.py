@@ -65,6 +65,7 @@ from drunc.controller.utils import (
 from drunc.exceptions import (
     ChildCommandNonTerminalException,
     ChildCommandTerminalException,
+    DruncException,
     DruncNonTerminalException,
     DruncTerminalException,
 
@@ -77,7 +78,7 @@ from drunc.fsm.exceptions import (
     FSMTransitionException,
 )
 from drunc.fsm.utils import convert_fsm_transition
-from drunc.utils.grpc_utils import ServerTimeout, extract_grpc_rich_error, pack_to_any
+from drunc.utils.grpc_utils import ServerTimeout, ServerUnreachable, extract_grpc_rich_error, pack_to_any
 from drunc.utils.utils import get_logger
 
 T = TypeVar("T")
@@ -652,18 +653,36 @@ class Controller(ControllerServicer):
         def safe_call(child: ChildNode, target: str) -> T:
             try:
                 return child_callable(child, target)
-            except grpc.RpcError as error:
-                rich = getattr(error, "rich_error_details", None)
-                if rich is None:
-                    rich = extract_grpc_rich_error(error)
+            except ServerTimeout:
+                raise
+            except (grpc.RpcError, ServerUnreachable, DruncException) as error:
+                if isinstance(error, (grpc.RpcError, ServerUnreachable)):
+                    rpc_error: BaseException | None = error
+                    while rpc_error is not None and not isinstance(
+                        rpc_error, grpc.RpcError
+                    ):
+                        rpc_error = rpc_error.__cause__
 
-                child_details = [
-                    detail for detail in rich.details if isinstance(detail, Message)
-                ]
+                    if not isinstance(rpc_error, grpc.RpcError):
+                        raise
+
+                    rich = extract_grpc_rich_error(rpc_error)
+                    child_details = [
+                        detail for detail in rich.details
+                        if isinstance(detail, Message)
+                    ]
+                    child_code = rich.code
+                    child_message = rich.message
+                else:
+                    child_details = error.rich_details
+                    child_code = error.grpc_error_code
+                    child_message = str(error)
 
                 child_error = ChildCommandNonTerminalException(
                     child_name=child.name,
-                    child_details=child_details
+                    child_details=child_details,
+                    child_code=child_code,
+                    child_message=child_message,
                 )
 
                 if degrade_response is not None:
@@ -673,6 +692,8 @@ class Controller(ControllerServicer):
                 raise ChildCommandTerminalException(
                     child_name=child.name,
                     child_details=child_details,
+                    child_code=child_code,
+                    child_message=child_message,
                 ) from error
                 
 
@@ -985,7 +1006,21 @@ class Controller(ControllerServicer):
             fsm_flag=FSMResponseFlag.FSM_EXECUTED_SUCCESSFULLY,
             flag=ResponseFlag.EXECUTED_SUCCESSFULLY,
         )
-
+        if self.name == "df-controller" and request.command.command_name == "conf":
+            error = DruncTerminalException(
+                message="TEST:-terminal child failure TEST: non-terminal child failure TEST: non-terminal child failure TEST: non-terminal child failure TEST: non-terminal child failure TEST: non-terminal child failure TEST: non-terminal child failure TEST: non-terminal child failure",
+                reason="TEST_CHILD_FAILURE",
+                domain="drunc.propagation_test",
+            )
+            response.flag = ResponseFlag.DRUNC_EXCEPTION_THROWN
+            response.fsm_flag = FSMResponseFlag.FSM_FAILED
+            response.error.CopyFrom(
+                ResponseError(
+                    message=str(error),
+                    details=[pack_to_any(detail) for detail in error.rich_details],
+                )
+            )
+            return response
         # Parse and validate target.
         try:
             request.target = self.parse_target_string(request.target)
@@ -1075,9 +1110,10 @@ class Controller(ControllerServicer):
                     transition_data=command.data,
                     ctx=self,
                 )
-
-            except FSMTransitionException as e:
-                self.log.error(f"'{self.name}' failed to prepare transition '{command_name}': {e}")
+            except DruncTerminalException:
+                raise
+            except DruncNonTerminalException as e:
+                self.log.error(f"'{self.name}' failed to execute transition '{command_name}': {e}")
                 response.fsm_flag = FSMResponseFlag.FSM_FAILED
                 response.flag = ResponseFlag.DRUNC_EXCEPTION_THROWN
                 response.error.CopyFrom(
@@ -1453,6 +1489,7 @@ class Controller(ControllerServicer):
                 lambda child, target: child.status(target, False, False),
                 child_status_list,
                 indices=connected_status_indices,
+                degrade_response=self._degrade_status_response,
             )
             child_status_responses.extend(
                 [
