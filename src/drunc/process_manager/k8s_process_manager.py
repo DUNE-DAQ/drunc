@@ -144,12 +144,7 @@ class K8sPodWatcherThread(threading.Thread):
                                 terminated_state.reason
                             )  # Finally, handle deleted events
                         elif is_deleted_event:
-                            if phase == "Succeeded":
-                                exit_code = 0
-                                reason = "GracefulShutdown"
-                            else:
-                                exit_code = -1
-                                reason = "PodDeleted"
+                            reason = "PodDeleted"
 
                         self.pm.log.debug(
                             f"Final result for pod {proc_uuid}: exit_code={exit_code}, reason={reason}"
@@ -230,7 +225,8 @@ class K8sProcessManager(ProcessManager):
         # keeps concurrent kills (e.g. different sessions) from sharing state.
         self._pending_deletion_batches: dict[str, tuple[set[str], threading.Event]] = {}
         self._pending_deletion_lock = threading.Lock()
-        # Guards against notify_termination running twice
+        # uuids whose termination was already logged/recorded for the current
+        # boot; cleared in _reset_process_state when the uuid is (re)booted
         self._notified_uuids: set[str] = set()
         self.final_exit_codes = {}
         # proc_uuid -> k8s UID of the pod currently running it. None while a
@@ -465,8 +461,6 @@ class K8sProcessManager(ProcessManager):
         """
         with self._pending_deletion_lock:
             self._notified_uuids.discard(proc_uuid)
-            self._pending_deletion_batches.pop(proc_uuid, None)
-        self.final_exit_codes.pop(proc_uuid, None)
         # Ignore all watch events for this uuid until the new pod UID is known.
         self._pod_uid_by_uuid[proc_uuid] = None
 
@@ -2363,9 +2357,10 @@ class K8sProcessManager(ProcessManager):
         """
         Handles the 'restart' command.
 
-        Kills each matched process and re-boots it using the original boot request.
-        Handles race conditions where a pod may be in a terminal state but not yet
-        fully deleted. Failed restarts are included in the result with DEAD status.
+        Kills each matched process and re-boots it under the same uuid using the
+        original boot request. If the old pod object is not fully gone yet, pod
+        creation retries on 409 Conflict (see _execute_pod_creation_api).
+        Failed restarts are included in the result with DEAD status.
 
         Args:
             query: A ProcessQuery specifying which processes to restart.
@@ -2391,34 +2386,11 @@ class K8sProcessManager(ProcessManager):
         ret = []
         for u in uuids:
             try:
-                if u in self.boot_request:
-                    pod_name = self.boot_request[u].process_description.metadata.name
-                    session = self.boot_request[u].process_description.metadata.session
+                meta = br_by_uuid[u].process_description.metadata
+                self.log.info(f"Restarting {meta.name} in session {meta.session}")
 
-                    self.log.info(f"Restarting {pod_name} in session {session}")
-
-                    # Kill the existing process
-                    kill_query = ProcessQuery(uuids=[ProcessUUID(uuid=u)])
-                    self._kill_impl(kill_query)
-
-                    # Handle case where pod completes but isn't deleted (race condition fix)
-                    try:
-                        pod_status = self._core_v1_api.read_namespaced_pod_status(
-                            pod_name, session
-                        )
-                        if pod_status.status.phase in ["Succeeded", "Failed"]:
-                            self.log.info(
-                                f"Pod {pod_name} is in terminal state {pod_status.status.phase}, deleting it"
-                            )
-                            self._core_v1_api.delete_namespaced_pod(
-                                name=pod_name, namespace=session
-                            )
-                            sleep(2)  # Wait for deletion to complete
-                    except self._api_error_v1_api as e:
-                        if e.status != 404:  # 404 means pod is already deleted
-                            self.log.warning(
-                                f"Error checking pod status after kill: {e}"
-                            )
+                # Kill the existing process (blocks until the pod is confirmed gone)
+                self._kill_impl(ProcessQuery(uuids=[ProcessUUID(uuid=u)]))
 
                 # Boot the new process
                 pi = self.__boot(br_by_uuid[u], u)
@@ -2699,7 +2671,7 @@ class K8sProcessManager(ProcessManager):
                         ].process_restriction,
                         status_code=ProcessInstance.StatusCode.DEAD,
                         uuid=ProcessUUID(uuid=proc_uuid),
-                        return_code=self.final_exit_codes.get(proc_uuid, -1),
+                        return_code=self.final_exit_codes.pop(proc_uuid, -1),
                     )
                     final_ret.append(pi)
                     del self.boot_request[proc_uuid]
