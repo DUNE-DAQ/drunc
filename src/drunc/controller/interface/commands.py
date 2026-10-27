@@ -309,6 +309,16 @@ def who_am_i(obj: ControllerContext) -> None:
     default=False,
 )
 @click.option(
+    "-s",
+    "--severity",
+    type=str,
+    default="INFO",
+    help=(
+        "Severity level of the log message (default INFO). Options: DEBUG, INFO, "
+        "WARNING, ERROR, CRITICAL"
+    ),
+)
+@click.option(
     "--logger",
     type=click.Choice(["echo", "main"]),
     default="echo",
@@ -328,6 +338,7 @@ def echo(
     text: str,
     server: bool,
     logger: int,
+    severity: str,
     target: str,
     execute_along_path: bool,
     execute_on_all_subsequent_children_in_path: bool,
@@ -335,12 +346,14 @@ def echo(
     """Log a message locally or send it to the controller server."""
     if not server:
         # Local-only path, no RPC — mirrors the old bare `echo` command.
-        (log_echo if logger == LoggerTarget.ECHO else log).info(text)
+        echo_logger = log_echo if logger == LoggerTarget.ECHO else log
+        getattr(echo_logger, severity.lower(), echo_logger.info)(text)
         return
 
     obj.get_driver("controller").send_log(
         text=text,
         target=target,
+        severity=severity,
         execute_along_path=execute_along_path,
         execute_on_all_subsequent_children_in_path=execute_on_all_subsequent_children_in_path,
         logger=logger,

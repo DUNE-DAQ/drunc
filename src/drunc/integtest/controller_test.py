@@ -119,19 +119,79 @@ _SHUTDOWN_STATUS_ERROR = (
     "Controller-specific commands cannot be sent until the session is booted"
 )
 
-# Maps each echo marker to the controller it was targeted at (None means no --target, i.e. broadcast).
-_ECHO_SERVER_TARGETS = {
-    "test_of_echo_on_server_full": None,
-    "test_of_echo_on_server_root_controller": "root-controller",
-    # "test_of_echo_on_server_df_controller": "df-controller", ## does not appear to work, but doesn't work in develop anyway..
+# Each case records the command target, propagation flags, and which of the root and
+# RU controller logs should contain its marker. The integration session may include
+# other controllers and applications; this test focuses on those two logs. A blank
+# target is normalised to the root controller by the server; an explicit target must
+# include that root name.
+_ECHO_SERVER_CASES = {
+    # A blank target addresses root; descendant execution then reaches the RU.
+    "test_of_echo_on_server_full": {
+        "target": None,
+        "execute_along_path": False,
+        "execute_on_all_subsequent_children_in_path": True,
+        "expected_controllers": {"root-controller", "ru-controller"},
+    },
+    # Target root without either propagation flag: log only on root.
+    "test_of_echo_on_server_root_only": {
+        "target": "root-controller",
+        "execute_along_path": False,
+        "execute_on_all_subsequent_children_in_path": False,
+        "expected_controllers": {"root-controller"},
+    },
+    # Target root and execute on its subsequent children: both controllers log.
+    "test_of_echo_on_server_root_and_children": {
+        "target": "root-controller",
+        "execute_along_path": False,
+        "execute_on_all_subsequent_children_in_path": True,
+        "expected_controllers": {"root-controller", "ru-controller"},
+    },
+    # Route to RU without executing on the intermediate root controller.
+    "test_of_echo_on_server_ru_only": {
+        "target": "root-controller/ru-controller",
+        "execute_along_path": False,
+        "execute_on_all_subsequent_children_in_path": False,
+        "expected_controllers": {"ru-controller"},
+    },
+    # Execute along root/RU path: both path controllers log, without subtree fan-out.
+    "test_of_echo_on_server_along_path": {
+        "target": "root-controller/ru-controller",
+        "execute_along_path": True,
+        "execute_on_all_subsequent_children_in_path": False,
+        "expected_controllers": {"root-controller", "ru-controller"},
+    },
+    # Enable descendant execution at RU. The test checks the root and RU controller
+    # logs only; downstream application logs are outside these assertions.
+    "test_of_echo_on_server_ru_and_children": {
+        "target": "root-controller/ru-controller",
+        "execute_along_path": False,
+        "execute_on_all_subsequent_children_in_path": True,
+        "expected_controllers": {"ru-controller"},
+    },
 }
 
 
 def _echo_server_command_block() -> str:
+    # Put the routing flags before the marker text, matching the unified-shell
+    # command syntax. Pass both positive and negative forms explicitly so each case
+    # is independent of the CLI defaults.
     lines = []
-    for marker, target in _ECHO_SERVER_TARGETS.items():
-        target_arg = f" --target {target}" if target else ""
-        lines.append(f"echo --server --logger main{target_arg} {marker}")
+    for marker, case in _ECHO_SERVER_CASES.items():
+        target_arg = f" --target {case['target']}" if case["target"] else ""
+        along_path_flag = (
+            "--execute-along-path"
+            if case["execute_along_path"]
+            else "--dont-execute-along-path"
+        )
+        subsequent_children_flag = (
+            "--execute-on-all-subsequent-children-in-path"
+            if case["execute_on_all_subsequent_children_in_path"]
+            else "--dont-execute-on-all-subsequent-children-in-path"
+        )
+        lines.append(
+            f"echo --server --logger main{target_arg} {along_path_flag} "
+            f"{subsequent_children_flag} {marker}"
+        )
     return "\n" + "\n".join(lines) + "\n"
 
 
@@ -268,24 +328,36 @@ def _marker_found_in_logs(marker: str, log_files) -> bool:
 
 
 @pytest.mark.parametrize(
-    "marker,target",
-    list(_ECHO_SERVER_TARGETS.items()),
-    ids=list(_ECHO_SERVER_TARGETS.keys()),
+    "marker,case",
+    list(_ECHO_SERVER_CASES.items()),
+    ids=list(_ECHO_SERVER_CASES.keys()),
 )
-def test_echo_on_server(run_dunerc, marker, target) -> None:
-    """Checks that the server-side echo marker appears in the expected log file."""
-    # No --target means the command is sent to the root controller.
-    log_target = target or "root-controller"
-    matching_logs = [
-        logname
-        for logname in run_dunerc.log_files
-        if f"{run_dunerc.daq_session_name}_{log_target}" in str(logname)
-    ]
-    assert matching_logs, f"No {log_target} log file found."
+def test_echo_on_server(run_dunerc, marker, case) -> None:
+    """Checks that target and propagation flags select the expected controllers."""
+    # Check both logs for every marker: positive checks prove expected delivery,
+    # while negative checks catch accidental execution on controllers outside the
+    # selected path or fan-out.
+    controller_logs = {
+        controller_name: [
+            logname
+            for logname in run_dunerc.log_files
+            if f"{run_dunerc.daq_session_name}_{controller_name}" in str(logname)
+        ]
+        for controller_name in ("root-controller", "ru-controller")
+    }
 
-    assert _marker_found_in_logs(marker, matching_logs), (
-        f"'{marker}' not found in log file(s): {matching_logs}"
-    )
+    for controller_name, matching_logs in controller_logs.items():
+        assert matching_logs, f"No {controller_name} log file found."
+        marker_found = _marker_found_in_logs(marker, matching_logs)
+        if controller_name in case["expected_controllers"]:
+            assert marker_found, (
+                f"'{marker}' was not logged by {controller_name}: {matching_logs}"
+            )
+        else:
+            assert not marker_found, (
+                f"'{marker}' was unexpectedly logged by {controller_name}: "
+                f"{matching_logs}"
+            )
 
 
 @pytest.mark.parametrize("params", _FSM_COMMANDS, ids=lambda p: p.marker)

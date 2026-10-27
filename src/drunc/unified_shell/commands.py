@@ -302,7 +302,8 @@ def echo(
     log.debug("Logging message to server(s)...")
 
     if not server:
-        (log_echo if logger == LoggerTarget.ECHO else log).info(text)
+        echo_logger = log_echo if logger == LoggerTarget.ECHO else log
+        getattr(echo_logger, severity.lower(), echo_logger.info)(text)
         return
 
     if target_server in ["", "process_manager"]:
