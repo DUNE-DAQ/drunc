@@ -593,9 +593,9 @@ class SSHProcessManager(ProcessManager):
             ProcessInstanceList containing status of killed/crashed processes
         """
         if query.names:
-            self.log.info(f"{self.name} killing {query.names} in session {self.session}")
+            self.log.info(f"[red]Killing[/] {', '.join(query.names)} in session [green]{query.session}[/]")
         else:
-            self.log.info(f"{self.name} killing all processes in session {self.session}")
+            self.log.info(f"[red]Killing all processes[/] in session [green]{query.session}[/]")
 
         if self.boot_request:
             uuids = ProcessManager._match_processes_against_query(
