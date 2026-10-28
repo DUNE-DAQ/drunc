@@ -21,7 +21,7 @@
 <!-- drunc.utils.flask_manager.CannotStartFlaskManager -->
 <g id="node2" class="node">
 <title>drunc.utils.flask_manager.CannotStartFlaskManager</title>
-<g id="a_node2"><a xlink:href="https://github.com/DUNE-DAQ/drunc/blob/0905a2acd037d51f11aa4ea7482233a1b9bc10dd/src/drunc/utils/flask_manager.py#L66" xlink:title="{CannotStartFlaskManager|&lt;br ALIGN=&quot;LEFT&quot;/&gt;|}" target="_blank">
+<g id="a_node2"><a xlink:href="https://github.com/DUNE-DAQ/drunc/blob/7497d5778c61489843bcb3a4143ae2b41ec46475/src/drunc/utils/flask_manager.py#L66" xlink:title="{CannotStartFlaskManager|&lt;br ALIGN=&quot;LEFT&quot;/&gt;|}" target="_blank">
 <polygon fill="#fff4b8" stroke="#8b7355" points="291.5,-75 291.5,-133 434.5,-133 434.5,-75 291.5,-75"/>
 <text text-anchor="start" x="299.5" y="-121" font-family="Helvetica,sans-Serif" font-size="10.00">CannotStartFlaskManager</text>
 <polyline fill="none" stroke="#8b7355" points="291.5,-114 434.5,-114 "/>
@@ -33,7 +33,7 @@
 <!-- drunc.utils.configuration.ConfHandler -->
 <g id="node3" class="node">
 <title>drunc.utils.configuration.ConfHandler</title>
-<g id="a_node3"><a xlink:href="https://github.com/DUNE-DAQ/drunc/blob/0905a2acd037d51f11aa4ea7482233a1b9bc10dd/src/drunc/utils/configuration.py#L116" xlink:title="{ConfHandler|class_name : str&lt;br ALIGN=&quot;LEFT&quot;/&gt;controller_id : int&lt;br ALIGN=&quot;LEFT&quot;/&gt;db : object&lt;br ALIGN=&quot;LEFT&quot;/&gt;initial_data : object&lt;br ALIGN=&quot;LEFT&quot;/&gt;log : Logger&lt;br ALIGN=&quot;LEFT&quot;/&gt;oks_key : OKSKey \| None&lt;br ALIGN=&quot;LEFT&quot;/&gt;oks_path : str&lt;br ALIGN=&quot;LEFT&quot;/&gt;process_id : int&lt;br ALIGN=&quot;LEFT&quot;/&gt;process_id_infra : int&lt;br ALIGN=&quot;LEFT&quot;/&gt;root_id : int&lt;br ALIGN=&quot;LEFT&quot;/&gt;session_name : str \| None&lt;br ALIGN=&quot;LEFT&quot;/&gt;type&lt;br ALIGN=&quot;LEFT&quot;/&gt;|copy_oks_key(): OKSKey \| None&lt;br ALIGN=&quot;LEFT&quot;/&gt;from_oks(url: str, oks_key: OKSKey, session_name: str \| None): Self&lt;br ALIGN=&quot;LEFT&quot;/&gt;from_pbany(data: object, session_name: str \| None): Self&lt;br ALIGN=&quot;LEFT&quot;/&gt;from_pyobject(data: object, session_name: str \| None): Self&lt;br ALIGN=&quot;LEFT&quot;/&gt;populate_from_pbany(pbany_data: object): None&lt;br ALIGN=&quot;LEFT&quot;/&gt;}" target="_blank">
+<g id="a_node3"><a xlink:href="https://github.com/DUNE-DAQ/drunc/blob/7497d5778c61489843bcb3a4143ae2b41ec46475/src/drunc/utils/configuration.py#L116" xlink:title="{ConfHandler|class_name : str&lt;br ALIGN=&quot;LEFT&quot;/&gt;controller_id : int&lt;br ALIGN=&quot;LEFT&quot;/&gt;db : object&lt;br ALIGN=&quot;LEFT&quot;/&gt;initial_data : object&lt;br ALIGN=&quot;LEFT&quot;/&gt;log : Logger&lt;br ALIGN=&quot;LEFT&quot;/&gt;oks_key : OKSKey \| None&lt;br ALIGN=&quot;LEFT&quot;/&gt;oks_path : str&lt;br ALIGN=&quot;LEFT&quot;/&gt;process_id : int&lt;br ALIGN=&quot;LEFT&quot;/&gt;process_id_infra : int&lt;br ALIGN=&quot;LEFT&quot;/&gt;root_id : int&lt;br ALIGN=&quot;LEFT&quot;/&gt;session_name : str \| None&lt;br ALIGN=&quot;LEFT&quot;/&gt;type&lt;br ALIGN=&quot;LEFT&quot;/&gt;|copy_oks_key(): OKSKey \| None&lt;br ALIGN=&quot;LEFT&quot;/&gt;from_oks(url: str, oks_key: OKSKey, session_name: str \| None): Self&lt;br ALIGN=&quot;LEFT&quot;/&gt;from_pbany(data: object, session_name: str \| None): Self&lt;br ALIGN=&quot;LEFT&quot;/&gt;from_pyobject(data: object, session_name: str \| None): Self&lt;br ALIGN=&quot;LEFT&quot;/&gt;populate_from_pbany(pbany_data: object): None&lt;br ALIGN=&quot;LEFT&quot;/&gt;}" target="_blank">
 <polygon fill="#fff4b8" stroke="#8b7355" points="354,-284.5 354,-506.5 698,-506.5 698,-284.5 354,-284.5"/>
 <text text-anchor="start" x="495.5" y="-494.5" font-family="Helvetica,sans-Serif" font-size="10.00">ConfHandler</text>
 <polyline fill="none" stroke="#8b7355" points="354,-487.5 698,-487.5 "/>
@@ -61,7 +61,7 @@
 <!-- drunc.utils.configuration.ConfTypeNotSupported -->
 <g id="node4" class="node">
 <title>drunc.utils.configuration.ConfTypeNotSupported</title>
-<g id="a_node4"><a xlink:href="https://github.com/DUNE-DAQ/drunc/blob/0905a2acd037d51f11aa4ea7482233a1b9bc10dd/src/drunc/utils/configuration.py#L80" xlink:title="{ConfTypeNotSupported|&lt;br ALIGN=&quot;LEFT&quot;/&gt;|}" target="_blank">
+<g id="a_node4"><a xlink:href="https://github.com/DUNE-DAQ/drunc/blob/7497d5778c61489843bcb3a4143ae2b41ec46475/src/drunc/utils/configuration.py#L80" xlink:title="{ConfTypeNotSupported|&lt;br ALIGN=&quot;LEFT&quot;/&gt;|}" target="_blank">
 <polygon fill="#fff4b8" stroke="#8b7355" points="618,-75 618,-133 746,-133 746,-75 618,-75"/>
 <text text-anchor="start" x="626" y="-121" font-family="Helvetica,sans-Serif" font-size="10.00">ConfTypeNotSupported</text>
 <polyline fill="none" stroke="#8b7355" points="618,-114 746,-114 "/>
@@ -73,7 +73,7 @@
 <!-- drunc.utils.configuration.ConfTypes -->
 <g id="node5" class="node">
 <title>drunc.utils.configuration.ConfTypes</title>
-<g id="a_node5"><a xlink:href="https://github.com/DUNE-DAQ/drunc/blob/0905a2acd037d51f11aa4ea7482233a1b9bc10dd/src/drunc/utils/configuration.py#L13" xlink:title="{ConfTypes|name&lt;br ALIGN=&quot;LEFT&quot;/&gt;|}" target="_blank">
+<g id="a_node5"><a xlink:href="https://github.com/DUNE-DAQ/drunc/blob/7497d5778c61489843bcb3a4143ae2b41ec46475/src/drunc/utils/configuration.py#L13" xlink:title="{ConfTypes|name&lt;br ALIGN=&quot;LEFT&quot;/&gt;|}" target="_blank">
 <polygon fill="#fff4b8" stroke="#8b7355" points="789.5,-75.5 789.5,-132.5 856.5,-132.5 856.5,-75.5 789.5,-75.5"/>
 <text text-anchor="start" x="797.5" y="-120.5" font-family="Helvetica,sans-Serif" font-size="10.00">ConfTypes</text>
 <polyline fill="none" stroke="#8b7355" points="789.5,-113.5 856.5,-113.5 "/>
@@ -86,7 +86,7 @@
 <!-- drunc.utils.configuration.ConfigurationNotFound -->
 <g id="node6" class="node">
 <title>drunc.utils.configuration.ConfigurationNotFound</title>
-<g id="a_node6"><a xlink:href="https://github.com/DUNE-DAQ/drunc/blob/0905a2acd037d51f11aa4ea7482233a1b9bc10dd/src/drunc/utils/configuration.py#L66" xlink:title="{ConfigurationNotFound|&lt;br ALIGN=&quot;LEFT&quot;/&gt;|}" target="_blank">
+<g id="a_node6"><a xlink:href="https://github.com/DUNE-DAQ/drunc/blob/7497d5778c61489843bcb3a4143ae2b41ec46475/src/drunc/utils/configuration.py#L66" xlink:title="{ConfigurationNotFound|&lt;br ALIGN=&quot;LEFT&quot;/&gt;|}" target="_blank">
 <polygon fill="#fff4b8" stroke="#8b7355" points="900,-75 900,-133 1028,-133 1028,-75 900,-75"/>
 <text text-anchor="start" x="908" y="-121" font-family="Helvetica,sans-Serif" font-size="10.00">ConfigurationNotFound</text>
 <polyline fill="none" stroke="#8b7355" points="900,-114 1028,-114 "/>
@@ -98,7 +98,7 @@
 <!-- drunc.utils.utils.ControlType -->
 <g id="node7" class="node">
 <title>drunc.utils.utils.ControlType</title>
-<g id="a_node7"><a xlink:href="https://github.com/DUNE-DAQ/drunc/blob/0905a2acd037d51f11aa4ea7482233a1b9bc10dd/src/drunc/utils/utils.py#L531" xlink:title="{ControlType|name&lt;br ALIGN=&quot;LEFT&quot;/&gt;|}" target="_blank">
+<g id="a_node7"><a xlink:href="https://github.com/DUNE-DAQ/drunc/blob/7497d5778c61489843bcb3a4143ae2b41ec46475/src/drunc/utils/utils.py#L531" xlink:title="{ControlType|name&lt;br ALIGN=&quot;LEFT&quot;/&gt;|}" target="_blank">
 <polygon fill="#fff4b8" stroke="#8b7355" points="1071,-75.5 1071,-132.5 1145,-132.5 1145,-75.5 1071,-75.5"/>
 <text text-anchor="start" x="1079" y="-120.5" font-family="Helvetica,sans-Serif" font-size="10.00">ControlType</text>
 <polyline fill="none" stroke="#8b7355" points="1071,-113.5 1145,-113.5 "/>
@@ -111,7 +111,7 @@
 <!-- drunc.utils.grpc_classes.DecodedResponse -->
 <g id="node8" class="node">
 <title>drunc.utils.grpc_classes.DecodedResponse</title>
-<g id="a_node8"><a xlink:href="https://github.com/DUNE-DAQ/drunc/blob/0905a2acd037d51f11aa4ea7482233a1b9bc10dd/src/drunc/utils/grpc_classes.py#L4" xlink:title="{DecodedResponse|children : list[&#39;DecodedResponse&#39;]&lt;br ALIGN=&quot;LEFT&quot;/&gt;data : NoneType&lt;br ALIGN=&quot;LEFT&quot;/&gt;flag : NoneType&lt;br ALIGN=&quot;LEFT&quot;/&gt;name : NoneType&lt;br ALIGN=&quot;LEFT&quot;/&gt;token : NoneType&lt;br ALIGN=&quot;LEFT&quot;/&gt;|to_string(obj: &#39;DecodedResponse&#39;, prefix: str): str&lt;br ALIGN=&quot;LEFT&quot;/&gt;}" target="_blank">
+<g id="a_node8"><a xlink:href="https://github.com/DUNE-DAQ/drunc/blob/7497d5778c61489843bcb3a4143ae2b41ec46475/src/drunc/utils/grpc_classes.py#L4" xlink:title="{DecodedResponse|children : list[&#39;DecodedResponse&#39;]&lt;br ALIGN=&quot;LEFT&quot;/&gt;data : NoneType&lt;br ALIGN=&quot;LEFT&quot;/&gt;flag : NoneType&lt;br ALIGN=&quot;LEFT&quot;/&gt;name : NoneType&lt;br ALIGN=&quot;LEFT&quot;/&gt;token : NoneType&lt;br ALIGN=&quot;LEFT&quot;/&gt;|to_string(obj: &#39;DecodedResponse&#39;, prefix: str): str&lt;br ALIGN=&quot;LEFT&quot;/&gt;}" target="_blank">
 <polygon fill="#fff4b8" stroke="#8b7355" points="1188.5,-53.5 1188.5,-154.5 1443.5,-154.5 1443.5,-53.5 1188.5,-53.5"/>
 <text text-anchor="start" x="1270.5" y="-142.5" font-family="Helvetica,sans-Serif" font-size="10.00">DecodedResponse</text>
 <polyline fill="none" stroke="#8b7355" points="1188.5,-135.5 1443.5,-135.5 "/>
@@ -153,7 +153,7 @@
 <!-- drunc.utils.flask_manager.FlaskManager -->
 <g id="node10" class="node">
 <title>drunc.utils.flask_manager.FlaskManager</title>
-<g id="a_node10"><a xlink:href="https://github.com/DUNE-DAQ/drunc/blob/0905a2acd037d51f11aa4ea7482233a1b9bc10dd/src/drunc/utils/flask_manager.py#L72" xlink:title="{FlaskManager|app : Flask&lt;br ALIGN=&quot;LEFT&quot;/&gt;flask : Process \| None&lt;br ALIGN=&quot;LEFT&quot;/&gt;gunicorn_pid : NoneType, int \| None&lt;br ALIGN=&quot;LEFT&quot;/&gt;host : str&lt;br ALIGN=&quot;LEFT&quot;/&gt;joined : bool&lt;br ALIGN=&quot;LEFT&quot;/&gt;log : NoneType, RootLogger&lt;br ALIGN=&quot;LEFT&quot;/&gt;name : str&lt;br ALIGN=&quot;LEFT&quot;/&gt;port : int&lt;br ALIGN=&quot;LEFT&quot;/&gt;prod_app : GunicornStandaloneApplication \| None&lt;br ALIGN=&quot;LEFT&quot;/&gt;ready : bool&lt;br ALIGN=&quot;LEFT&quot;/&gt;ready_lock : lock&lt;br ALIGN=&quot;LEFT&quot;/&gt;workers : int&lt;br ALIGN=&quot;LEFT&quot;/&gt;|is_ready(): bool&lt;br ALIGN=&quot;LEFT&quot;/&gt;is_terminated(): bool&lt;br ALIGN=&quot;LEFT&quot;/&gt;restart_renew(): &#39;FlaskManager&#39;&lt;br ALIGN=&quot;LEFT&quot;/&gt;run(): None&lt;br ALIGN=&quot;LEFT&quot;/&gt;stop(): None&lt;br ALIGN=&quot;LEFT&quot;/&gt;}" target="_blank">
+<g id="a_node10"><a xlink:href="https://github.com/DUNE-DAQ/drunc/blob/7497d5778c61489843bcb3a4143ae2b41ec46475/src/drunc/utils/flask_manager.py#L72" xlink:title="{FlaskManager|app : Flask&lt;br ALIGN=&quot;LEFT&quot;/&gt;flask : Process \| None&lt;br ALIGN=&quot;LEFT&quot;/&gt;gunicorn_pid : NoneType, int \| None&lt;br ALIGN=&quot;LEFT&quot;/&gt;host : str&lt;br ALIGN=&quot;LEFT&quot;/&gt;joined : bool&lt;br ALIGN=&quot;LEFT&quot;/&gt;log : NoneType, RootLogger&lt;br ALIGN=&quot;LEFT&quot;/&gt;name : str&lt;br ALIGN=&quot;LEFT&quot;/&gt;port : int&lt;br ALIGN=&quot;LEFT&quot;/&gt;prod_app : GunicornStandaloneApplication \| None&lt;br ALIGN=&quot;LEFT&quot;/&gt;ready : bool&lt;br ALIGN=&quot;LEFT&quot;/&gt;ready_lock : lock&lt;br ALIGN=&quot;LEFT&quot;/&gt;workers : int&lt;br ALIGN=&quot;LEFT&quot;/&gt;|is_ready(): bool&lt;br ALIGN=&quot;LEFT&quot;/&gt;is_terminated(): bool&lt;br ALIGN=&quot;LEFT&quot;/&gt;restart_renew(): &#39;FlaskManager&#39;&lt;br ALIGN=&quot;LEFT&quot;/&gt;run(): None&lt;br ALIGN=&quot;LEFT&quot;/&gt;stop(): None&lt;br ALIGN=&quot;LEFT&quot;/&gt;}" target="_blank">
 <polygon fill="#fff4b8" stroke="#8b7355" points="1613,-284.5 1613,-506.5 1871,-506.5 1871,-284.5 1613,-284.5"/>
 <text text-anchor="start" x="1707" y="-494.5" font-family="Helvetica,sans-Serif" font-size="10.00">FlaskManager</text>
 <polyline fill="none" stroke="#8b7355" points="1613,-487.5 1871,-487.5 "/>
@@ -181,7 +181,7 @@
 <!-- drunc.utils.grpc_utils.GrpcErrorDetails -->
 <g id="node11" class="node">
 <title>drunc.utils.grpc_utils.GrpcErrorDetails</title>
-<g id="a_node11"><a xlink:href="https://github.com/DUNE-DAQ/drunc/blob/0905a2acd037d51f11aa4ea7482233a1b9bc10dd/src/drunc/utils/grpc_utils.py#L250" xlink:title="{GrpcErrorDetails|code : str&lt;br ALIGN=&quot;LEFT&quot;/&gt;details : list[str \| Message]&lt;br ALIGN=&quot;LEFT&quot;/&gt;message : str&lt;br ALIGN=&quot;LEFT&quot;/&gt;|}" target="_blank">
+<g id="a_node11"><a xlink:href="https://github.com/DUNE-DAQ/drunc/blob/7497d5778c61489843bcb3a4143ae2b41ec46475/src/drunc/utils/grpc_utils.py#L250" xlink:title="{GrpcErrorDetails|code : str&lt;br ALIGN=&quot;LEFT&quot;/&gt;details : list[str \| Message]&lt;br ALIGN=&quot;LEFT&quot;/&gt;message : str&lt;br ALIGN=&quot;LEFT&quot;/&gt;|}" target="_blank">
 <polygon fill="#fff4b8" stroke="#8b7355" points="1943,-64.5 1943,-143.5 2089,-143.5 2089,-64.5 1943,-64.5"/>
 <text text-anchor="start" x="1975.5" y="-131.5" font-family="Helvetica,sans-Serif" font-size="10.00">GrpcErrorDetails</text>
 <polyline fill="none" stroke="#8b7355" points="1943,-124.5 2089,-124.5 "/>
@@ -196,7 +196,7 @@
 <!-- drunc.utils.flask_manager.GunicornStandaloneApplication -->
 <g id="node12" class="node">
 <title>drunc.utils.flask_manager.GunicornStandaloneApplication</title>
-<g id="a_node12"><a xlink:href="https://github.com/DUNE-DAQ/drunc/blob/0905a2acd037d51f11aa4ea7482233a1b9bc10dd/src/drunc/utils/flask_manager.py#L29" xlink:title="{GunicornStandaloneApplication|application : Flask&lt;br ALIGN=&quot;LEFT&quot;/&gt;options : dict&lt;br ALIGN=&quot;LEFT&quot;/&gt;|load(): Flask&lt;br ALIGN=&quot;LEFT&quot;/&gt;load_config(): None&lt;br ALIGN=&quot;LEFT&quot;/&gt;}" target="_blank">
+<g id="a_node12"><a xlink:href="https://github.com/DUNE-DAQ/drunc/blob/7497d5778c61489843bcb3a4143ae2b41ec46475/src/drunc/utils/flask_manager.py#L29" xlink:title="{GunicornStandaloneApplication|application : Flask&lt;br ALIGN=&quot;LEFT&quot;/&gt;options : dict&lt;br ALIGN=&quot;LEFT&quot;/&gt;|load(): Flask&lt;br ALIGN=&quot;LEFT&quot;/&gt;load_config(): None&lt;br ALIGN=&quot;LEFT&quot;/&gt;}" target="_blank">
 <polygon fill="#fff4b8" stroke="#8b7355" points="1730,-64.5 1730,-143.5 1900,-143.5 1900,-64.5 1730,-64.5"/>
 <text text-anchor="start" x="1738" y="-131.5" font-family="Helvetica,sans-Serif" font-size="10.00">GunicornStandaloneApplication</text>
 <polyline fill="none" stroke="#8b7355" points="1730,-124.5 1900,-124.5 "/>
@@ -234,7 +234,7 @@
 <!-- drunc.utils.utils.IncorrectAddress -->
 <g id="node13" class="node">
 <title>drunc.utils.utils.IncorrectAddress</title>
-<g id="a_node13"><a xlink:href="https://github.com/DUNE-DAQ/drunc/blob/0905a2acd037d51f11aa4ea7482233a1b9bc10dd/src/drunc/utils/utils.py#L382" xlink:title="{IncorrectAddress|&lt;br ALIGN=&quot;LEFT&quot;/&gt;|}" target="_blank">
+<g id="a_node13"><a xlink:href="https://github.com/DUNE-DAQ/drunc/blob/7497d5778c61489843bcb3a4143ae2b41ec46475/src/drunc/utils/utils.py#L382" xlink:title="{IncorrectAddress|&lt;br ALIGN=&quot;LEFT&quot;/&gt;|}" target="_blank">
 <polygon fill="#fff4b8" stroke="#8b7355" points="2132,-75 2132,-133 2230,-133 2230,-75 2132,-75"/>
 <text text-anchor="start" x="2140" y="-121" font-family="Helvetica,sans-Serif" font-size="10.00">IncorrectAddress</text>
 <polyline fill="none" stroke="#8b7355" points="2132,-114 2230,-114 "/>
@@ -246,7 +246,7 @@
 <!-- drunc.utils.shell_utils.InterruptedCommand -->
 <g id="node14" class="node">
 <title>drunc.utils.shell_utils.InterruptedCommand</title>
-<g id="a_node14"><a xlink:href="https://github.com/DUNE-DAQ/drunc/blob/0905a2acd037d51f11aa4ea7482233a1b9bc10dd/src/drunc/utils/shell_utils.py#L20" xlink:title="{InterruptedCommand|&lt;br ALIGN=&quot;LEFT&quot;/&gt;|}" target="_blank">
+<g id="a_node14"><a xlink:href="https://github.com/DUNE-DAQ/drunc/blob/7497d5778c61489843bcb3a4143ae2b41ec46475/src/drunc/utils/shell_utils.py#L20" xlink:title="{InterruptedCommand|&lt;br ALIGN=&quot;LEFT&quot;/&gt;|}" target="_blank">
 <polygon fill="#fff4b8" stroke="#8b7355" points="2273.5,-75 2273.5,-133 2394.5,-133 2394.5,-75 2273.5,-75"/>
 <text text-anchor="start" x="2281.5" y="-121" font-family="Helvetica,sans-Serif" font-size="10.00">InterruptedCommand</text>
 <polyline fill="none" stroke="#8b7355" points="2273.5,-114 2394.5,-114 "/>
@@ -258,7 +258,7 @@
 <!-- drunc.utils.configuration.OKSKey -->
 <g id="node15" class="node">
 <title>drunc.utils.configuration.OKSKey</title>
-<g id="a_node15"><a xlink:href="https://github.com/DUNE-DAQ/drunc/blob/0905a2acd037d51f11aa4ea7482233a1b9bc10dd/src/drunc/utils/configuration.py#L96" xlink:title="{OKSKey|class_name : str&lt;br ALIGN=&quot;LEFT&quot;/&gt;obj_uid : str&lt;br ALIGN=&quot;LEFT&quot;/&gt;schema_file : str&lt;br ALIGN=&quot;LEFT&quot;/&gt;session : str&lt;br ALIGN=&quot;LEFT&quot;/&gt;|}" target="_blank">
+<g id="a_node15"><a xlink:href="https://github.com/DUNE-DAQ/drunc/blob/7497d5778c61489843bcb3a4143ae2b41ec46475/src/drunc/utils/configuration.py#L96" xlink:title="{OKSKey|class_name : str&lt;br ALIGN=&quot;LEFT&quot;/&gt;obj_uid : str&lt;br ALIGN=&quot;LEFT&quot;/&gt;schema_file : str&lt;br ALIGN=&quot;LEFT&quot;/&gt;session : str&lt;br ALIGN=&quot;LEFT&quot;/&gt;|}" target="_blank">
 <polygon fill="#fff4b8" stroke="#8b7355" points="477.5,-59 477.5,-149 574.5,-149 574.5,-59 477.5,-59"/>
 <text text-anchor="start" x="506.5" y="-137" font-family="Helvetica,sans-Serif" font-size="10.00">OKSKey</text>
 <polyline fill="none" stroke="#8b7355" points="477.5,-130 574.5,-130 "/>
@@ -281,7 +281,7 @@
 <!-- drunc.utils.grpc_utils.RichErrorClientInterceptor -->
 <g id="node16" class="node">
 <title>drunc.utils.grpc_utils.RichErrorClientInterceptor</title>
-<g id="a_node16"><a xlink:href="https://github.com/DUNE-DAQ/drunc/blob/0905a2acd037d51f11aa4ea7482233a1b9bc10dd/src/drunc/utils/grpc_utils.py#L531" xlink:title="{RichErrorClientInterceptor|log&lt;br ALIGN=&quot;LEFT&quot;/&gt;|intercept_unary_unary(continuation, client_call_details, request)&lt;br ALIGN=&quot;LEFT&quot;/&gt;}" target="_blank">
+<g id="a_node16"><a xlink:href="https://github.com/DUNE-DAQ/drunc/blob/7497d5778c61489843bcb3a4143ae2b41ec46475/src/drunc/utils/grpc_utils.py#L531" xlink:title="{RichErrorClientInterceptor|log&lt;br ALIGN=&quot;LEFT&quot;/&gt;|intercept_unary_unary(continuation, client_call_details, request)&lt;br ALIGN=&quot;LEFT&quot;/&gt;}" target="_blank">
 <polygon fill="#fff4b8" stroke="#8b7355" points="2437.5,-75.5 2437.5,-132.5 2768.5,-132.5 2768.5,-75.5 2437.5,-75.5"/>
 <text text-anchor="start" x="2539.5" y="-120.5" font-family="Helvetica,sans-Serif" font-size="10.00">RichErrorClientInterceptor</text>
 <polyline fill="none" stroke="#8b7355" points="2437.5,-113.5 2768.5,-113.5 "/>
@@ -294,7 +294,7 @@
 <!-- drunc.utils.grpc_utils.RichErrorServerInterceptor -->
 <g id="node17" class="node">
 <title>drunc.utils.grpc_utils.RichErrorServerInterceptor</title>
-<g id="a_node17"><a xlink:href="https://github.com/DUNE-DAQ/drunc/blob/0905a2acd037d51f11aa4ea7482233a1b9bc10dd/src/drunc/utils/grpc_utils.py#L435" xlink:title="{RichErrorServerInterceptor|&lt;br ALIGN=&quot;LEFT&quot;/&gt;|intercept_service(continuation: Callable[[grpc.HandlerCallDetails], grpc.RpcMethodHandler[object, object] \| None], handler_call_details: grpc.HandlerCallDetails): grpc.RpcMethodHandler[object, object] \| None&lt;br ALIGN=&quot;LEFT&quot;/&gt;}" target="_blank">
+<g id="a_node17"><a xlink:href="https://github.com/DUNE-DAQ/drunc/blob/7497d5778c61489843bcb3a4143ae2b41ec46475/src/drunc/utils/grpc_utils.py#L435" xlink:title="{RichErrorServerInterceptor|&lt;br ALIGN=&quot;LEFT&quot;/&gt;|intercept_service(continuation: Callable[[grpc.HandlerCallDetails], grpc.RpcMethodHandler[object, object] \| None], handler_call_details: grpc.HandlerCallDetails): grpc.RpcMethodHandler[object, object] \| None&lt;br ALIGN=&quot;LEFT&quot;/&gt;}" target="_blank">
 <polygon fill="#fff4b8" stroke="#8b7355" points="2812,-75 2812,-133 3844,-133 3844,-75 2812,-75"/>
 <text text-anchor="start" x="3263" y="-121" font-family="Helvetica,sans-Serif" font-size="10.00">RichErrorServerInterceptor</text>
 <polyline fill="none" stroke="#8b7355" points="2812,-114 3844,-114 "/>
@@ -306,7 +306,7 @@
 <!-- drunc.utils.grpc_utils.ServerTimeout -->
 <g id="node18" class="node">
 <title>drunc.utils.grpc_utils.ServerTimeout</title>
-<g id="a_node18"><a xlink:href="https://github.com/DUNE-DAQ/drunc/blob/0905a2acd037d51f11aa4ea7482233a1b9bc10dd/src/drunc/utils/grpc_utils.py#L113" xlink:title="{ServerTimeout|message : str&lt;br ALIGN=&quot;LEFT&quot;/&gt;|}" target="_blank">
+<g id="a_node18"><a xlink:href="https://github.com/DUNE-DAQ/drunc/blob/7497d5778c61489843bcb3a4143ae2b41ec46475/src/drunc/utils/grpc_utils.py#L113" xlink:title="{ServerTimeout|message : str&lt;br ALIGN=&quot;LEFT&quot;/&gt;|}" target="_blank">
 <polygon fill="#fff4b8" stroke="#8b7355" points="3887.5,-75.5 3887.5,-132.5 3976.5,-132.5 3976.5,-75.5 3887.5,-75.5"/>
 <text text-anchor="start" x="3895.5" y="-120.5" font-family="Helvetica,sans-Serif" font-size="10.00">ServerTimeout</text>
 <polyline fill="none" stroke="#8b7355" points="3887.5,-113.5 3976.5,-113.5 "/>
@@ -319,7 +319,7 @@
 <!-- drunc.utils.grpc_utils.ServerUnreachable -->
 <g id="node19" class="node">
 <title>drunc.utils.grpc_utils.ServerUnreachable</title>
-<g id="a_node19"><a xlink:href="https://github.com/DUNE-DAQ/drunc/blob/0905a2acd037d51f11aa4ea7482233a1b9bc10dd/src/drunc/utils/grpc_utils.py#L100" xlink:title="{ServerUnreachable|message : str&lt;br ALIGN=&quot;LEFT&quot;/&gt;|}" target="_blank">
+<g id="a_node19"><a xlink:href="https://github.com/DUNE-DAQ/drunc/blob/7497d5778c61489843bcb3a4143ae2b41ec46475/src/drunc/utils/grpc_utils.py#L100" xlink:title="{ServerUnreachable|message : str&lt;br ALIGN=&quot;LEFT&quot;/&gt;|}" target="_blank">
 <polygon fill="#fff4b8" stroke="#8b7355" points="4020,-75.5 4020,-132.5 4130,-132.5 4130,-75.5 4020,-75.5"/>
 <text text-anchor="start" x="4028" y="-120.5" font-family="Helvetica,sans-Serif" font-size="10.00">ServerUnreachable</text>
 <polyline fill="none" stroke="#8b7355" points="4020,-113.5 4130,-113.5 "/>
@@ -332,7 +332,7 @@
 <!-- drunc.utils.shell_utils.ShellContext -->
 <g id="node20" class="node">
 <title>drunc.utils.shell_utils.ShellContext</title>
-<g id="a_node20"><a xlink:href="https://github.com/DUNE-DAQ/drunc/blob/0905a2acd037d51f11aa4ea7482233a1b9bc10dd/src/drunc/utils/shell_utils.py#L40" xlink:title="{ShellContext|dynamic_commands : set[str]&lt;br ALIGN=&quot;LEFT&quot;/&gt;shell_id : str \| None&lt;br ALIGN=&quot;LEFT&quot;/&gt;|&lt;I&gt;create_drivers&lt;/I&gt;(): MutableMapping[str, object]&lt;br ALIGN=&quot;LEFT&quot;/&gt;&lt;I&gt;create_token&lt;/I&gt;(): Token&lt;br ALIGN=&quot;LEFT&quot;/&gt;delete_driver(name: str): None&lt;br ALIGN=&quot;LEFT&quot;/&gt;get_controller_driver(quiet_fail: bool): ControllerDriver&lt;br ALIGN=&quot;LEFT&quot;/&gt;get_driver(name: str \| None, quiet_fail: bool): object&lt;br ALIGN=&quot;LEFT&quot;/&gt;get_pm_driver(quiet_fail: bool): ProcessManagerDriver&lt;br ALIGN=&quot;LEFT&quot;/&gt;get_shell_id(): str \| None&lt;br ALIGN=&quot;LEFT&quot;/&gt;get_token(): Token&lt;br ALIGN=&quot;LEFT&quot;/&gt;has_driver(name: str): bool&lt;br ALIGN=&quot;LEFT&quot;/&gt;print(): None&lt;br ALIGN=&quot;LEFT&quot;/&gt;print_status_summary(): None&lt;br ALIGN=&quot;LEFT&quot;/&gt;&lt;I&gt;reset&lt;/I&gt;(): None&lt;br ALIGN=&quot;LEFT&quot;/&gt;rule(): None&lt;br ALIGN=&quot;LEFT&quot;/&gt;set_driver(name: str, driver: object): None&lt;br ALIGN=&quot;LEFT&quot;/&gt;&lt;I&gt;terminate&lt;/I&gt;(): None&lt;br ALIGN=&quot;LEFT&quot;/&gt;}" target="_blank">
+<g id="a_node20"><a xlink:href="https://github.com/DUNE-DAQ/drunc/blob/7497d5778c61489843bcb3a4143ae2b41ec46475/src/drunc/utils/shell_utils.py#L40" xlink:title="{ShellContext|dynamic_commands : set[str]&lt;br ALIGN=&quot;LEFT&quot;/&gt;shell_id : str \| None&lt;br ALIGN=&quot;LEFT&quot;/&gt;|&lt;I&gt;create_drivers&lt;/I&gt;(): MutableMapping[str, object]&lt;br ALIGN=&quot;LEFT&quot;/&gt;&lt;I&gt;create_token&lt;/I&gt;(): Token&lt;br ALIGN=&quot;LEFT&quot;/&gt;delete_driver(name: str): None&lt;br ALIGN=&quot;LEFT&quot;/&gt;get_controller_driver(quiet_fail: bool): ControllerDriver&lt;br ALIGN=&quot;LEFT&quot;/&gt;get_driver(name: str \| None, quiet_fail: bool): object&lt;br ALIGN=&quot;LEFT&quot;/&gt;get_pm_driver(quiet_fail: bool): ProcessManagerDriver&lt;br ALIGN=&quot;LEFT&quot;/&gt;get_shell_id(): str \| None&lt;br ALIGN=&quot;LEFT&quot;/&gt;get_token(): Token&lt;br ALIGN=&quot;LEFT&quot;/&gt;has_driver(name: str): bool&lt;br ALIGN=&quot;LEFT&quot;/&gt;print(): None&lt;br ALIGN=&quot;LEFT&quot;/&gt;print_status_summary(): None&lt;br ALIGN=&quot;LEFT&quot;/&gt;&lt;I&gt;reset&lt;/I&gt;(): None&lt;br ALIGN=&quot;LEFT&quot;/&gt;rule(): None&lt;br ALIGN=&quot;LEFT&quot;/&gt;set_driver(name: str, driver: object): None&lt;br ALIGN=&quot;LEFT&quot;/&gt;&lt;I&gt;terminate&lt;/I&gt;(): None&lt;br ALIGN=&quot;LEFT&quot;/&gt;}" target="_blank">
 <polygon fill="#fff4b8" stroke="#8b7355" points="4173,-0.5 4173,-207.5 4457,-207.5 4457,-0.5 4173,-0.5"/>
 <text text-anchor="start" x="4283.5" y="-195.5" font-family="Helvetica,sans-Serif" font-size="10.00">ShellContext</text>
 <polyline fill="none" stroke="#8b7355" points="4173,-188.5 4457,-188.5 "/>
@@ -364,7 +364,7 @@
 <!-- drunc.utils.grpc_utils.UnpackingError -->
 <g id="node21" class="node">
 <title>drunc.utils.grpc_utils.UnpackingError</title>
-<g id="a_node21"><a xlink:href="https://github.com/DUNE-DAQ/drunc/blob/0905a2acd037d51f11aa4ea7482233a1b9bc10dd/src/drunc/utils/grpc_utils.py#L24" xlink:title="{UnpackingError|data : object&lt;br ALIGN=&quot;LEFT&quot;/&gt;format : type[Message]&lt;br ALIGN=&quot;LEFT&quot;/&gt;|}" target="_blank">
+<g id="a_node21"><a xlink:href="https://github.com/DUNE-DAQ/drunc/blob/7497d5778c61489843bcb3a4143ae2b41ec46475/src/drunc/utils/grpc_utils.py#L24" xlink:title="{UnpackingError|data : object&lt;br ALIGN=&quot;LEFT&quot;/&gt;format : type[Message]&lt;br ALIGN=&quot;LEFT&quot;/&gt;|}" target="_blank">
 <polygon fill="#fff4b8" stroke="#8b7355" points="4500.5,-70 4500.5,-138 4631.5,-138 4631.5,-70 4500.5,-70"/>
 <text text-anchor="start" x="4528" y="-126" font-family="Helvetica,sans-Serif" font-size="10.00">UnpackingError</text>
 <polyline fill="none" stroke="#8b7355" points="4500.5,-119 4631.5,-119 "/>
@@ -395,7 +395,7 @@
 <!-- drunc.utils.utils._ConnectivityService -->
 <g id="node23" class="node">
 <title>drunc.utils.utils._ConnectivityService</title>
-<g id="a_node23"><a xlink:href="https://github.com/DUNE-DAQ/drunc/blob/0905a2acd037d51f11aa4ea7482233a1b9bc10dd/src/drunc/utils/utils.py#L527" xlink:title="{_ConnectivityService|&lt;br ALIGN=&quot;LEFT&quot;/&gt;|resolve(name: str, message_type: str): list[dict[str, object]]&lt;br ALIGN=&quot;LEFT&quot;/&gt;}" target="_blank">
+<g id="a_node23"><a xlink:href="https://github.com/DUNE-DAQ/drunc/blob/7497d5778c61489843bcb3a4143ae2b41ec46475/src/drunc/utils/utils.py#L527" xlink:title="{_ConnectivityService|&lt;br ALIGN=&quot;LEFT&quot;/&gt;|resolve(name: str, message_type: str): list[dict[str, object]]&lt;br ALIGN=&quot;LEFT&quot;/&gt;}" target="_blank">
 <polygon fill="#fff4b8" stroke="#8b7355" points="4674.5,-75 4674.5,-133 4979.5,-133 4979.5,-75 4674.5,-75"/>
 <text text-anchor="start" x="4775.5" y="-121" font-family="Helvetica,sans-Serif" font-size="10.00">_ConnectivityService</text>
 <polyline fill="none" stroke="#8b7355" points="4674.5,-114 4979.5,-114 "/>
@@ -407,7 +407,7 @@
 <!-- drunc.utils.grpc_utils._GRPCCallWrapper -->
 <g id="node24" class="node">
 <title>drunc.utils.grpc_utils._GRPCCallWrapper</title>
-<g id="a_node24"><a xlink:href="https://github.com/DUNE-DAQ/drunc/blob/0905a2acd037d51f11aa4ea7482233a1b9bc10dd/src/drunc/utils/grpc_utils.py#L479" xlink:title="{_GRPCCallWrapper|&lt;br ALIGN=&quot;LEFT&quot;/&gt;|}" target="_blank">
+<g id="a_node24"><a xlink:href="https://github.com/DUNE-DAQ/drunc/blob/7497d5778c61489843bcb3a4143ae2b41ec46475/src/drunc/utils/grpc_utils.py#L479" xlink:title="{_GRPCCallWrapper|&lt;br ALIGN=&quot;LEFT&quot;/&gt;|}" target="_blank">
 <polygon fill="#fff4b8" stroke="#8b7355" points="5022.5,-75 5022.5,-133 5131.5,-133 5131.5,-75 5022.5,-75"/>
 <text text-anchor="start" x="5030.5" y="-121" font-family="Helvetica,sans-Serif" font-size="10.00">_GRPCCallWrapper</text>
 <polyline fill="none" stroke="#8b7355" points="5022.5,-114 5131.5,-114 "/>
@@ -419,7 +419,7 @@
 <!-- drunc.utils.configuration._OksDbProtocol -->
 <g id="node26" class="node">
 <title>drunc.utils.configuration._OksDbProtocol</title>
-<g id="a_node26"><a xlink:href="https://github.com/DUNE-DAQ/drunc/blob/0905a2acd037d51f11aa4ea7482233a1b9bc10dd/src/drunc/utils/configuration.py#L27" xlink:title="{_OksDbProtocol|&lt;br ALIGN=&quot;LEFT&quot;/&gt;|get_dal(class_name: str, uid: str): object&lt;br ALIGN=&quot;LEFT&quot;/&gt;}" target="_blank">
+<g id="a_node26"><a xlink:href="https://github.com/DUNE-DAQ/drunc/blob/7497d5778c61489843bcb3a4143ae2b41ec46475/src/drunc/utils/configuration.py#L27" xlink:title="{_OksDbProtocol|&lt;br ALIGN=&quot;LEFT&quot;/&gt;|get_dal(class_name: str, uid: str): object&lt;br ALIGN=&quot;LEFT&quot;/&gt;}" target="_blank">
 <polygon fill="#fff4b8" stroke="#8b7355" points="5175,-75 5175,-133 5387,-133 5387,-75 5175,-75"/>
 <text text-anchor="start" x="5242" y="-121" font-family="Helvetica,sans-Serif" font-size="10.00">_OksDbProtocol</text>
 <polyline fill="none" stroke="#8b7355" points="5175,-114 5387,-114 "/>

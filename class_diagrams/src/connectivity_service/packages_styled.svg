@@ -12,7 +12,7 @@
 <!-- drunc.connectivity_service -->
 <g id="node1" class="node">
 <title>drunc.connectivity_service</title>
-<g id="a_node1"><a xlink:href="https://github.com/DUNE-DAQ/drunc/blob/0905a2acd037d51f11aa4ea7482233a1b9bc10dd/src/drunc/connectivity_service/__init__.py" xlink:title="drunc.connectivity_service" target="_blank">
+<g id="a_node1"><a xlink:href="https://github.com/DUNE-DAQ/drunc/blob/7497d5778c61489843bcb3a4143ae2b41ec46475/src/drunc/connectivity_service/__init__.py" xlink:title="drunc.connectivity_service" target="_blank">
 <polygon fill="#fff4b8" stroke="#8b7355" points="147,-36 0,-36 0,0 147,0 147,-36"/>
 <text text-anchor="middle" x="73.5" y="-15.5" font-family="Helvetica,sans-Serif" font-size="10.00">drunc.connectivity_service</text>
 </a>
@@ -21,7 +21,7 @@
 <!-- drunc.connectivity_service.client -->
 <g id="node2" class="node">
 <title>drunc.connectivity_service.client</title>
-<g id="a_node2"><a xlink:href="https://github.com/DUNE-DAQ/drunc/blob/0905a2acd037d51f11aa4ea7482233a1b9bc10dd/src/drunc/connectivity_service/client.py" xlink:title="drunc.connectivity_service.client" target="_blank">
+<g id="a_node2"><a xlink:href="https://github.com/DUNE-DAQ/drunc/blob/7497d5778c61489843bcb3a4143ae2b41ec46475/src/drunc/connectivity_service/client.py" xlink:title="drunc.connectivity_service.client" target="_blank">
 <polygon fill="#fff4b8" stroke="#8b7355" points="367,-36 190,-36 190,0 367,0 367,-36"/>
 <text text-anchor="middle" x="278.5" y="-15.5" font-family="Helvetica,sans-Serif" font-size="10.00">drunc.connectivity_service.client</text>
 </a>
@@ -30,7 +30,7 @@
 <!-- drunc.connectivity_service.exceptions -->
 <g id="node3" class="node">
 <title>drunc.connectivity_service.exceptions</title>
-<g id="a_node3"><a xlink:href="https://github.com/DUNE-DAQ/drunc/blob/0905a2acd037d51f11aa4ea7482233a1b9bc10dd/src/drunc/connectivity_service/exceptions.py" xlink:title="drunc.connectivity_service.exceptions" target="_blank">
+<g id="a_node3"><a xlink:href="https://github.com/DUNE-DAQ/drunc/blob/7497d5778c61489843bcb3a4143ae2b41ec46475/src/drunc/connectivity_service/exceptions.py" xlink:title="drunc.connectivity_service.exceptions" target="_blank">
 <polygon fill="#fff4b8" stroke="#8b7355" points="380,-137 177,-137 177,-101 380,-101 380,-137"/>
 <text text-anchor="middle" x="278.5" y="-116.5" font-family="Helvetica,sans-Serif" font-size="10.00">drunc.connectivity_service.exceptions</text>
 </a>

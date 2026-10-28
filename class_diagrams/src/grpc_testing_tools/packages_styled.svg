@@ -12,7 +12,7 @@
 <!-- drunc.grpc_testing_tools -->
 <g id="node1" class="node">
 <title>drunc.grpc_testing_tools</title>
-<g id="a_node1"><a xlink:href="https://github.com/DUNE-DAQ/drunc/blob/0905a2acd037d51f11aa4ea7482233a1b9bc10dd/src/drunc/grpc_testing_tools/__init__.py" xlink:title="drunc.grpc_testing_tools" target="_blank">
+<g id="a_node1"><a xlink:href="https://github.com/DUNE-DAQ/drunc/blob/7497d5778c61489843bcb3a4143ae2b41ec46475/src/drunc/grpc_testing_tools/__init__.py" xlink:title="drunc.grpc_testing_tools" target="_blank">
 <polygon fill="#fff4b8" stroke="#8b7355" points="136,-36 0,-36 0,0 136,0 136,-36"/>
 <text text-anchor="middle" x="68" y="-15.5" font-family="Helvetica,sans-Serif" font-size="10.00">drunc.grpc_testing_tools</text>
 </a>
@@ -21,7 +21,7 @@
 <!-- drunc.grpc_testing_tools.available_grpc_servers -->
 <g id="node2" class="node">
 <title>drunc.grpc_testing_tools.available_grpc_servers</title>
-<g id="a_node2"><a xlink:href="https://github.com/DUNE-DAQ/drunc/blob/0905a2acd037d51f11aa4ea7482233a1b9bc10dd/src/drunc/grpc_testing_tools/available_grpc_servers.py" xlink:title="drunc.grpc_testing_tools.available_grpc_servers" target="_blank">
+<g id="a_node2"><a xlink:href="https://github.com/DUNE-DAQ/drunc/blob/7497d5778c61489843bcb3a4143ae2b41ec46475/src/drunc/grpc_testing_tools/available_grpc_servers.py" xlink:title="drunc.grpc_testing_tools.available_grpc_servers" target="_blank">
 <polygon fill="#fff4b8" stroke="#8b7355" points="916.5,-339 665.5,-339 665.5,-303 916.5,-303 916.5,-339"/>
 <text text-anchor="middle" x="791" y="-318.5" font-family="Helvetica,sans-Serif" font-size="10.00">drunc.grpc_testing_tools.available_grpc_servers</text>
 </a>
@@ -30,7 +30,7 @@
 <!-- drunc.grpc_testing_tools.child_controller -->
 <g id="node3" class="node">
 <title>drunc.grpc_testing_tools.child_controller</title>
-<g id="a_node3"><a xlink:href="https://github.com/DUNE-DAQ/drunc/blob/0905a2acd037d51f11aa4ea7482233a1b9bc10dd/src/drunc/grpc_testing_tools/child_controller.py" xlink:title="drunc.grpc_testing_tools.child_controller" target="_blank">
+<g id="a_node3"><a xlink:href="https://github.com/DUNE-DAQ/drunc/blob/7497d5778c61489843bcb3a4143ae2b41ec46475/src/drunc/grpc_testing_tools/child_controller.py" xlink:title="drunc.grpc_testing_tools.child_controller" target="_blank">
 <polygon fill="#fff4b8" stroke="#8b7355" points="1247,-238 1033,-238 1033,-202 1247,-202 1247,-238"/>
 <text text-anchor="middle" x="1140" y="-217.5" font-family="Helvetica,sans-Serif" font-size="10.00">drunc.grpc_testing_tools.child_controller</text>
 </a>
@@ -39,7 +39,7 @@
 <!-- drunc.grpc_testing_tools.test_services_pb2 -->
 <g id="node21" class="node">
 <title>drunc.grpc_testing_tools.test_services_pb2</title>
-<g id="a_node21"><a xlink:href="https://github.com/DUNE-DAQ/drunc/blob/0905a2acd037d51f11aa4ea7482233a1b9bc10dd/src/drunc/grpc_testing_tools/test_services_pb2.py" xlink:title="drunc.grpc_testing_tools.test_services_pb2" target="_blank">
+<g id="a_node21"><a xlink:href="https://github.com/DUNE-DAQ/drunc/blob/7497d5778c61489843bcb3a4143ae2b41ec46475/src/drunc/grpc_testing_tools/test_services_pb2.py" xlink:title="drunc.grpc_testing_tools.test_services_pb2" target="_blank">
 <polygon fill="#fff4b8" stroke="#8b7355" points="1536.5,-339 1309.5,-339 1309.5,-303 1536.5,-303 1536.5,-339"/>
 <text text-anchor="middle" x="1423" y="-318.5" font-family="Helvetica,sans-Serif" font-size="10.00">drunc.grpc_testing_tools.test_services_pb2</text>
 </a>
@@ -54,7 +54,7 @@
 <!-- drunc.grpc_testing_tools.test_services_pb2_grpc -->
 <g id="node22" class="node">
 <title>drunc.grpc_testing_tools.test_services_pb2_grpc</title>
-<g id="a_node22"><a xlink:href="https://github.com/DUNE-DAQ/drunc/blob/0905a2acd037d51f11aa4ea7482233a1b9bc10dd/src/drunc/grpc_testing_tools/test_services_pb2_grpc.py" xlink:title="drunc.grpc_testing_tools.test_services_pb2_grpc" target="_blank">
+<g id="a_node22"><a xlink:href="https://github.com/DUNE-DAQ/drunc/blob/7497d5778c61489843bcb3a4143ae2b41ec46475/src/drunc/grpc_testing_tools/test_services_pb2_grpc.py" xlink:title="drunc.grpc_testing_tools.test_services_pb2_grpc" target="_blank">
 <polygon fill="#fff4b8" stroke="#8b7355" points="1266.5,-339 1013.5,-339 1013.5,-303 1266.5,-303 1266.5,-339"/>
 <text text-anchor="middle" x="1140" y="-318.5" font-family="Helvetica,sans-Serif" font-size="10.00">drunc.grpc_testing_tools.test_services_pb2_grpc</text>
 </a>
@@ -69,7 +69,7 @@
 <!-- drunc.grpc_testing_tools.child_controller_server_cli -->
 <g id="node4" class="node">
 <title>drunc.grpc_testing_tools.child_controller_server_cli</title>
-<g id="a_node4"><a xlink:href="https://github.com/DUNE-DAQ/drunc/blob/0905a2acd037d51f11aa4ea7482233a1b9bc10dd/src/drunc/grpc_testing_tools/child_controller_server_cli.py" xlink:title="drunc.grpc_testing_tools.child_controller_server_cli" target="_blank">
+<g id="a_node4"><a xlink:href="https://github.com/DUNE-DAQ/drunc/blob/7497d5778c61489843bcb3a4143ae2b41ec46475/src/drunc/grpc_testing_tools/child_controller_server_cli.py" xlink:title="drunc.grpc_testing_tools.child_controller_server_cli" target="_blank">
 <polygon fill="#fff4b8" stroke="#8b7355" points="1177,-36 911,-36 911,0 1177,0 1177,-36"/>
 <text text-anchor="middle" x="1044" y="-15.5" font-family="Helvetica,sans-Serif" font-size="10.00">drunc.grpc_testing_tools.child_controller_server_cli</text>
 </a>
@@ -78,7 +78,7 @@
 <!-- drunc.grpc_testing_tools.run_grpc_services -->
 <g id="node19" class="node">
 <title>drunc.grpc_testing_tools.run_grpc_services</title>
-<g id="a_node19"><a xlink:href="https://github.com/DUNE-DAQ/drunc/blob/0905a2acd037d51f11aa4ea7482233a1b9bc10dd/src/drunc/grpc_testing_tools/run_grpc_services.py" xlink:title="drunc.grpc_testing_tools.run_grpc_services" target="_blank">
+<g id="a_node19"><a xlink:href="https://github.com/DUNE-DAQ/drunc/blob/7497d5778c61489843bcb3a4143ae2b41ec46475/src/drunc/grpc_testing_tools/run_grpc_services.py" xlink:title="drunc.grpc_testing_tools.run_grpc_services" target="_blank">
 <polygon fill="#fff4b8" stroke="#8b7355" points="1472.5,-137 1245.5,-137 1245.5,-101 1472.5,-101 1472.5,-137"/>
 <text text-anchor="middle" x="1359" y="-116.5" font-family="Helvetica,sans-Serif" font-size="10.00">drunc.grpc_testing_tools.run_grpc_services</text>
 </a>
@@ -93,7 +93,7 @@
 <!-- drunc.grpc_testing_tools.connection_utils -->
 <g id="node5" class="node">
 <title>drunc.grpc_testing_tools.connection_utils</title>
-<g id="a_node5"><a xlink:href="https://github.com/DUNE-DAQ/drunc/blob/0905a2acd037d51f11aa4ea7482233a1b9bc10dd/src/drunc/grpc_testing_tools/connection_utils.py" xlink:title="drunc.grpc_testing_tools.connection_utils" target="_blank">
+<g id="a_node5"><a xlink:href="https://github.com/DUNE-DAQ/drunc/blob/7497d5778c61489843bcb3a4143ae2b41ec46475/src/drunc/grpc_testing_tools/connection_utils.py" xlink:title="drunc.grpc_testing_tools.connection_utils" target="_blank">
 <polygon fill="#fff4b8" stroke="#8b7355" points="2066,-36 1848,-36 1848,0 2066,0 2066,-36"/>
 <text text-anchor="middle" x="1957" y="-15.5" font-family="Helvetica,sans-Serif" font-size="10.00">drunc.grpc_testing_tools.connection_utils</text>
 </a>
@@ -102,7 +102,7 @@
 <!-- drunc.grpc_testing_tools.grpc_log_file_manager -->
 <g id="node6" class="node">
 <title>drunc.grpc_testing_tools.grpc_log_file_manager</title>
-<g id="a_node6"><a xlink:href="https://github.com/DUNE-DAQ/drunc/blob/0905a2acd037d51f11aa4ea7482233a1b9bc10dd/src/drunc/grpc_testing_tools/grpc_log_file_manager.py" xlink:title="drunc.grpc_testing_tools.grpc_log_file_manager" target="_blank">
+<g id="a_node6"><a xlink:href="https://github.com/DUNE-DAQ/drunc/blob/7497d5778c61489843bcb3a4143ae2b41ec46475/src/drunc/grpc_testing_tools/grpc_log_file_manager.py" xlink:title="drunc.grpc_testing_tools.grpc_log_file_manager" target="_blank">
 <polygon fill="#fff4b8" stroke="#8b7355" points="2358.5,-36 2109.5,-36 2109.5,0 2358.5,0 2358.5,-36"/>
 <text text-anchor="middle" x="2234" y="-15.5" font-family="Helvetica,sans-Serif" font-size="10.00">drunc.grpc_testing_tools.grpc_log_file_manager</text>
 </a>
@@ -111,7 +111,7 @@
 <!-- drunc.grpc_testing_tools.grpc_log_util -->
 <g id="node7" class="node">
 <title>drunc.grpc_testing_tools.grpc_log_util</title>
-<g id="a_node7"><a xlink:href="https://github.com/DUNE-DAQ/drunc/blob/0905a2acd037d51f11aa4ea7482233a1b9bc10dd/src/drunc/grpc_testing_tools/grpc_log_util.py" xlink:title="drunc.grpc_testing_tools.grpc_log_util" target="_blank">
+<g id="a_node7"><a xlink:href="https://github.com/DUNE-DAQ/drunc/blob/7497d5778c61489843bcb3a4143ae2b41ec46475/src/drunc/grpc_testing_tools/grpc_log_util.py" xlink:title="drunc.grpc_testing_tools.grpc_log_util" target="_blank">
 <polygon fill="#fff4b8" stroke="#8b7355" points="2013.5,-238 1812.5,-238 1812.5,-202 2013.5,-202 2013.5,-238"/>
 <text text-anchor="middle" x="1913" y="-217.5" font-family="Helvetica,sans-Serif" font-size="10.00">drunc.grpc_testing_tools.grpc_log_util</text>
 </a>
@@ -120,7 +120,7 @@
 <!-- drunc.grpc_testing_tools.grpc_running_server_data -->
 <g id="node8" class="node">
 <title>drunc.grpc_testing_tools.grpc_running_server_data</title>
-<g id="a_node8"><a xlink:href="https://github.com/DUNE-DAQ/drunc/blob/0905a2acd037d51f11aa4ea7482233a1b9bc10dd/src/drunc/grpc_testing_tools/grpc_running_server_data.py" xlink:title="drunc.grpc_testing_tools.grpc_running_server_data" target="_blank">
+<g id="a_node8"><a xlink:href="https://github.com/DUNE-DAQ/drunc/blob/7497d5778c61489843bcb3a4143ae2b41ec46475/src/drunc/grpc_testing_tools/grpc_running_server_data.py" xlink:title="drunc.grpc_testing_tools.grpc_running_server_data" target="_blank">
 <polygon fill="#fff4b8" stroke="#8b7355" points="815.5,-238 550.5,-238 550.5,-202 815.5,-202 815.5,-238"/>
 <text text-anchor="middle" x="683" y="-217.5" font-family="Helvetica,sans-Serif" font-size="10.00">drunc.grpc_testing_tools.grpc_running_server_data</text>
 </a>
@@ -135,7 +135,7 @@
 <!-- drunc.grpc_testing_tools.stubs -->
 <g id="node20" class="node">
 <title>drunc.grpc_testing_tools.stubs</title>
-<g id="a_node20"><a xlink:href="https://github.com/DUNE-DAQ/drunc/blob/0905a2acd037d51f11aa4ea7482233a1b9bc10dd/src/drunc/grpc_testing_tools/stubs.py" xlink:title="drunc.grpc_testing_tools.stubs" target="_blank">
+<g id="a_node20"><a xlink:href="https://github.com/DUNE-DAQ/drunc/blob/7497d5778c61489843bcb3a4143ae2b41ec46475/src/drunc/grpc_testing_tools/stubs.py" xlink:title="drunc.grpc_testing_tools.stubs" target="_blank">
 <polygon fill="#fff4b8" stroke="#8b7355" points="567.5,-339 402.5,-339 402.5,-303 567.5,-303 567.5,-339"/>
 <text text-anchor="middle" x="485" y="-318.5" font-family="Helvetica,sans-Serif" font-size="10.00">drunc.grpc_testing_tools.stubs</text>
 </a>
@@ -150,7 +150,7 @@
 <!-- drunc.grpc_testing_tools.grpc_server_config -->
 <g id="node9" class="node">
 <title>drunc.grpc_testing_tools.grpc_server_config</title>
-<g id="a_node9"><a xlink:href="https://github.com/DUNE-DAQ/drunc/blob/0905a2acd037d51f11aa4ea7482233a1b9bc10dd/src/drunc/grpc_testing_tools/grpc_server_config.py" xlink:title="drunc.grpc_testing_tools.grpc_server_config" target="_blank">
+<g id="a_node9"><a xlink:href="https://github.com/DUNE-DAQ/drunc/blob/7497d5778c61489843bcb3a4143ae2b41ec46475/src/drunc/grpc_testing_tools/grpc_server_config.py" xlink:title="drunc.grpc_testing_tools.grpc_server_config" target="_blank">
 <polygon fill="#fff4b8" stroke="#8b7355" points="1007,-137 777,-137 777,-101 1007,-101 1007,-137"/>
 <text text-anchor="middle" x="892" y="-116.5" font-family="Helvetica,sans-Serif" font-size="10.00">drunc.grpc_testing_tools.grpc_server_config</text>
 </a>
@@ -165,7 +165,7 @@
 <!-- drunc.grpc_testing_tools.grpc_server_manager -->
 <g id="node10" class="node">
 <title>drunc.grpc_testing_tools.grpc_server_manager</title>
-<g id="a_node10"><a xlink:href="https://github.com/DUNE-DAQ/drunc/blob/0905a2acd037d51f11aa4ea7482233a1b9bc10dd/src/drunc/grpc_testing_tools/grpc_server_manager.py" xlink:title="drunc.grpc_testing_tools.grpc_server_manager" target="_blank">
+<g id="a_node10"><a xlink:href="https://github.com/DUNE-DAQ/drunc/blob/7497d5778c61489843bcb3a4143ae2b41ec46475/src/drunc/grpc_testing_tools/grpc_server_manager.py" xlink:title="drunc.grpc_testing_tools.grpc_server_manager" target="_blank">
 <polygon fill="#fff4b8" stroke="#8b7355" points="845.5,-36 600.5,-36 600.5,0 845.5,0 845.5,-36"/>
 <text text-anchor="middle" x="723" y="-15.5" font-family="Helvetica,sans-Serif" font-size="10.00">drunc.grpc_testing_tools.grpc_server_manager</text>
 </a>
@@ -186,7 +186,7 @@
 <!-- drunc.grpc_testing_tools.process_connection_manager -->
 <g id="node14" class="node">
 <title>drunc.grpc_testing_tools.process_connection_manager</title>
-<g id="a_node14"><a xlink:href="https://github.com/DUNE-DAQ/drunc/blob/0905a2acd037d51f11aa4ea7482233a1b9bc10dd/src/drunc/grpc_testing_tools/process_connection_manager.py" xlink:title="drunc.grpc_testing_tools.process_connection_manager" target="_blank">
+<g id="a_node14"><a xlink:href="https://github.com/DUNE-DAQ/drunc/blob/7497d5778c61489843bcb3a4143ae2b41ec46475/src/drunc/grpc_testing_tools/process_connection_manager.py" xlink:title="drunc.grpc_testing_tools.process_connection_manager" target="_blank">
 <polygon fill="#fff4b8" stroke="#8b7355" points="647,-137 363,-137 363,-101 647,-101 647,-137"/>
 <text text-anchor="middle" x="505" y="-116.5" font-family="Helvetica,sans-Serif" font-size="10.00">drunc.grpc_testing_tools.process_connection_manager</text>
 </a>
@@ -207,7 +207,7 @@
 <!-- drunc.grpc_testing_tools.grpc_testing_ports -->
 <g id="node11" class="node">
 <title>drunc.grpc_testing_tools.grpc_testing_ports</title>
-<g id="a_node11"><a xlink:href="https://github.com/DUNE-DAQ/drunc/blob/0905a2acd037d51f11aa4ea7482233a1b9bc10dd/src/drunc/grpc_testing_tools/grpc_testing_ports.py" xlink:title="drunc.grpc_testing_tools.grpc_testing_ports" target="_blank">
+<g id="a_node11"><a xlink:href="https://github.com/DUNE-DAQ/drunc/blob/7497d5778c61489843bcb3a4143ae2b41ec46475/src/drunc/grpc_testing_tools/grpc_testing_ports.py" xlink:title="drunc.grpc_testing_tools.grpc_testing_ports" target="_blank">
 <polygon fill="#fff4b8" stroke="#8b7355" points="2630.5,-36 2401.5,-36 2401.5,0 2630.5,0 2630.5,-36"/>
 <text text-anchor="middle" x="2516" y="-15.5" font-family="Helvetica,sans-Serif" font-size="10.00">drunc.grpc_testing_tools.grpc_testing_ports</text>
 </a>
@@ -216,7 +216,7 @@
 <!-- drunc.grpc_testing_tools.multiprocessing_connection_manager -->
 <g id="node12" class="node">
 <title>drunc.grpc_testing_tools.multiprocessing_connection_manager</title>
-<g id="a_node12"><a xlink:href="https://github.com/DUNE-DAQ/drunc/blob/0905a2acd037d51f11aa4ea7482233a1b9bc10dd/src/drunc/grpc_testing_tools/multiprocessing_connection_manager.py" xlink:title="drunc.grpc_testing_tools.multiprocessing_connection_manager" target="_blank">
+<g id="a_node12"><a xlink:href="https://github.com/DUNE-DAQ/drunc/blob/7497d5778c61489843bcb3a4143ae2b41ec46475/src/drunc/grpc_testing_tools/multiprocessing_connection_manager.py" xlink:title="drunc.grpc_testing_tools.multiprocessing_connection_manager" target="_blank">
 <polygon fill="#fff4b8" stroke="#8b7355" points="503,-36 179,-36 179,0 503,0 503,-36"/>
 <text text-anchor="middle" x="341" y="-15.5" font-family="Helvetica,sans-Serif" font-size="10.00">drunc.grpc_testing_tools.multiprocessing_connection_manager</text>
 </a>
@@ -237,7 +237,7 @@
 <!-- drunc.grpc_testing_tools.port_cleaner -->
 <g id="node13" class="node">
 <title>drunc.grpc_testing_tools.port_cleaner</title>
-<g id="a_node13"><a xlink:href="https://github.com/DUNE-DAQ/drunc/blob/0905a2acd037d51f11aa4ea7482233a1b9bc10dd/src/drunc/grpc_testing_tools/port_cleaner.py" xlink:title="drunc.grpc_testing_tools.port_cleaner" target="_blank">
+<g id="a_node13"><a xlink:href="https://github.com/DUNE-DAQ/drunc/blob/7497d5778c61489843bcb3a4143ae2b41ec46475/src/drunc/grpc_testing_tools/port_cleaner.py" xlink:title="drunc.grpc_testing_tools.port_cleaner" target="_blank">
 <polygon fill="#fff4b8" stroke="#8b7355" points="2874,-36 2674,-36 2674,0 2874,0 2874,-36"/>
 <text text-anchor="middle" x="2774" y="-15.5" font-family="Helvetica,sans-Serif" font-size="10.00">drunc.grpc_testing_tools.port_cleaner</text>
 </a>
@@ -258,7 +258,7 @@
 <!-- drunc.grpc_testing_tools.process_manager -->
 <g id="node15" class="node">
 <title>drunc.grpc_testing_tools.process_manager</title>
-<g id="a_node15"><a xlink:href="https://github.com/DUNE-DAQ/drunc/blob/0905a2acd037d51f11aa4ea7482233a1b9bc10dd/src/drunc/grpc_testing_tools/process_manager.py" xlink:title="drunc.grpc_testing_tools.process_manager" target="_blank">
+<g id="a_node15"><a xlink:href="https://github.com/DUNE-DAQ/drunc/blob/7497d5778c61489843bcb3a4143ae2b41ec46475/src/drunc/grpc_testing_tools/process_manager.py" xlink:title="drunc.grpc_testing_tools.process_manager" target="_blank">
 <polygon fill="#fff4b8" stroke="#8b7355" points="1515.5,-238 1290.5,-238 1290.5,-202 1515.5,-202 1515.5,-238"/>
 <text text-anchor="middle" x="1403" y="-217.5" font-family="Helvetica,sans-Serif" font-size="10.00">drunc.grpc_testing_tools.process_manager</text>
 </a>
@@ -279,7 +279,7 @@
 <!-- drunc.grpc_testing_tools.process_manager_server_cli -->
 <g id="node16" class="node">
 <title>drunc.grpc_testing_tools.process_manager_server_cli</title>
-<g id="a_node16"><a xlink:href="https://github.com/DUNE-DAQ/drunc/blob/0905a2acd037d51f11aa4ea7482233a1b9bc10dd/src/drunc/grpc_testing_tools/process_manager_server_cli.py" xlink:title="drunc.grpc_testing_tools.process_manager_server_cli" target="_blank">
+<g id="a_node16"><a xlink:href="https://github.com/DUNE-DAQ/drunc/blob/7497d5778c61489843bcb3a4143ae2b41ec46475/src/drunc/grpc_testing_tools/process_manager_server_cli.py" xlink:title="drunc.grpc_testing_tools.process_manager_server_cli" target="_blank">
 <polygon fill="#fff4b8" stroke="#8b7355" points="1498,-36 1220,-36 1220,0 1498,0 1498,-36"/>
 <text text-anchor="middle" x="1359" y="-15.5" font-family="Helvetica,sans-Serif" font-size="10.00">drunc.grpc_testing_tools.process_manager_server_cli</text>
 </a>
@@ -294,7 +294,7 @@
 <!-- drunc.grpc_testing_tools.root_controller -->
 <g id="node17" class="node">
 <title>drunc.grpc_testing_tools.root_controller</title>
-<g id="a_node17"><a xlink:href="https://github.com/DUNE-DAQ/drunc/blob/0905a2acd037d51f11aa4ea7482233a1b9bc10dd/src/drunc/grpc_testing_tools/root_controller.py" xlink:title="drunc.grpc_testing_tools.root_controller" target="_blank">
+<g id="a_node17"><a xlink:href="https://github.com/DUNE-DAQ/drunc/blob/7497d5778c61489843bcb3a4143ae2b41ec46475/src/drunc/grpc_testing_tools/root_controller.py" xlink:title="drunc.grpc_testing_tools.root_controller" target="_blank">
 <polygon fill="#fff4b8" stroke="#8b7355" points="1769,-238 1559,-238 1559,-202 1769,-202 1769,-238"/>
 <text text-anchor="middle" x="1664" y="-217.5" font-family="Helvetica,sans-Serif" font-size="10.00">drunc.grpc_testing_tools.root_controller</text>
 </a>
@@ -315,7 +315,7 @@
 <!-- drunc.grpc_testing_tools.root_controller_server_cli -->
 <g id="node18" class="node">
 <title>drunc.grpc_testing_tools.root_controller_server_cli</title>
-<g id="a_node18"><a xlink:href="https://github.com/DUNE-DAQ/drunc/blob/0905a2acd037d51f11aa4ea7482233a1b9bc10dd/src/drunc/grpc_testing_tools/root_controller_server_cli.py" xlink:title="drunc.grpc_testing_tools.root_controller_server_cli" target="_blank">
+<g id="a_node18"><a xlink:href="https://github.com/DUNE-DAQ/drunc/blob/7497d5778c61489843bcb3a4143ae2b41ec46475/src/drunc/grpc_testing_tools/root_controller_server_cli.py" xlink:title="drunc.grpc_testing_tools.root_controller_server_cli" target="_blank">
 <polygon fill="#fff4b8" stroke="#8b7355" points="1804.5,-36 1541.5,-36 1541.5,0 1804.5,0 1804.5,-36"/>
 <text text-anchor="middle" x="1673" y="-15.5" font-family="Helvetica,sans-Serif" font-size="10.00">drunc.grpc_testing_tools.root_controller_server_cli</text>
 </a>
