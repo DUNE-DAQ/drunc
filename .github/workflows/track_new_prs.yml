@@ -24,6 +24,31 @@ jobs:
           project-url: https://github.com/orgs/DUNE-DAQ/projects/8
           github-token: ${{ secrets.BOT_CI_ISSUES }}
 
+      - name: Set DRUNC Internal status to In Progress
+        env:
+          GH_TOKEN: ${{ secrets.BOT_CI_ISSUES }}
+          ITEM_ID: ${{ steps.add_to_drunc_project.outputs.itemId }}
+        run: |
+          set -euo pipefail
+          meta="$(gh api graphql -f query='
+            {
+              organization(login: "DUNE-DAQ") {
+                projectV2(number: 8) {
+                  id
+                  status: field(name: "Status") {
+                    ... on ProjectV2SingleSelectField { id options { id name } }
+                  }
+                }
+              }
+            }')"
+          p='.data.organization.projectV2'
+          project_id="$(jq -r "${p}.id" <<<"${meta}")"
+          status_field="$(jq -r "${p}.status.id" <<<"${meta}")"
+          in_progress="$(jq -r "${p}.status.options[] | select(.name == \"In Progress\") | .id" <<<"${meta}")"
+
+          gh project item-edit --id "${ITEM_ID}" --project-id "${project_id}" \
+            --field-id "${status_field}" --single-select-option-id "${in_progress}"
+
       - name: Set DRUNC Internal sprint to the current sprint
         env:
           GH_TOKEN: ${{ secrets.BOT_CI_ISSUES }}
@@ -68,6 +93,31 @@ jobs:
         with:
           project-url: https://github.com/orgs/DUNE-DAQ/projects/5
           github-token: ${{ secrets.BOT_CI_ISSUES }}
+
+      - name: Set DUNE-DAQ tracking status to In Progress
+        env:
+          GH_TOKEN: ${{ secrets.BOT_CI_ISSUES }}
+          ITEM_ID: ${{ steps.add_to_tracking_project.outputs.itemId }}
+        run: |
+          set -euo pipefail
+          meta="$(gh api graphql -f query='
+            {
+              organization(login: "DUNE-DAQ") {
+                projectV2(number: 5) {
+                  id
+                  status: field(name: "Status") {
+                    ... on ProjectV2SingleSelectField { id options { id name } }
+                  }
+                }
+              }
+            }')"
+          p='.data.organization.projectV2'
+          project_id="$(jq -r "${p}.id" <<<"${meta}")"
+          status_field="$(jq -r "${p}.status.id" <<<"${meta}")"
+          in_progress="$(jq -r "${p}.status.options[] | select(.name == \"In Progress\") | .id" <<<"${meta}")"
+
+          gh project item-edit --id "${ITEM_ID}" --project-id "${project_id}" \
+            --field-id "${status_field}" --single-select-option-id "${in_progress}"
 
       - name: Set DUNE-DAQ tracking project Working Group to CCM
         env:
