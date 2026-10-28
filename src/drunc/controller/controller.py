@@ -657,17 +657,16 @@ class Controller(ControllerServicer):
                 return child_callable(child, target)
             except ServerTimeout:
                 raise
-            except (grpc.RpcError, ServerUnreachable, DruncException) as error:
+            except (grpc.RpcError, DruncException) as error:
+                rpc_error: BaseException | None = None
                 if isinstance(error, (grpc.RpcError, ServerUnreachable)):
-                    rpc_error: BaseException | None = error
+                    rpc_error = error
                     while rpc_error is not None and not isinstance(
                         rpc_error, grpc.RpcError
                     ):
                         rpc_error = rpc_error.__cause__
 
-                    if not isinstance(rpc_error, grpc.RpcError):
-                        raise
-
+                if isinstance(rpc_error, grpc.RpcError):
                     rich = extract_grpc_rich_error(rpc_error)
                     child_details = [
                         detail for detail in rich.details
@@ -675,10 +674,12 @@ class Controller(ControllerServicer):
                     ]
                     child_code = rich.code
                     child_message = rich.message
-                else:
+                elif isinstance(error, DruncException):
                     child_details = error.rich_details
-                    child_code = child_code = code_pb2.Code.Name(error.grpc_error_code)
+                    child_code = code_pb2.Code.Name(error.grpc_error_code)
                     child_message = str(error)
+                else:
+                    raise
 
                 child_error = ChildCommandException(
                     child_name=child.name,
@@ -690,13 +691,7 @@ class Controller(ControllerServicer):
                 if degrade_response is not None:
                     return degrade_response(child, child_error)
 
-                # If degrade_response is None, we consider this a terminal error and raise an exception.
-                raise ChildCommandException(
-                    child_name=child.name,
-                    child_details=child_details,
-                    child_code=child_code,
-                    child_message=child_message,
-                ) from error
+                raise child_error from error
                 
 
         selected_child_list = (
