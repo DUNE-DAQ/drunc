@@ -7,12 +7,12 @@ import time
 from collections.abc import Iterator
 from time import sleep
 from types import FrameType
-from typing import List
+from typing import List, Literal, cast
 from urllib.parse import urlparse
 
 import conffwk
 import grpc
-from confmodel_dal.dal_protocols import Service, Session
+from confmodel_dal.dal_protocols import Session, WritableService, WritableSession
 from daqconf.set_connectivity_service_port import set_connectivity_service_port
 from daqconf.set_rc_controller_port import set_rc_controller_port
 from daqconf.utils import find_free_port
@@ -89,7 +89,9 @@ class ProcessManagerDriver:
         except Exception as e:
             self.log.error(f"Error closing gRPC channel: {e}", exc_info=True)
 
-    def update_controller_logs(self, ctrl_dal: Session, level: str) -> Session:
+    def update_controller_logs(
+        self, ctrl_dal: WritableSession, level: str
+    ) -> WritableSession:
         """
         Update the log level of the controller in the DAL.
         Will automatically capitalise any string to match the configuration schema.
@@ -104,7 +106,10 @@ class ProcessManagerDriver:
         Raises:
             None
         """
-        ctrl_dal.controller_log_level = level.upper()
+        # conffwk rejects values outside the schema enum on assignment
+        ctrl_dal.controller_log_level = cast(
+            Literal["CRITICAL", "ERROR", "WARNING", "INFO", "DEBUG"], level.upper()
+        )
         return ctrl_dal
 
     # ----- Boot workflow -----
@@ -430,7 +435,7 @@ To debug it, close drunc and run the following command:
                 )
                 return
 
-    def resolve_localhost(self, session_dal):
+    def resolve_localhost(self, session_dal: WritableSession) -> WritableSession:
         def dal_localhost_mapping(dal_host: str):
             if dal_host != "localhost":
                 return dal_host
@@ -445,18 +450,19 @@ To debug it, close drunc and run the following command:
             )
             return resolved_server
 
-        session_dal.connectivity_service.host = dal_localhost_mapping(
-            session_dal.connectivity_service.host
-        )
-        session_dal.segment.controller.runs_on.runs_on.id = dal_localhost_mapping(
-            session_dal.segment.controller.runs_on.runs_on.id
+        if session_dal.connectivity_service is not None:
+            session_dal.connectivity_service.host = dal_localhost_mapping(
+                session_dal.connectivity_service.host
+            )
+        session_dal.segment.controller.runs_on.runs_on.rename(
+            dal_localhost_mapping(session_dal.segment.controller.runs_on.runs_on.id)
         )
 
         return session_dal
 
     def check_port_conflicts(
-        self, db: conffwk.Configuration, session_dal: Session
-    ) -> tuple[conffwk.Configuration, Session]:
+        self, db: conffwk.Configuration, session_dal: WritableSession
+    ) -> tuple[conffwk.Configuration, WritableSession]:
         """
         Check that the ports allocated in the configuration file are available. If the
         file is editable, make the changes in the file itself. Otherwise, make the
@@ -492,7 +498,7 @@ To debug it, close drunc and run the following command:
         # Check that the address of the root controller is available, otherwise change
         # it to one that is available
         root_controller_host: str = session_dal.segment.controller.runs_on.runs_on.id
-        root_controller_service_list: list[Service] = [
+        root_controller_service_list: list[WritableService] = [
             service
             for service in session_dal.segment.controller.exposes_service
             if "_control" in service.id
@@ -518,9 +524,12 @@ To debug it, close drunc and run the following command:
         # If a local connectivity service is being used, perform the same checks
         # Temporarily removed to allow integration tests to pass without restructuring
         # Note - if infrastructure applications outside of the connectivity service are spawned, this will need to be adjusted.
-        if session_dal.infrastructure_applications:  # Check if the own application needs to be spawned, or if an externally managed one is in use (e.g. if using ehn1 connectivity service or integration tests.)
-            connectivity_service_host: str = session_dal.connectivity_service.host
-            connectivity_service_port = session_dal.connectivity_service.service.port
+        connectivity_service = session_dal.connectivity_service
+        if (
+            session_dal.infrastructure_applications and connectivity_service is not None
+        ):  # Check if the own application needs to be spawned, or if an externally managed one is in use (e.g. if using ehn1 connectivity service or integration tests.)
+            connectivity_service_host: str = connectivity_service.host
+            connectivity_service_port = connectivity_service.service.port
             if not is_port_available(
                 connectivity_service_host, connectivity_service_port
             ):
@@ -570,7 +579,7 @@ To debug it, close drunc and run the following command:
 
     def _initialise_session(
         self, conf_file: str, conf_id: str
-    ) -> tuple["conffwk.Configuration", Session]:
+    ) -> tuple["conffwk.Configuration", WritableSession]:
         import conffwk  # isort: skip
 
         db = conffwk.Configuration(conf_file)
