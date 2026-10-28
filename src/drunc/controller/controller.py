@@ -1093,8 +1093,7 @@ class Controller(ControllerServicer):
                 transition_data=command.data,
                 ctx=self,
             )
-            fsm_args = None
-            fsm_data = command.data
+
             # If the command publishes to ELisa Logbook, make sure that .dotdrunc.json
             # is present and well formatted
             using_elisa_logbook = "elisa-logbook" in self.fsm_config.get_actions()
