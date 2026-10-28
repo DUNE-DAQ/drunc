@@ -89,9 +89,7 @@ def boot_test_setup(mock_driver):
 
         # Mock connectivity service
         csc_mock = MagicMock(is_ready=MagicMock(return_value=is_ready))
-        mock_driver._connect_to_service = MagicMock(
-            return_value=(csc_mock, "server", 1234)
-        )
+        mock_driver._connect_to_service = MagicMock(return_value=csc_mock)
 
         # Internal methods of the driver
         mock_driver._consolidate_config = MagicMock()
@@ -468,7 +466,7 @@ def test_initialise_session_config_failure(mock_config_class, mock_driver):
 @patch("drunc.process_manager.process_manager_driver.ConnectivityServiceClient")
 def test_connect_to_service_success(mock_client_class, mock_driver):
     """
-    Test that `_connect_to_service` returns a client and connection details when connectivity_service is present.
+    Test that `_connect_to_service` returns a client when connectivity_service is present.
     """
     mock_client_instance = MagicMock()
     mock_client_class.return_value = mock_client_instance
@@ -481,28 +479,28 @@ def test_connect_to_service_success(mock_client_class, mock_driver):
 
     result_localhost = mock_driver._connect_to_service(mock_session_dal, "session1")
     mock_client_class.assert_called_once_with("session1", f"{pytest_hostname}:1234")
-    assert result_localhost == (mock_client_instance, pytest_hostname, 1234)
+    assert result_localhost == mock_client_instance
 
     mock_session_dal.connectivity_service.host = pytest_hostname
     result_pytest_hostname = mock_driver._connect_to_service(
         mock_session_dal, "session2"
     )
     mock_client_class.assert_called_with("session2", f"{pytest_hostname}:1234")
-    assert result_pytest_hostname == (mock_client_instance, pytest_hostname, 1234)
+    assert result_pytest_hostname == mock_client_instance
 
     mock_client_class.assert_called_with("session2", f"{pytest_hostname}:1234")
 
 
 def test_connect_to_service_none(mock_driver):
     """
-    Test that `_connect_to_service` returns (None, None, None) when connectivity service is missing.
+    Test that `_connect_to_service` returns None when connectivity service is missing.
     """
     mock_session_dal = MagicMock()
     mock_session_dal.connectivity_service = None
 
     result = mock_driver._connect_to_service(mock_session_dal, "session1")
 
-    assert result == (None, None, None)
+    assert result is None
 
 
 @patch(
@@ -525,8 +523,6 @@ def test_discover_controller_with_csc_success(
         session_dal=MagicMock(),
         session_name="session1",
         csc=MagicMock(),
-        connection_server="localhost",
-        connection_port=1234,
     )
     assert mock_driver.controller_address == "controller:1234"
     mock_driver.log.debug.assert_called()
@@ -546,6 +542,8 @@ def test_discover_controller_with_csc_failure(mock_collect, mock_timeout, mock_d
     session_dal = MagicMock()
     session_dal.segment.controller.id = "controller"
     session_dal.environment = {}
+    session_dal.connectivity_service.host = "localhost"
+    session_dal.connectivity_service.service.port = 1234
 
     # Mock failure logging method to track its invocation
     mock_driver._log_controller_lookup_failure = MagicMock()
@@ -558,8 +556,6 @@ def test_discover_controller_with_csc_failure(mock_collect, mock_timeout, mock_d
             session_dal=session_dal,
             session_name="session1",
             csc=MagicMock(),
-            connection_server="localhost",
-            connection_port=1234,
         )
         # Assert that the failure was logged with the correct parameters
         mock_driver._log_controller_lookup_failure.assert_called_once_with(
@@ -603,8 +599,6 @@ def test_discover_controller_without_connectivity_service(
         session_dal=session_dal,
         session_name="session1",
         csc=None,
-        connection_server="",
-        connection_port=0,
     )
     assert mock_driver.controller_address == "192.168.1.10:5678"
 

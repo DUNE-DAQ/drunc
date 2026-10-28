@@ -149,9 +149,7 @@ class ProcessManagerDriver:
         session_dal = self.resolve_localhost(session_dal)
 
         # Step 4 - connect to the connection service
-        csc, connection_server, connection_port = self._connect_to_service(
-            session_dal, session_name
-        )
+        csc = self._connect_to_service(session_dal, session_name)
 
         # Step 5 - track boot timings per host
         last_boot_on_host_at: dict[str, float] = {}
@@ -223,9 +221,7 @@ class ProcessManagerDriver:
             yield response
 
         # Step 7: discover segment root controller
-        self._discover_controller(
-            session_dal, session_name, csc, connection_server, connection_port
-        )
+        self._discover_controller(session_dal, session_name, csc)
 
     def _collect_all_apps(
         self,
@@ -596,16 +592,14 @@ To debug it, close drunc and run the following command:
             client = ConnectivityServiceClient(
                 session_name, f"{connection_server}:{connection_port}"
             )
-            return client, connection_server, connection_port
-        return None, None, None
+            return client
+        return None
 
     def _discover_controller(
         self,
         session_dal: Session,
         session_name: str,
         csc: ConnectivityServiceClient | None,
-        connection_server: str,
-        connection_port: int,
     ):
         """
         Attempts to discover the controller address after booting applications.
@@ -618,6 +612,8 @@ To debug it, close drunc and run the following command:
             self.log.error(f"Could not determine controller name from OKS: {e}")
             top_controller_name = "Unknown-Controller"  # Set a default
 
+        connectivity_service = session_dal.connectivity_service
+
         def get_controller_address(session_dal, session_name):
             from drunc.process_manager.oks_parser import collect_variables
 
@@ -625,7 +621,9 @@ To debug it, close drunc and run the following command:
             collect_variables(session_dal.environment, env)
 
             # 1: Try dynamic lookup via Connectivity Service
-            if csc:
+            if csc and connectivity_service:
+                connection_server = connectivity_service.host
+                connection_port = connectivity_service.service.port
                 self.log.info(
                     f"Looking for top controller '{top_controller_name}' in the connectivity service at http://{connection_server}:{connection_port}"
                 )
