@@ -316,12 +316,12 @@ class SSHProcessLifetimeManagerShell(ProcessLifetimeManager):
             logger: Logger instance for real-time output logging
             on_process_exit: Optional callback function(uuid, exit_status, exception) invoked when process exits
         """
-        self.disable_host_key_check = disable_host_key_check
-        self.disable_localhost_host_key_check = disable_localhost_host_key_check
-        self.log = (
-            logger if logger else get_logger("ssh_process_lifetime_manager_shell")
+        super().__init__(
+            disable_host_key_check=disable_host_key_check,
+            disable_localhost_host_key_check=disable_localhost_host_key_check,
+            logger=logger or get_logger("ssh_process_lifetime_manager_shell"),
+            on_process_exit=on_process_exit,
         )
-        self._on_process_exit = on_process_exit
 
         # Create SSH command wrapper
         self.ssh = sh.Command("/usr/bin/ssh")
