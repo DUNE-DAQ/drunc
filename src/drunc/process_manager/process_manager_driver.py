@@ -7,7 +7,7 @@ import time
 from collections.abc import Iterator
 from time import sleep
 from types import FrameType
-from typing import List, Literal, cast
+from typing import List
 from urllib.parse import urlparse
 
 import conffwk
@@ -37,7 +37,11 @@ from drunc.connectivity_service.exceptions import ApplicationLookupUnsuccessful
 from drunc.controller.utils import get_segment_lookup_timeout
 from drunc.exceptions import DruncSetupException, DruncShellException
 from drunc.process_manager.oks_parser import AppInfo, get_full_db_path
-from drunc.process_manager.utils import get_log_path, get_rte_script
+from drunc.process_manager.utils import (
+    ControllerLogLevel,
+    get_log_path,
+    get_rte_script,
+)
 from drunc.utils.grpc_utils import (
     RichErrorClientInterceptor,
     copy_token,
@@ -90,11 +94,10 @@ class ProcessManagerDriver:
             self.log.error(f"Error closing gRPC channel: {e}", exc_info=True)
 
     def update_controller_logs(
-        self, ctrl_dal: WritableSession, level: str
+        self, ctrl_dal: WritableSession, level: ControllerLogLevel
     ) -> WritableSession:
         """
         Update the log level of the controller in the DAL.
-        Will automatically capitalise any string to match the configuration schema.
 
         Args:
             ctrl_dal: The controller DAL object.
@@ -106,10 +109,7 @@ class ProcessManagerDriver:
         Raises:
             None
         """
-        # conffwk rejects values outside the schema enum on assignment
-        ctrl_dal.controller_log_level = cast(
-            Literal["CRITICAL", "ERROR", "WARNING", "INFO", "DEBUG"], level.upper()
-        )
+        ctrl_dal.controller_log_level = level
         return ctrl_dal
 
     # ----- Boot workflow -----
@@ -120,7 +120,7 @@ class ProcessManagerDriver:
         conf_id: str,
         user: str,
         session_name: str,
-        log_level: str | None = None,
+        log_level: ControllerLogLevel | None = None,
         override_logs: bool = True,
         timeout: int | float = 60,
         sleep_between_app_boot: (
