@@ -1,0 +1,41 @@
+labels:
+  "Architecture/Design":
+    reviewers:
+      - username: emmuhamm
+        weight: 1
+  Controller:
+    reviewers:
+      - username: emmuhamm
+        weight: 3
+  documentation:
+    reviewers:
+      - username: emmuhamm
+        weight: 10
+  gRPC:
+    reviewers:
+      - username: emmuhamm
+        weight: 3
+  K8s:
+    reviewers:
+      - username: emmuhamm
+        weight: 3
+  "Process Manager":
+    reviewers:
+      - username: emmuhamm
+        weight: 1
+  "Resource Manager":
+    reviewers:
+      - username: emmuhamm
+        weight: 3
+  "Session Manager":
+    reviewers:
+      - username: emmuhamm
+        weight: 3
+  Testing:
+    reviewers:
+      - username: emmuhamm
+        weight: 3
+  Utilities:
+    reviewers:
+      - username: emmuhamm
+        weight: 3

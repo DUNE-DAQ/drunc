@@ -37,5 +37,12 @@ If are developing a user interface for `drunc`, you can get help here:
 
 There is more developer information in the [drunc wiki](https://github.com/DUNE-DAQ/drunc/wiki).
 
+## Pull request workflow
+
+1. New or reopened PRs are automatically converted to draft. Complete the developer checklist before marking the PR **Ready for review**.
+2. Changed files determine the PR labels. When the PR is ready, the workflow requests all matching reviewers except the author and posts a review tracker with a reviewer checklist.
+3. Reviewers tick the checklist in the bot's tracker comment. Once complete, post `/retry-checklist` in a new PR comment to rerun the checklist check. Existing review requests and checklist ticks are preserved on routing reruns.
+4. An approval triggers a one-time comment with the final steps to follow before merging.
+
 # Release notes
 ... are [here](https://dune-daq-sw.readthedocs.io/en/latest/packages/drunc/Release-notes)
