@@ -312,8 +312,9 @@ class ProcessManagerDriver:
         env = app["env"]
         app_log_path = app["log_path"]
         data_path = app.get("data_path")
-        env["DUNE_DAQ_BASE_RELEASE"] = os.getenv("DUNE_DAQ_BASE_RELEASE")
-        env["SPACK_RELEASES_DIR"] = os.getenv("SPACK_RELEASES_DIR")
+        for var in ("DUNE_DAQ_BASE_RELEASE", "SPACK_RELEASES_DIR"):
+            if (value := os.getenv(var)) is not None:
+                env[var] = value
         # Some edge cases throw issues with DISPLAY being set, so we remove it from the
         # environment
         env.pop("DISPLAY", None)
@@ -381,7 +382,7 @@ class ProcessManagerDriver:
         session_dal: Session,
         session_name: str,
         override_logs: bool,
-    ) -> Iterator[BootRequest]:
+    ) -> Iterator[BootRequest | None]:
         apps = self._collect_all_apps(oks_conf, session_dal, session_name)
 
         pwd = os.getcwd()
@@ -405,6 +406,7 @@ class ProcessManagerDriver:
                 log = get_logger("utils.boot_req_generator")
                 log.error(f"[red]Caught exception in boot generator [/red]: {e}")
                 yield None
+                return
             yield breq
 
     def _consolidate_config(self, session_name, conf_file: str) -> str | None:
