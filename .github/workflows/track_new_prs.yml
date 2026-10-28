@@ -18,10 +18,80 @@ jobs:
       pull-requests: write 
     steps:
       - name: Add PR to drunc project
+        id: add_to_drunc_project
         uses: actions/add-to-project@v2
         with:
           project-url: https://github.com/orgs/DUNE-DAQ/projects/8
           github-token: ${{ secrets.BOT_CI_ISSUES }}
+
+      - name: Set DRUNC Internal sprint to the current sprint
+        env:
+          GH_TOKEN: ${{ secrets.BOT_CI_ISSUES }}
+          ITEM_ID: ${{ steps.add_to_drunc_project.outputs.itemId }}
+        run: |
+          set -euo pipefail
+          today="$(date -u +%F)"
+          meta="$(gh api graphql -f query='
+            {
+              organization(login: "DUNE-DAQ") {
+                projectV2(number: 8) {
+                  id
+                  sprint: field(name: "Sprint") {
+                    ... on ProjectV2IterationField {
+                      id
+                      configuration { iterations { id startDate duration } }
+                    }
+                  }
+                }
+              }
+            }')"
+          project_id="$(jq -r '.data.organization.projectV2.id' <<<"${meta}")"
+          sprint_field="$(jq -r '.data.organization.projectV2.sprint.id' <<<"${meta}")"
+          # Current sprint: start <= today < start + duration.
+          sprint="$(jq -r --arg today "${today}" '
+            .data.organization.projectV2.sprint.configuration.iterations[]
+            | select(.startDate <= $today
+                     and ((.startDate + "T00:00:00Z" | fromdateiso8601) + .duration * 86400
+                          > ($today + "T00:00:00Z" | fromdateiso8601)))
+            | .id' <<<"${meta}" | head -n1)"
+
+          if [[ -n "${sprint}" ]]; then
+            gh project item-edit --id "${ITEM_ID}" --project-id "${project_id}" \
+              --field-id "${sprint_field}" --iteration-id "${sprint}"
+          else
+            echo "::warning::No sprint covers ${today}; sprint not set."
+          fi
+
+      - name: Add PR to DUNE-DAQ tracking project
+        id: add_to_tracking_project
+        uses: actions/add-to-project@v2
+        with:
+          project-url: https://github.com/orgs/DUNE-DAQ/projects/5
+          github-token: ${{ secrets.BOT_CI_ISSUES }}
+
+      - name: Set DUNE-DAQ tracking project Working Group to CCM
+        env:
+          GH_TOKEN: ${{ secrets.BOT_CI_ISSUES }}
+          ITEM_ID: ${{ steps.add_to_tracking_project.outputs.itemId }}
+        run: |
+          set -euo pipefail
+          meta="$(gh api graphql -f query='
+            {
+              organization(login: "DUNE-DAQ") {
+                projectV2(number: 5) {
+                  id
+                  group: field(name: "Working Group") {
+                    ... on ProjectV2SingleSelectField { id options { id name } }
+                  }
+                }
+              }
+            }')"
+          p='.data.organization.projectV2'
+          project_id="$(jq -r "${p}.id" <<<"${meta}")"
+          ccm="$(jq -r "${p}.group.options[] | select(.name == \"CCM\") | .id" <<<"${meta}")"
+
+          gh project item-edit --id "${ITEM_ID}" --project-id "${project_id}" \
+            --field-id "$(jq -r "${p}.group.id" <<<"${meta}")" --single-select-option-id "${ccm}"
 
       - name: Assign PR author
         uses: actions/github-script@v7
