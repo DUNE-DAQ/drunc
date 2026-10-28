@@ -44,7 +44,11 @@ jobs:
           p='.data.organization.projectV2'
           project_id="$(jq -r "${p}.id" <<<"${meta}")"
           status_field="$(jq -r "${p}.status.id" <<<"${meta}")"
-          in_progress="$(jq -r "${p}.status.options[] | select(.name == \"In Progress\") | .id" <<<"${meta}")"
+          in_progress="$(jq -r "${p}.status.options[] | select(.name | test(\"in progress$\"; \"i\")) | .id" <<<"${meta}")"
+          if [[ -z "${in_progress}" ]]; then
+            echo "::error::In Progress status option not found in DRUNC Internal project."
+            exit 1
+          fi
 
           gh project item-edit --id "${ITEM_ID}" --project-id "${project_id}" \
             --field-id "${status_field}" --single-select-option-id "${in_progress}"
@@ -114,7 +118,11 @@ jobs:
           p='.data.organization.projectV2'
           project_id="$(jq -r "${p}.id" <<<"${meta}")"
           status_field="$(jq -r "${p}.status.id" <<<"${meta}")"
-          in_progress="$(jq -r "${p}.status.options[] | select(.name == \"In Progress\") | .id" <<<"${meta}")"
+          in_progress="$(jq -r "${p}.status.options[] | select(.name | test(\"in progress$\"; \"i\")) | .id" <<<"${meta}")"
+          if [[ -z "${in_progress}" ]]; then
+            echo "::error::In Progress status option not found in DUNE-DAQ tracking project."
+            exit 1
+          fi
 
           gh project item-edit --id "${ITEM_ID}" --project-id "${project_id}" \
             --field-id "${status_field}" --single-select-option-id "${in_progress}"
