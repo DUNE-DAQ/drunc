@@ -253,6 +253,28 @@ def test_boot_success(mock_driver, boot_test_setup):
     mock_sleep.assert_not_called()
 
 
+def test_boot_stops_on_invalid_config(mock_driver, boot_test_setup):
+    """
+    Test that `boot` yields nothing and stops before initialising the session when
+    the configuration cannot be consolidated.
+    """
+    boot_test_setup()
+    mock_driver._consolidate_config.return_value = False
+
+    responses = list(
+        mock_driver.boot(
+            conf_file="conf.yaml",
+            conf_id="conf1",
+            user="test_user",
+            session_name="test_session",
+        )
+    )
+
+    assert responses == []
+    mock_driver._initialise_session.assert_not_called()
+    mock_driver.stub.boot.assert_not_called()
+
+
 def test_boot_connectivity_service_not_ready(mock_driver, boot_test_setup):
     """
     Test that `boot` raises DruncSetupException when the connectivity service is not ready.
@@ -399,7 +421,7 @@ def test_convert_oks_to_boot_request_yields_correct_number(mock_driver, app_data
 @patch("drunc.process_manager.process_manager_driver.tempfile.NamedTemporaryFile")
 def test_consolidate_config_success(mock_tempfile, mock_consolidate_db, mock_driver):
     """
-    Test that `_consolidate_config` calls consolidate_db and returns the temp file name.
+    Test that `_consolidate_config` calls consolidate_db and returns True.
     """
 
     # Simulate a temporary file context manager that returns a known file path
@@ -407,7 +429,9 @@ def test_consolidate_config_success(mock_tempfile, mock_consolidate_db, mock_dri
     mock_file.__enter__.return_value.name = "/tmp/fake.data.xml"
     mock_tempfile.return_value = mock_file
 
-    mock_driver._consolidate_config("session1", "oksconflibs:/path/to/config.oks")
+    assert mock_driver._consolidate_config(
+        "session1", "oksconflibs:/path/to/config.oks"
+    )
 
     # Check correct log message
     mock_driver.log.debug.assert_any_call("Validating session1 configuration")
@@ -421,14 +445,16 @@ def test_consolidate_config_success(mock_tempfile, mock_consolidate_db, mock_dri
 @patch("drunc.process_manager.process_manager_driver.tempfile.NamedTemporaryFile")
 def test_consolidate_config_exception(mock_tempfile, mock_consolidate_db, mock_driver):
     """
-    Test that `_consolidate_config` logs a critical error and returns None when consolidate_db fails.
+    Test that `_consolidate_config` logs a critical error and returns False when consolidate_db fails.
     """
     # Simulate a temporary file context manager that returns a known file path
     mock_file = MagicMock()
     mock_file.__enter__.return_value.name = "/tmp/fake.data.xml"
     mock_tempfile.return_value = mock_file
 
-    mock_driver._consolidate_config("session1", "oksconflibs:/invalid/config.oks")
+    assert not mock_driver._consolidate_config(
+        "session1", "oksconflibs:/invalid/config.oks"
+    )
     mock_driver.log.critical.assert_called()
 
     # Check log message contains expected errors

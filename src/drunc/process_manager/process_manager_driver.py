@@ -133,7 +133,9 @@ class ProcessManagerDriver:
         conf_file = f"oksconflibs:{conf_file}" if ":" not in conf_file else conf_file
 
         # Step 1 - consolidate configuration
-        self._consolidate_config(session_name, conf_file)
+        if not self._consolidate_config(session_name, conf_file):
+            self.log.error("[red]Configuration is invalid, ending boot.[/red]")
+            return
 
         # Step 2 - initialise session
         db, session_dal = self._initialise_session(conf_file, conf_id)
@@ -409,7 +411,8 @@ class ProcessManagerDriver:
                 return
             yield breq
 
-    def _consolidate_config(self, session_name, conf_file: str) -> str | None:
+    def _consolidate_config(self, session_name: str, conf_file: str) -> bool:
+        """Check that the configuration consolidates. Returns False if it does not."""
         from daqconf.consolidate import consolidate_db
 
         self.log.debug(f"Validating {session_name} configuration")
@@ -431,7 +434,8 @@ To debug it, close drunc and run the following command:
 
 """
                 )
-                return
+                return False
+        return True
 
     def resolve_localhost(self, session_dal: WritableSession) -> WritableSession:
         def dal_localhost_mapping(dal_host: str):
