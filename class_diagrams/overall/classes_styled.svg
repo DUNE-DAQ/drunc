@@ -3057,28 +3057,10 @@
 <path fill="none" stroke="#555555" d="M13514.96,-565.67C13493.45,-602.09 13453.41,-667.62 13414,-720 13327.58,-834.87 13212.02,-959.71 13155.32,-1019.36"/>
 <polygon fill="none" stroke="#555555" points="13152.74,-1016.99 13148.38,-1026.65 13157.81,-1021.82 13152.74,-1016.99"/>
 </g>
-<!-- drunc.controller.interface.shell_utils.MissingArgument -->
-<g id="node134" class="node">
-<title>drunc.controller.interface.shell_utils.MissingArgument</title>
-<g id="a_node134"><a xlink:href="https://github.com/DUNE-DAQ/drunc/blob/7497d5778c61489843bcb3a4143ae2b41ec46475/src/drunc/controller/interface/shell_utils.py#L620" xlink:title="{MissingArgument|&lt;br ALIGN=&quot;LEFT&quot;/&gt;|}" target="_blank">
-<polygon fill="#f6c3d5" stroke="#8b7355" points="16242,-508 16242,-566 16344,-566 16344,-508 16242,-508"/>
-<text text-anchor="start" x="16250" y="-554" font-family="Helvetica,sans-Serif" font-size="10.00">MissingArgument</text>
-<polyline fill="none" stroke="#8b7355" points="16242,-547 16344,-547 "/>
-<polyline fill="none" stroke="#8b7355" points="16242,-527 16344,-527 "/>
-<text text-anchor="start" x="16291" y="-515" font-family="Helvetica,sans-Serif" font-size="10.00"> </text>
-</a>
-</g>
-</g>
-<!-- drunc.controller.interface.shell_utils.MissingArgument&#45;&gt;drunc.controller.interface.shell_utils.ArgumentException -->
-<g id="edge27" class="edge">
-<title>drunc.controller.interface.shell_utils.MissingArgument&#45;&gt;drunc.controller.interface.shell_utils.ArgumentException</title>
-<path fill="none" stroke="#555555" d="M16289.79,-566.16C16279.87,-653.08 16249.72,-917.21 16238.38,-1016.62"/>
-<polygon fill="none" stroke="#555555" points="16234.87,-1016.48 16237.22,-1026.81 16241.83,-1017.27 16234.87,-1016.48"/>
-</g>
 <!-- drunc.fsm.exceptions.MissingArgument -->
-<g id="node135" class="node">
+<g id="node134" class="node">
 <title>drunc.fsm.exceptions.MissingArgument</title>
-<g id="a_node135"><a xlink:href="https://github.com/DUNE-DAQ/drunc/blob/7497d5778c61489843bcb3a4143ae2b41ec46475/src/drunc/fsm/exceptions.py#L46" xlink:title="{MissingArgument|message&lt;br ALIGN=&quot;LEFT&quot;/&gt;|}" target="_blank">
+<g id="a_node134"><a xlink:href="https://github.com/DUNE-DAQ/drunc/blob/7497d5778c61489843bcb3a4143ae2b41ec46475/src/drunc/fsm/exceptions.py#L46" xlink:title="{MissingArgument|message&lt;br ALIGN=&quot;LEFT&quot;/&gt;|}" target="_blank">
 <polygon fill="#fff4b8" stroke="#8b7355" points="13670,-508.5 13670,-565.5 13772,-565.5 13772,-508.5 13670,-508.5"/>
 <text text-anchor="start" x="13678" y="-553.5" font-family="Helvetica,sans-Serif" font-size="10.00">MissingArgument</text>
 <polyline fill="none" stroke="#8b7355" points="13670,-546.5 13772,-546.5 "/>
@@ -3093,6 +3075,24 @@
 <title>drunc.fsm.exceptions.MissingArgument&#45;&gt;drunc.fsm.exceptions.FSMException</title>
 <path fill="none" stroke="#555555" d="M13715.51,-565.73C13706.77,-603.99 13686.6,-673.51 13648,-720 13512.67,-882.97 13276.9,-992.33 13172.86,-1034.97"/>
 <polygon fill="none" stroke="#555555" points="13171.46,-1031.76 13163.51,-1038.77 13174.09,-1038.25 13171.46,-1031.76"/>
+</g>
+<!-- drunc.controller.interface.shell_utils.MissingArgument -->
+<g id="node135" class="node">
+<title>drunc.controller.interface.shell_utils.MissingArgument</title>
+<g id="a_node135"><a xlink:href="https://github.com/DUNE-DAQ/drunc/blob/7497d5778c61489843bcb3a4143ae2b41ec46475/src/drunc/controller/interface/shell_utils.py#L620" xlink:title="{MissingArgument|&lt;br ALIGN=&quot;LEFT&quot;/&gt;|}" target="_blank">
+<polygon fill="#f6c3d5" stroke="#8b7355" points="16242,-508 16242,-566 16344,-566 16344,-508 16242,-508"/>
+<text text-anchor="start" x="16250" y="-554" font-family="Helvetica,sans-Serif" font-size="10.00">MissingArgument</text>
+<polyline fill="none" stroke="#8b7355" points="16242,-547 16344,-547 "/>
+<polyline fill="none" stroke="#8b7355" points="16242,-527 16344,-527 "/>
+<text text-anchor="start" x="16291" y="-515" font-family="Helvetica,sans-Serif" font-size="10.00"> </text>
+</a>
+</g>
+</g>
+<!-- drunc.controller.interface.shell_utils.MissingArgument&#45;&gt;drunc.controller.interface.shell_utils.ArgumentException -->
+<g id="edge27" class="edge">
+<title>drunc.controller.interface.shell_utils.MissingArgument&#45;&gt;drunc.controller.interface.shell_utils.ArgumentException</title>
+<path fill="none" stroke="#555555" d="M16289.79,-566.16C16279.87,-653.08 16249.72,-917.21 16238.38,-1016.62"/>
+<polygon fill="none" stroke="#555555" points="16234.87,-1016.48 16237.22,-1026.81 16241.83,-1017.27 16234.87,-1016.48"/>
 </g>
 <!-- drunc.fsm.exceptions.MissingArgumentValue -->
 <g id="node136" class="node">
@@ -4641,28 +4641,10 @@
 <path fill="none" stroke="#555555" d="M15363.34,-1106.92C15358.24,-1162.33 15343.36,-1252.33 15300,-1316 15157.52,-1525.2 15071.39,-1551.05 14838,-1649 14758.16,-1682.51 14720.09,-1637.2 14646,-1682 14614.86,-1700.83 14590.41,-1734.31 14574.41,-1761.36"/>
 <polygon fill="none" stroke="#555555" points="14571.25,-1759.84 14569.31,-1770.26 14577.32,-1763.32 14571.25,-1759.84"/>
 </g>
-<!-- drunc.controller.interface.shell_utils.UnhandledArgumentType -->
-<g id="node218" class="node">
-<title>drunc.controller.interface.shell_utils.UnhandledArgumentType</title>
-<g id="a_node218"><a xlink:href="https://github.com/DUNE-DAQ/drunc/blob/7497d5778c61489843bcb3a4143ae2b41ec46475/src/drunc/controller/interface/shell_utils.py#L638" xlink:title="{UnhandledArgumentType|&lt;br ALIGN=&quot;LEFT&quot;/&gt;|}" target="_blank">
-<polygon fill="#f6c3d5" stroke="#8b7355" points="16387,-508 16387,-566 16527,-566 16527,-508 16387,-508"/>
-<text text-anchor="start" x="16395" y="-554" font-family="Helvetica,sans-Serif" font-size="10.00">UnhandledArgumentType</text>
-<polyline fill="none" stroke="#8b7355" points="16387,-547 16527,-547 "/>
-<polyline fill="none" stroke="#8b7355" points="16387,-527 16527,-527 "/>
-<text text-anchor="start" x="16455" y="-515" font-family="Helvetica,sans-Serif" font-size="10.00"> </text>
-</a>
-</g>
-</g>
-<!-- drunc.controller.interface.shell_utils.UnhandledArgumentType&#45;&gt;drunc.controller.interface.shell_utils.ArgumentException -->
-<g id="edge28" class="edge">
-<title>drunc.controller.interface.shell_utils.UnhandledArgumentType&#45;&gt;drunc.controller.interface.shell_utils.ArgumentException</title>
-<path fill="none" stroke="#555555" d="M16444.31,-566.09C16427.56,-602.41 16396.5,-667.27 16365,-720 16343.88,-755.35 16329.94,-758.93 16312,-796 16276.02,-870.35 16252.66,-964.79 16241.56,-1016.62"/>
-<polygon fill="none" stroke="#555555" points="16238.08,-1016.2 16239.45,-1026.71 16244.93,-1017.64 16238.08,-1016.2"/>
-</g>
 <!-- drunc.fsm.exceptions.UnhandledArgumentType -->
-<g id="node219" class="node">
+<g id="node218" class="node">
 <title>drunc.fsm.exceptions.UnhandledArgumentType</title>
-<g id="a_node219"><a xlink:href="https://github.com/DUNE-DAQ/drunc/blob/7497d5778c61489843bcb3a4143ae2b41ec46475/src/drunc/fsm/exceptions.py#L70" xlink:title="{UnhandledArgumentType|message&lt;br ALIGN=&quot;LEFT&quot;/&gt;|}" target="_blank">
+<g id="a_node218"><a xlink:href="https://github.com/DUNE-DAQ/drunc/blob/7497d5778c61489843bcb3a4143ae2b41ec46475/src/drunc/fsm/exceptions.py#L70" xlink:title="{UnhandledArgumentType|message&lt;br ALIGN=&quot;LEFT&quot;/&gt;|}" target="_blank">
 <polygon fill="#fff4b8" stroke="#8b7355" points="14527,-508.5 14527,-565.5 14667,-565.5 14667,-508.5 14527,-508.5"/>
 <text text-anchor="start" x="14535" y="-553.5" font-family="Helvetica,sans-Serif" font-size="10.00">UnhandledArgumentType</text>
 <polyline fill="none" stroke="#8b7355" points="14527,-546.5 14667,-546.5 "/>
@@ -4677,6 +4659,24 @@
 <title>drunc.fsm.exceptions.UnhandledArgumentType&#45;&gt;drunc.fsm.exceptions.FSMException</title>
 <path fill="none" stroke="#555555" d="M14590.78,-565.8C14580.28,-606.11 14555.09,-680.31 14505,-720 14289.01,-891.16 13399.53,-1018.28 13173.45,-1048.25"/>
 <polygon fill="none" stroke="#555555" points="13172.96,-1044.78 13163.5,-1049.56 13173.87,-1051.72 13172.96,-1044.78"/>
+</g>
+<!-- drunc.controller.interface.shell_utils.UnhandledArgumentType -->
+<g id="node219" class="node">
+<title>drunc.controller.interface.shell_utils.UnhandledArgumentType</title>
+<g id="a_node219"><a xlink:href="https://github.com/DUNE-DAQ/drunc/blob/7497d5778c61489843bcb3a4143ae2b41ec46475/src/drunc/controller/interface/shell_utils.py#L638" xlink:title="{UnhandledArgumentType|&lt;br ALIGN=&quot;LEFT&quot;/&gt;|}" target="_blank">
+<polygon fill="#f6c3d5" stroke="#8b7355" points="16387,-508 16387,-566 16527,-566 16527,-508 16387,-508"/>
+<text text-anchor="start" x="16395" y="-554" font-family="Helvetica,sans-Serif" font-size="10.00">UnhandledArgumentType</text>
+<polyline fill="none" stroke="#8b7355" points="16387,-547 16527,-547 "/>
+<polyline fill="none" stroke="#8b7355" points="16387,-527 16527,-527 "/>
+<text text-anchor="start" x="16455" y="-515" font-family="Helvetica,sans-Serif" font-size="10.00"> </text>
+</a>
+</g>
+</g>
+<!-- drunc.controller.interface.shell_utils.UnhandledArgumentType&#45;&gt;drunc.controller.interface.shell_utils.ArgumentException -->
+<g id="edge28" class="edge">
+<title>drunc.controller.interface.shell_utils.UnhandledArgumentType&#45;&gt;drunc.controller.interface.shell_utils.ArgumentException</title>
+<path fill="none" stroke="#555555" d="M16444.31,-566.09C16427.56,-602.41 16396.5,-667.27 16365,-720 16343.88,-755.35 16329.94,-758.93 16312,-796 16276.02,-870.35 16252.66,-964.79 16241.56,-1016.62"/>
+<polygon fill="none" stroke="#555555" points="16238.08,-1016.2 16239.45,-1026.71 16244.93,-1017.64 16238.08,-1016.2"/>
 </g>
 <!-- drunc.controller.interface.shell_utils.UnhandledArguments -->
 <g id="node220" class="node">
