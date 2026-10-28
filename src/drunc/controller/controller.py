@@ -4,6 +4,7 @@ import time
 from concurrent.futures import ThreadPoolExecutor
 from typing import Callable, List, TypeVar
 
+from click import command
 import grpc
 from daqpytools.logging import LogHandlerConf, setup_daq_ers_logger
 from druncschema.authoriser_pb2 import ActionType, SystemType
@@ -72,7 +73,6 @@ from drunc.fsm.configuration import FSMConfHandler
 from drunc.fsm.exceptions import (
     DotDruncJsonIncorrectFormat,
     DotDruncJsonNotFound,
-    FSMTransitionException,
 )
 from drunc.fsm.utils import convert_fsm_transition
 from drunc.utils.grpc_utils import (
@@ -1008,21 +1008,6 @@ class Controller(ControllerServicer):
             fsm_flag=FSMResponseFlag.FSM_EXECUTED_SUCCESSFULLY,
             flag=ResponseFlag.EXECUTED_SUCCESSFULLY,
         )
-        if self.name == "df-controller" and request.command.command_name == "conf":
-            error = DruncException(
-                message="TEST:-terminal child failure TEST: non-terminal child failure TEST: non-terminal child failure TEST: non-terminal child failure TEST: non-terminal child failure TEST: non-terminal child failure TEST: non-terminal child failure TEST: non-terminal child failure",
-                reason="TEST_CHILD_FAILURE",
-                domain="drunc.propagation_test",
-            )
-            response.flag = ResponseFlag.DRUNC_EXCEPTION_THROWN
-            response.fsm_flag = FSMResponseFlag.FSM_FAILED
-            response.error.CopyFrom(
-                ResponseError(
-                    message=str(error),
-                    details=[pack_to_any(detail) for detail in error.rich_details],
-                )
-            )
-            return response
         # Parse and validate target.
         try:
             request.target = self.parse_target_string(request.target)

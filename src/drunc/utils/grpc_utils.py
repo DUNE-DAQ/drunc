@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import logging
+import traceback
 from typing import Callable, NoReturn, TypeVar, cast
 
 import grpc
@@ -19,6 +21,8 @@ from drunc.exceptions import (
     DruncCommandException,
     DruncException,
 )
+
+from drunc.utils.utils import get_logger
 
 
 class UnpackingError(DruncCommandException):
@@ -452,6 +456,7 @@ class RichErrorServerInterceptor(grpc.ServerInterceptor):
         Intercept gRPC service calls to handle exceptions and convert them
         into rich error statuses.
         """
+
         handler = continuation(handler_call_details)
         if handler is None:
             return None
@@ -466,6 +471,28 @@ class RichErrorServerInterceptor(grpc.ServerInterceptor):
             except DruncException as e:
                 abort_with_rich_details(
                     context, int(e.grpc_error_code), str(e), e.rich_details
+                )
+            except grpc.RpcError:
+                raise
+            except Exception as error:
+                trace_logger = get_logger(
+                    "grpc.unexpected_errors",
+                    rich_handler=False)
+                trace_logger.error(
+                    "Unexpected exception in gRPC handler:\n%s",
+                    traceback.format_exc(),
+                )
+                details = [
+                    error_details_pb2.ErrorInfo(
+                        reason="UNEXPECTED_SERVER_ERROR",
+                        domain="drunc",
+                    ),
+                ]
+                abort_with_rich_details(
+                    context,
+                    code_pb2.INTERNAL,
+                    "Unexpected internal server error. Check log file for details.",
+                    details,
                 )
 
         if handler.unary_unary:
