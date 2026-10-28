@@ -4,6 +4,7 @@ import time
 from concurrent.futures import ThreadPoolExecutor
 from typing import Callable, List, TypeVar
 
+import grpc
 from daqpytools.logging import LogHandlerConf, setup_daq_ers_logger
 from druncschema.authoriser_pb2 import ActionType, SystemType
 from druncschema.common_pb2 import LoggerTarget, SendLogRequest, SendLogResponse
@@ -38,10 +39,13 @@ from druncschema.controller_pb2 import (
 )
 from druncschema.controller_pb2_grpc import ControllerServicer
 from druncschema.description_pb2 import Description
+from druncschema.generic_pb2 import ResponseError
 from druncschema.opmon.FSM_pb2 import FSMStatus
 from druncschema.opmon.generic_pb2 import RunInfo
 from druncschema.request_response_pb2 import ResponseFlag
 from druncschema.token_pb2 import Token
+from google.protobuf.message import Message
+from google.rpc import code_pb2
 from grpc import ServicerContext
 
 from drunc.authoriser.configuration import DummyAuthoriserConfHandler
@@ -59,14 +63,24 @@ from drunc.controller.utils import (
     get_detector_name,
     get_status_message,
 )
+from drunc.exceptions import (
+    ChildCommandException,
+    DruncException,
+)
 from drunc.fsm.actions.utils import get_dotdrunc_json
 from drunc.fsm.configuration import FSMConfHandler
 from drunc.fsm.exceptions import (
     DotDruncJsonIncorrectFormat,
     DotDruncJsonNotFound,
+    FSMTransitionException,
 )
 from drunc.fsm.utils import convert_fsm_transition
-from drunc.utils.grpc_utils import ServerTimeout
+from drunc.utils.grpc_utils import (
+    ServerTimeout,
+    ServerUnreachable,
+    extract_grpc_rich_error,
+    pack_to_any,
+)
 from drunc.utils.utils import get_logger
 
 T = TypeVar("T")
@@ -509,11 +523,119 @@ class Controller(ControllerServicer):
             if child.included or include_excluded_nodes
         ]
 
+
+    def _degrade_response(
+        self,
+        response_type: type[T],
+        child: ChildNode,
+        failure: ChildCommandException,
+    ) -> T:
+        """Convert a child failure into a normal typed response.
+
+        The returned response uses `DRUNC_EXCEPTION_THROWN` and stores the original 
+        child's error details. This allows responses to be returned without
+        aborting the RPC.
+
+        Args:
+            response_type: Protobuf response class.
+            child: Child node whose command failed.
+            failure: Non-terminal wrapper containing the child's error details.
+
+        Returns:
+            A response of `response_type` representing the child failure.
+        """
+        self.log.error(f"Child '{child.name}' failed: {failure}")
+
+        return response_type(
+            token=None,
+            name=child.name,
+            flag=ResponseFlag.DRUNC_EXCEPTION_THROWN,
+            error=ResponseError(
+            message=str(failure),
+            details=[
+                pack_to_any(detail)
+                for detail in failure.rich_details
+                ],
+            ),
+        )
+
+
+    def _degrade_status_response(
+        self,
+        child: ChildNode,
+        failure: ChildCommandException,
+    ) -> StatusResponse:
+        """Convert a child failure into an error-state status response. Needed as StatusResponse
+        contains additional fields compared to the generic responses.
+
+        Args:
+            child: Child node whose status request failed.
+            failure: Non-terminal wrapper containing the child's error details.
+
+        Returns:
+            A `StatusResponse` marked as a DRUNC exception and reporting the
+            child as being in an error state.
+        """
+        response = self._degrade_response(StatusResponse, child, failure)
+        response.status.CopyFrom(
+            Status(
+                state="error",
+                sub_state="error",
+                in_error=True,
+                included=child.included,
+            )
+        )
+        return response
+
+
+    def _degrade_fsm_response(
+        self,
+        child: ChildNode,
+        failure: ChildCommandException,
+        command_name: str,
+    ) -> ExecuteFSMCommandResponse:
+        """Convert a child RPC failure into a failed FSM command response.
+
+        Args:
+            child: Child node whose FSM command failed.
+            failure: Non-terminal wrapper containing the child's error details.
+            command_name: Name of the FSM command that was executed.
+
+        Returns:
+            An `ExecuteFSMCommandResponse` with `FSM_FAILED` and the original
+            child's structured error details.
+        """
+        response = self._degrade_response(
+            ExecuteFSMCommandResponse,
+            child,
+            failure,
+        )
+        response.command_name = command_name
+        response.fsm_flag = FSMResponseFlag.FSM_FAILED
+        return response
+
+
+    def _degrade_expert_fsm_command_response(
+            self,
+            child: ChildNode,
+            failure: ChildCommandException,
+        ) -> ExecuteExpertCommandResponse:
+        """Convert a child RPC failure into a failed expert command response."""
+        response = self._degrade_response(
+            ExecuteExpertCommandResponse,
+            child,
+            failure,
+        )
+        response.fsm_flag = FSMResponseFlag.FSM_FAILED
+        return response
+
+    
     @staticmethod
     def propagate_concurrently(
         child_callable: Callable[[ChildNode, str], T],
         child_list: list[tuple[ChildNode, str]],
         indices: list[int] | None = None,
+        degrade_response: Callable[[ChildNode, ChildCommandException], T] | None = None,
     ) -> list[T]:
         """Propagate commands concurrently to a list of children.
             maintaining the ordering of the children in the response list.
@@ -524,10 +646,59 @@ class Controller(ControllerServicer):
             child_list: List of (node, target) for each addressed child.
             indices: Optional list of indices selecting which entries from
                 ``child_list`` to execute.
+            degrade_response: Callable[[ChildNode, ChildCommandException], T] | None: Optional callable to convert a child failure into a response.
 
         Returns:
             List of responses from each child.
         """
+
+        def safe_call(child: ChildNode, target: str) -> T:
+            try:
+                return child_callable(child, target)
+            except ServerTimeout:
+                raise
+            except (grpc.RpcError, ServerUnreachable, DruncException) as error:
+                if isinstance(error, (grpc.RpcError, ServerUnreachable)):
+                    rpc_error: BaseException | None = error
+                    while rpc_error is not None and not isinstance(
+                        rpc_error, grpc.RpcError
+                    ):
+                        rpc_error = rpc_error.__cause__
+
+                    if not isinstance(rpc_error, grpc.RpcError):
+                        raise
+
+                    rich = extract_grpc_rich_error(rpc_error)
+                    child_details = [
+                        detail for detail in rich.details
+                        if isinstance(detail, Message)
+                    ]
+                    child_code = rich.code
+                    child_message = rich.message
+                else:
+                    child_details = error.rich_details
+                    child_code = child_code = code_pb2.Code.Name(error.grpc_error_code)
+                    child_message = str(error)
+
+                child_error = ChildCommandException(
+                    child_name=child.name,
+                    child_details=child_details,
+                    child_code=child_code,
+                    child_message=child_message,
+                )
+
+                if degrade_response is not None:
+                    return degrade_response(child, child_error)
+
+                # If degrade_response is None, we consider this a terminal error and raise an exception.
+                raise ChildCommandException(
+                    child_name=child.name,
+                    child_details=child_details,
+                    child_code=child_code,
+                    child_message=child_message,
+                ) from error
+                
+
         selected_child_list = (
             child_list if indices is None else [child_list[i] for i in indices]
         )
@@ -535,7 +706,7 @@ class Controller(ControllerServicer):
         with ThreadPoolExecutor() as executor:
             return list(
                 executor.map(
-                    lambda child_target: child_callable(
+                    lambda child_target: safe_call(
                         child_target[0], child_target[1]
                     ),
                     selected_child_list,
@@ -643,6 +814,8 @@ class Controller(ControllerServicer):
             ),
             child_list,
             indices=connected_indices,
+            degrade_response=self._degrade_status_response, # convert child failure into a StatusResponse with error info
+
         )
         child_responses.extend(
             [
@@ -712,7 +885,13 @@ class Controller(ControllerServicer):
             ),
             child_list,
             indices=connected_indices,
-        )
+            degrade_response=lambda child, failure: self._degrade_response(
+                DescribeResponse,
+                child,
+                failure,
+                )
+            )
+        
         child_responses.extend(
             [
                 DescribeResponse(
@@ -790,7 +969,12 @@ class Controller(ControllerServicer):
             ),
             child_list,
             indices=connected_indices,
-        )
+            degrade_response=lambda child, failure: self._degrade_response(
+                DescribeFSMResponse,
+                child,
+                failure,
+                )
+            )
         child_responses.extend(
             [
                 DescribeFSMResponse(
@@ -824,7 +1008,21 @@ class Controller(ControllerServicer):
             fsm_flag=FSMResponseFlag.FSM_EXECUTED_SUCCESSFULLY,
             flag=ResponseFlag.EXECUTED_SUCCESSFULLY,
         )
-
+        if self.name == "df-controller" and request.command.command_name == "conf":
+            error = DruncException(
+                message="TEST:-terminal child failure TEST: non-terminal child failure TEST: non-terminal child failure TEST: non-terminal child failure TEST: non-terminal child failure TEST: non-terminal child failure TEST: non-terminal child failure TEST: non-terminal child failure",
+                reason="TEST_CHILD_FAILURE",
+                domain="drunc.propagation_test",
+            )
+            response.flag = ResponseFlag.DRUNC_EXCEPTION_THROWN
+            response.fsm_flag = FSMResponseFlag.FSM_FAILED
+            response.error.CopyFrom(
+                ResponseError(
+                    message=str(error),
+                    details=[pack_to_any(detail) for detail in error.rich_details],
+                )
+            )
+            return response
         # Parse and validate target.
         try:
             request.target = self.parse_target_string(request.target)
@@ -910,7 +1108,8 @@ class Controller(ControllerServicer):
                 transition_data=command.data,
                 ctx=self,
             )
-
+            fsm_args = None
+            fsm_data = command.data
             # If the command publishes to ELisa Logbook, make sure that .dotdrunc.json
             # is present and well formatted
             using_elisa_logbook = "elisa-logbook" in self.fsm_config.get_actions()
@@ -955,15 +1154,17 @@ class Controller(ControllerServicer):
                     ),
                     child_list,
                     indices=connected_indices,
+                    degrade_response=lambda child, failure: self._degrade_fsm_response(
+                        child,
+                        failure,
+                        command_name,
+                    ),
                 )
                 response.children.extend(child_responses)
             except ServerTimeout as e:
                 response.fsm_flag = FSMResponseFlag.FSM_FAILED
                 self.stateful_node.to_error()
-                self.log.error(
-                    f"FSM command '{command_name}' failed: {e}",
-                    extra=self.handlerconf.ERS,
-                )
+                self.log.error(f"FSM command '{command_name}' failed: {e}")
                 return response
 
             # Finish propagating FSM transition to children.
@@ -993,6 +1194,11 @@ class Controller(ControllerServicer):
                 ),
                 child_list,
                 indices=connected_indices,
+                degrade_response=lambda child, failure: self._degrade_fsm_response(
+                    child,
+                    failure,
+                    command_name,
+                ),
             )
             response.children.extend(child_responses)
 
@@ -1041,6 +1247,11 @@ class Controller(ControllerServicer):
             ),
             child_list,
             indices=connected_indices,
+            degrade_response=lambda child, failure: self._degrade_expert_fsm_command_response(
+                                child,
+                                failure,
+                            ),
+            
         )
         child_responses.extend(
             [
@@ -1096,6 +1307,7 @@ class Controller(ControllerServicer):
             ),
             child_list,
             indices=connected_indices,
+            degrade_response=lambda child, failure: self._degrade_response(IncludeResponse, child, failure)
         )
         # Disconnected children can't be reached via gRPC/REST, but we can still mark
         # them included locally so this controller can route commands to them again.
@@ -1161,6 +1373,8 @@ class Controller(ControllerServicer):
             ),
             child_list,
             indices=connected_indices,
+            degrade_response=lambda child, failure: self._degrade_response(ExcludeResponse, child, failure)
+
         )
         # Disconnected children can't be reached via gRPC/REST, but we can still mark
         # them excluded locally so this controller stops routing commands to them.
@@ -1223,6 +1437,7 @@ class Controller(ControllerServicer):
             ),
             child_list,
             indices=connected_indices,
+            degrade_response=lambda child, failure: self._degrade_response(RecomputeStatusResponse, child, failure),
         )
         child_responses.extend(
             [
@@ -1250,6 +1465,7 @@ class Controller(ControllerServicer):
                 lambda child, target: child.status(target, False, False),
                 child_status_list,
                 indices=connected_status_indices,
+                degrade_response=self._degrade_status_response,
             )
             child_status_responses.extend(
                 [
@@ -1355,6 +1571,7 @@ class Controller(ControllerServicer):
             ),
             child_list,
             indices=connected_indices,
+            degrade_response=lambda child, failure: self._degrade_response(TakeControlResponse, child, failure),
         )
         child_responses.extend(
             [
@@ -1431,6 +1648,7 @@ class Controller(ControllerServicer):
             ),
             child_list,
             indices=connected_indices,
+            degrade_response=lambda child, failure: self._degrade_response(SurrenderControlResponse, child, failure),
         )
         child_responses.extend(
             [
@@ -1504,6 +1722,7 @@ class Controller(ControllerServicer):
             ),
             child_list,
             indices=connected_indices,
+            degrade_response=lambda child, failure: self._degrade_response(WhoIsInChargeResponse, child, failure),
         )
         child_responses.extend(
             [
@@ -1568,6 +1787,7 @@ class Controller(ControllerServicer):
             ),
             child_list,
             indices=connected_indices,
+            degrade_response=lambda child, failure: self._degrade_response(ToErrorResponse, child, failure),
         )
         child_responses.extend(
             [
@@ -1623,7 +1843,9 @@ class Controller(ControllerServicer):
             response.flag = ResponseFlag.NOT_EXECUTED_BAD_REQUEST_FORMAT
             return response
 
-        execute_on_this_node = request.target == self.name or request.execute_along_path
+        # This node.
+        if request.target == self.name or request.execute_along_path:
+            request.target = ""
 
         # Children nodes (ignore exclusion).
         child_list = self.address_target_path(
@@ -1633,19 +1855,20 @@ class Controller(ControllerServicer):
         )
         connected_indices, disconnected_indices = self._partition_connected_children(
             child_list,
-            operation_name="send_log",
+            operation_name="who_is_in_charge",
         )
         child_responses = self.propagate_concurrently(
             lambda child, target: child.send_log(
                 request.text,
                 request.severity,
                 request.logger,
-                target,
+                request.target,
                 request.execute_along_path,
                 request.execute_on_all_subsequent_children_in_path,
             ),
             child_list,
             indices=connected_indices,
+            degrade_response=lambda child, failure: self._degrade_response(SendLogResponse, child, failure),
         )
         child_responses.extend(
             [
@@ -1660,7 +1883,7 @@ class Controller(ControllerServicer):
         response.children.extend(child_responses)
 
         # This node.
-        if execute_on_this_node:
+        if request.target in [self.name, ""] or request.execute_along_path:
             if request.logger == LoggerTarget.ECHO:
                 self.log.critical("Echo logging is not implemented")
                 return SendLogResponse(

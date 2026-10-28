@@ -368,14 +368,16 @@ def extract_grpc_rich_error(grpc_error: grpc.RpcError) -> GrpcErrorDetails:
         GrpcErrorDetails with structured error information
     """
     code = grpc_error.code().name if grpc_error.code() else "UNKNOWN"
+    message = grpc_error.details() or "No message"
+    
     try:
         status = rpc_status.from_call(cast(grpc.Call, grpc_error))
     except NotImplementedError:
-        return GrpcErrorDetails(code=code, message="No message", details=[])
+        return GrpcErrorDetails(code=code, message=message, details=[])
 
     # Fallback to simple error if no rich status
     if status is None:
-        return GrpcErrorDetails(code=code, message="No message", details=[])
+        return GrpcErrorDetails(code=code, message=message, details=[])
 
     # Extract all error details
     error_details = []
