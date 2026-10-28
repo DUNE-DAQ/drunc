@@ -23,7 +23,7 @@ jobs:
 
       - name: Convert to draft
         env:
-          GITHUB_TOKEN: ${{ secrets.DRUNC_DRAFTER }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
         run: python .github/scripts/convert_to_draft.py
 
