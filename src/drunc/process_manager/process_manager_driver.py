@@ -60,7 +60,7 @@ from drunc.utils.utils import (
 
 
 class ProcessManagerDriver:
-    controller_address = ""
+    controller_address: str | None = None
 
     def __init__(self, address: str, token: Token):
         self.log = get_logger("process_manager_driver", rich_handler=True)
@@ -610,7 +610,7 @@ To debug it, close drunc and run the following command:
         session_dal: Session,
         session_name: str,
         csc: ConnectivityServiceClient | None,
-    ):
+    ) -> None:
         """
         Attempts to discover the controller address after booting applications.
         Tries dynamic lookup via connectivity service first, then falls back
@@ -624,7 +624,7 @@ To debug it, close drunc and run the following command:
 
         connectivity_service = session_dal.connectivity_service
 
-        def get_controller_address(session_dal, session_name):
+        def get_controller_address() -> str | None:
             from drunc.process_manager.oks_parser import collect_variables
 
             env: dict[str, str] = {}
@@ -802,7 +802,7 @@ To debug it, close drunc and run the following command:
         original_sigint_handler = signal.getsignal(signal.SIGINT)
         signal.signal(signal.SIGINT, keyboard_interrupt_on_sigint)
         try:
-            self.controller_address = get_controller_address(session_dal, session_name)
+            self.controller_address = get_controller_address()
         except KeyboardInterrupt:
             if session_dal.connectivity_service:
                 connection_server = session_dal.connectivity_service.host

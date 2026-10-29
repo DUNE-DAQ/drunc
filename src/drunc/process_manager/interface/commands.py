@@ -132,8 +132,8 @@ def boot(
         raise e
 
     controller_address = pm_driver.controller_address
-    controller_address = resolve_context_peer(controller_address)
     if controller_address:
+        controller_address = resolve_context_peer(controller_address)
         obj.print(
             Panel(
                 f"Controller endpoint: '{controller_address}', point your 'drunc-controller-shell' to it.",
