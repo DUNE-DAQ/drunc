@@ -32,9 +32,7 @@ Otherwise
 <details>
 
 <summary>
-
 Notification message for a Slack channel
-
 </summary>
 
 
@@ -58,14 +56,14 @@ _URL_
 
 
 I will leave time for any comments, otherwise will merge these at the end of the day.
+```
 
 </details>
-
 </details>
-
 
 
 Once completed, the _reviewer_ can merge the PR.
+
 
 
 
