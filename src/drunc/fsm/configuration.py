@@ -19,48 +19,6 @@ class FSMConfHandler(ConfHandler):
 
     data: FSMData
 
-    def _fill_pre_post_transition_sequence_oks(
-        self,
-        prefix: str,
-        transition: Transition,
-        data: List[FSMxTransition] | None,
-    ) -> PreOrPostTransitionSequence:
-        """
-        Fill the pre or post transition sequence for a given transition.
-
-        Args:
-            prefix (str): "pre" or "post" to indicate which sequence to fill.
-            transition (Transition): The transition for which to fill the sequence.
-            data: The data containing all configuration pre or post transition sequences.
-
-        Returns:
-            PreOrPostTransitionSequence: The filled pre or post transition sequence for the given transition.
-
-        Raises:
-            ValueError: If the prefix is not "pre" or "post".
-        """
-        self.log = get_logger("controller.core.FSMConfHandler")
-        seq = PreOrPostTransitionSequence(
-            transition,
-            prefix,
-        )
-
-        if data is None:
-            return seq
-
-        # Iterate through the FSMxTransitions to find the one matching the current
-        # transition. There is one FSMxTransition per transition. The FSMxTransition
-        # contains the list of actions to execute for the given transition.
-        for fsm_x_transition in data:
-            if fsm_x_transition.transition == transition.name:
-                for action_name in fsm_x_transition.order:
-                    seq.add_callback(
-                        action=self.actions[action_name],
-                        mandatory=action_name in fsm_x_transition.mandatory,
-                    )
-                break
-        return seq
-
     def _post_process_oks(self) -> None:
         """
         Post-process the configuration data after it has been loaded and validated.
@@ -78,7 +36,7 @@ class FSMConfHandler(ConfHandler):
             None
 
         Raises:
-            None
+            ValuesError: If there are duplicate transition or sequence names, or if a sequence references a non-existent transition. 
         """
         raw = cast(FSMData, self._raw_data)
 
@@ -152,7 +110,9 @@ class FSMConfHandler(ConfHandler):
                 
             self.transitions.append(tr)
 
-        ## fill the sequences
+        ## fill anche check the sequences
+        tr_ids = [t.id for t in raw.transitions]
+
         for sequence in raw.command_sequences:
             seq_id = sequence.name 
             if seq_id in [t.name for t in self.transitions]:
@@ -163,16 +123,19 @@ class FSMConfHandler(ConfHandler):
                 raise ValueError(
                     f"Duplicate sequence name '{seq_id}' from sequence object'{sequence.id}'"
                 ) 
-            
-            cmd_ids = [tr.cmd for tr in sequence.sequence]
 
-            for c in cmd_ids:
-                if c not in [t.name for t in self.transitions]:
+            ## Here we check a bit more
+            # we check if the OKS objects used in the sequence are the 
+            # same as used in the transitions 
+            cmd_names=[]
+            for tr in sequence.sequence:
+                if tr.id not in tr_ids:
                     raise ValueError(
-                        f"Transition name '{c}' from sequence object '{sequence.id}' does not match any transitions in this FSM configuration"
+                        f"Transition id '{tr.id}' from sequence object '{sequence.id}' does not match any transitions in this FSM configuration"
                     )
-
-            self.sequences.append(FSMSequence(id=seq_id, command_ids=cmd_ids))
+                cmd_names.append(tr.cmd)
+            
+            self.sequences.append(FSMSequence(id=seq_id, command_ids=cmd_names))
         
 
     def get_actions(self) -> dict[str, FSMActionProtocol]:
