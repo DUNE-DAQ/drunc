@@ -1,7 +1,7 @@
 import getpass
 import sys
 from functools import update_wrapper
-from typing import cast
+from typing import cast, get_args
 
 import click
 from click.decorators import FC
@@ -27,7 +27,10 @@ from drunc.process_manager.interface.commands import (
     restart_impl,
 )
 from drunc.process_manager.interface.context import ProcessManagerContext
-from drunc.process_manager.utils import tabulate_process_instance_list
+from drunc.process_manager.utils import (
+    ControllerLogLevel,
+    tabulate_process_instance_list,
+)
 from drunc.unified_shell.context import UnifiedShellContext, UnifiedShellMode
 from drunc.utils.shell_utils import InterruptedCommand, format_table_width, log_pm_cmd
 from drunc.utils.utils import get_logger, log_echo
@@ -43,6 +46,7 @@ from drunc.utils.utils import get_logger, log_echo
 @click.option(
     "-cl",
     "--controller-log-level",
+    type=click.Choice(get_args(ControllerLogLevel), case_sensitive=False),
     default=None,
     help="Overrides the config-defined log level of the controller",
 )
@@ -56,7 +60,7 @@ from drunc.utils.utils import get_logger, log_echo
 def boot(
     obj: UnifiedShellContext,
     override_logs: bool | None,
-    controller_log_level: str | None,
+    controller_log_level: ControllerLogLevel | None,
     sleep_between_app_boot: float = 0,
 ) -> None:
     log = get_logger("unified_shell.boot")
@@ -279,7 +283,7 @@ def echo(
     text: str,
     server: bool,
     target_server: str,
-    logger: int,
+    logger: LoggerTarget.ValueType,
     target: str,
     severity: str,
     execute_along_path: bool,

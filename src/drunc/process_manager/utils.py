@@ -2,7 +2,7 @@ import os
 import re
 from collections.abc import Callable
 from functools import update_wrapper
-from typing import cast
+from typing import Literal, cast
 
 import click
 from click.decorators import FC
@@ -24,6 +24,9 @@ from drunc.process_manager.configuration import (
 from drunc.processes.process_metadata import ProcessMetadata
 from drunc.utils.configuration import ConfTypes, parse_conf_url
 from drunc.utils.utils import now_str
+
+# Values of the Session.controller_log_level enum in the confmodel schema
+ControllerLogLevel = Literal["CRITICAL", "ERROR", "WARNING", "INFO", "DEBUG"]
 
 
 def compute_role_from_boot_request(boot_request: BootRequest) -> str:
