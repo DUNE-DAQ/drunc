@@ -923,9 +923,8 @@ To debug it, close drunc and run the following command:
         # Check if the response indicates a BadQuery error
         if response.flag == ResponseFlag.NOT_EXECUTED_BAD_REQUEST_FORMAT:
             lines = response.lines
-            if len(lines) == 1:
-                lines = lines[0]
-            self.log.warning(f"Bad query for logs: {lines}")
+            detail = lines[0] if len(lines) == 1 else lines
+            self.log.warning(f"Bad query for logs: {detail}")
             return None
 
         # Check for other error flags
@@ -1014,7 +1013,7 @@ To find the controller address, you can look up \'{top_controller_name}_control\
         self,
         text: str,
         severity: str = "INFO",
-        logger: int = LoggerTarget.MAIN,
+        logger: LoggerTarget.ValueType = LoggerTarget.MAIN,
         target: str = "",
         execute_along_path: bool = False,
         execute_on_all_subsequent_children_in_path: bool = True,

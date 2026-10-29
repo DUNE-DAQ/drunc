@@ -283,7 +283,7 @@ def echo(
     text: str,
     server: bool,
     target_server: str,
-    logger: int,
+    logger: LoggerTarget.ValueType,
     target: str,
     severity: str,
     execute_along_path: bool,
