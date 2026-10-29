@@ -29,6 +29,7 @@ from druncschema.controller_pb2 import (
 from druncschema.description_pb2 import Description
 from druncschema.generic_pb2 import bool_msg, float_msg, int_msg, string_msg
 from druncschema.request_response_pb2 import ResponseFlag
+from google.protobuf import json_format
 from rich.console import Console, ConsoleOptions, Group, RenderResult
 from rich.measure import Measurement
 from rich.progress import (
@@ -982,21 +983,27 @@ def run_one_fsm_command(
         return f"[dark_green]{flag}[/]" if success else f"[red]{flag}[/]"
 
     def add_to_table(
-        table: Table, response: FSMExecutionResponseLike, prefix: str = ""
+        table: Table, response: FSMExecutionResponseLike, prefix: str = "", parent_path: str = ""
     ) -> None:
-        executed_command = response.flag == ResponseFlag.EXECUTED_SUCCESSFULLY
-
         table.add_row(
             prefix + response.name,
             bool_to_success(response.flag, message_type=ResponseFlag),
-            (
-                bool_to_success(response.fsm_flag, message_type=FSMResponseFlag)
-                if executed_command
-                else "[red]NA[/]"
-            ),
+            bool_to_success(response.fsm_flag, message_type=FSMResponseFlag),
         )
+
+        node_path = f"{parent_path}/{response.name}" if parent_path else response.name
+
+        if response.HasField("error"):
+            log.error("%s: %s", node_path, response.error.message)
+            for detail in response.error.details:
+                try:
+                    rendered_detail = json_format.MessageToJson(detail)
+                except (TypeError, ValueError):
+                    rendered_detail = f"Unparsed rich detail: {detail.type_url}"
+                log.error("%s rich detail: %s", node_path, rendered_detail)
+
         for child_response in sorted(response.children, key=lambda c: c.name):
-            add_to_table(table, child_response, "  " + prefix)
+            add_to_table(table, child_response, "  " + prefix, node_path)
 
     add_to_table(t, result)
 

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import traceback
 from dataclasses import dataclass
 from typing import Callable, NoReturn, TypeVar, cast
 
@@ -19,6 +20,7 @@ from drunc.exceptions import (
     DruncCommandException,
     DruncException,
 )
+from drunc.utils.utils import get_logger
 
 
 class UnpackingError(DruncCommandException):
@@ -111,6 +113,9 @@ class ServerUnreachable(DruncException):
 
 
 class ServerTimeout(DruncException):
+
+    grpc_error_code = code_pb2.DEADLINE_EXCEEDED
+
     """Exception raised when the gRPC server times out."""
 
     def __init__(self, message: str) -> None:
@@ -368,14 +373,16 @@ def extract_grpc_rich_error(grpc_error: grpc.RpcError) -> GrpcErrorDetails:
         GrpcErrorDetails with structured error information
     """
     code = grpc_error.code().name if grpc_error.code() else "UNKNOWN"
+    message = grpc_error.details() or "No message"
+    
     try:
         status = rpc_status.from_call(cast(grpc.Call, grpc_error))
     except NotImplementedError:
-        return GrpcErrorDetails(code=code, message="No message", details=[])
+        return GrpcErrorDetails(code=code, message=message, details=[])
 
     # Fallback to simple error if no rich status
     if status is None:
-        return GrpcErrorDetails(code=code, message="No message", details=[])
+        return GrpcErrorDetails(code=code, message=message, details=[])
 
     # Extract all error details
     error_details = []
@@ -450,6 +457,7 @@ class RichErrorServerInterceptor(grpc.ServerInterceptor):
         Intercept gRPC service calls to handle exceptions and convert them
         into rich error statuses.
         """
+
         handler = continuation(handler_call_details)
         if handler is None:
             return None
@@ -464,6 +472,28 @@ class RichErrorServerInterceptor(grpc.ServerInterceptor):
             except DruncException as e:
                 abort_with_rich_details(
                     context, int(e.grpc_error_code), str(e), e.rich_details
+                )
+            except grpc.RpcError:
+                raise
+            except Exception:
+                trace_logger = get_logger(
+                    "grpc.unexpected_errors",
+                    rich_handler=False)
+                trace_logger.error(
+                    "Unexpected exception in gRPC handler:\n%s",
+                    traceback.format_exc(),
+                )
+                details = [
+                    error_details_pb2.ErrorInfo(
+                        reason="UNEXPECTED_SERVER_ERROR",
+                        domain="drunc",
+                    ),
+                ]
+                abort_with_rich_details(
+                    context,
+                    code_pb2.INTERNAL,
+                    "Unexpected internal server error. Check log file for details.",
+                    details,
                 )
 
         if handler.unary_unary:

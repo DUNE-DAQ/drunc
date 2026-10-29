@@ -3,10 +3,11 @@ from google.rpc import code_pb2, error_details_pb2
 
 
 class DruncException(Exception):
+    """Base class for all Drunc exceptions."""
     def __init__(
         self,
         message: str | None = "An error occurred in Drunc.",
-        grpc_error_code: int | None = None,
+        grpc_error_code: int | None = None, # the gRPC status API expects an INT
         details: str | None = None,
         reason: str | None = None,
         domain: str | None = None,
@@ -87,29 +88,6 @@ class DruncCommandException(DruncException):
     reason: str = "COMMAND_ERROR"
 
 
-class DruncServerSideError(DruncException):
-    def __init__(
-        self,
-        error_txt: str,
-        stack_txt: str,
-        server_response: str,
-        *args: object,
-        **kwargs: object,
-    ) -> None:
-        self.error_txt: str = error_txt
-        self.stack_txt: str = stack_txt
-        self.server_response: str = server_response
-
-        super().__init__(
-            message=error_txt,
-            details=server_response,
-            **kwargs,  # type: ignore[arg-type]
-        )
-
-    def __str__(self) -> str:
-        return f"{self.stack_txt}\n{self.error_txt}\n{self.server_response}"
-
-
 class DruncBatchShellError(DruncException):
     def __init__(self, msg: str) -> None:
         err_msg = f"Batch shell error: {msg}"
@@ -137,3 +115,31 @@ class DruncBatchShellMissingArg(DruncException):
 class DruncNotImplementedException(DruncException):
     grpc_error_code: int = code_pb2.UNIMPLEMENTED
     reason: str = "NOT_IMPLEMENTED"
+
+
+class ChildCommandException(DruncException):
+    
+    def __init__(
+        self,
+        child_name: str,
+        child_details: list[Message],
+        child_code: str, # str is useful for display or metadata purposes
+        child_message: str,
+        **kwargs,
+    ) -> None:
+        self.child_name = child_name
+        self.child_code = child_code
+        self.child_message = child_message
+        self._child_details = child_details
+
+        super().__init__(
+            message=f"Child '{child_name}' failed [{child_code}]: {child_message}",
+            child_name=child_name,
+            child_code=child_code,
+            child_message=child_message,
+            **kwargs,
+        )
+
+    @property
+    def specialised_details(self) -> list[Message]:
+        return list(self._child_details)
