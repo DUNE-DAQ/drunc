@@ -1,0 +1,59 @@
+name: Retry reviewer checklist
+
+'on':
+  issue_comment:
+    types: [created]
+
+permissions:
+  contents: read
+  actions: write
+  pull-requests: write
+  issues: write
+
+concurrency:
+  group: retry-checklist-${{ github.event.issue.number }}
+  cancel-in-progress: false
+
+jobs:
+  retry-checklist:
+    if: >-
+      github.event.issue.pull_request &&
+      github.event.comment.user.type == 'User' &&
+      contains(github.event.comment.body, '/checklist-complete')
+    runs-on: ubuntu-latest
+    steps:
+      - name: Acknowledge retry command
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          COMMENT_ID: ${{ github.event.comment.id }}
+        run: |
+          gh api --method POST \
+            "repos/${GITHUB_REPOSITORY}/issues/comments/${COMMENT_ID}/reactions" \
+            -f content='eyes' \
+            --silent
+      
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+
+      - uses: ./.github/actions/setup-scripts
+
+      - name: Retry the PR's reviewer-checklist job
+        id: retry
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: python .github/scripts/retry_checklist.py
+
+      - name: React to retry script result
+        if: ${{ always() && (steps.retry.outcome == 'success' || steps.retry.outcome == 'failure') }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          COMMENT_ID: ${{ github.event.comment.id }}
+          REACTION: ${{ steps.retry.outcome == 'success' && '+1' || '-1' }}
+        run: |
+          gh api --method POST \
+            "repos/${GITHUB_REPOSITORY}/issues/comments/${COMMENT_ID}/reactions" \
+            -f content="${REACTION}" \
+            --silent
