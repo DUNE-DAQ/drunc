@@ -438,7 +438,7 @@ To debug it, close drunc and run the following command:
         return True
 
     def resolve_localhost(self, session_dal: WritableSession) -> WritableSession:
-        def dal_localhost_mapping(dal_host: str):
+        def dal_localhost_mapping(dal_host: str) -> str:
             if dal_host != "localhost":
                 return dal_host
 
@@ -450,7 +450,7 @@ To debug it, close drunc and run the following command:
             self.log.debug(
                 f"Resolved connection server 'localhost' to '{resolved_server}' to avoid K8s hairpinning."
             )
-            return resolved_server
+            return resolved_server or dal_host
 
         if session_dal.connectivity_service is not None:
             session_dal.connectivity_service.host = dal_localhost_mapping(
@@ -487,6 +487,10 @@ To debug it, close drunc and run the following command:
 
         # Firstly, check if the file is read only. If so, we will only update the DAL
         configuration_file = db.active_database
+        if configuration_file is None:
+            raise DruncSetupException(
+                "The configuration has no active database, cannot check for port conflicts."
+            )
         config_is_read_only: bool = file_is_read_only(
             get_full_db_path(configuration_file)
         )
