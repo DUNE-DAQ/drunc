@@ -14,5 +14,5 @@ items:
 
 # Optional freeform markdown rendered below the checklist in the routing comment.
 footer: |
-  This checklist **must** be ticked off for the actions workflow to pass. When everything is checked, post `/retry-checklist` in a new comment on this pull request to rerun the reviewer-checklist check.
+  This checklist **must** be ticked off for the actions workflow to pass. When everything is checked, post `/checklist-complete` in a new comment on this pull request to rerun the reviewer-checklist check.
 

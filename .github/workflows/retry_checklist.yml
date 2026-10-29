@@ -19,7 +19,7 @@ jobs:
     if: >-
       github.event.issue.pull_request &&
       github.event.comment.user.type == 'User' &&
-      contains(github.event.comment.body, '/retry-checklist')
+      contains(github.event.comment.body, '/checklist-complete')
     runs-on: ubuntu-latest
     steps:
       - name: Acknowledge retry command

@@ -1,4 +1,4 @@
-"""Retry the current PR's checklist job when a human posts /retry-checklist."""
+"""Retry the current PR's checklist job when a human posts /checklist-complete."""
 
 from __future__ import annotations
 
@@ -18,9 +18,9 @@ def retry(api: GitHubApi, event: dict) -> str:
         event.get("action") != "created"
         or "pull_request" not in issue
         or comment.get("user", {}).get("type") != "User"
-        or "/retry-checklist" not in comment.get("body", "")
+        or "/checklist-complete" not in comment.get("body", "")
     ):
-        return "Skipped: not a human PR comment containing /retry-checklist."
+        return "Skipped: not a human PR comment containing /checklist-complete."
 
     pull_number = issue.get("number")
     if (
