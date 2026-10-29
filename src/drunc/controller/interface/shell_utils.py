@@ -902,7 +902,9 @@ def run_one_fsm_command(
                 while time.time() - time_start < timeout and not future.done():
                     updater.update(task, completed=time.time() - time_start)
                     updater.update_table()
-                    time.sleep(0.5)
+                    # 29-Oct-2026, KAB: reduced the following sleep time by a factor of 10
+                    # to avoid occasional unnecessarily long delays.
+                    time.sleep(0.05)
 
                 updater.update_table()
 
