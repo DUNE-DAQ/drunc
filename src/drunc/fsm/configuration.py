@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from curses import raw
 from typing import List, cast
 
 from conffwk.dal import FSMData, FSMxTransition
@@ -93,50 +94,86 @@ class FSMConfHandler(ConfHandler):
         self.states: list[str] = raw.states
         self.initial_state: str = raw.initial_state
 
-        # Fill the actions dictionary with the FSMAction objects corresponding to the
-        # action names defined in the configuration
-        for action in raw.actions:
-            self.actions[action.id] = FSMActionFactory.get().get_action(
-                action.id, action
-            )
-
+        ## fill the transistions 
         for transition in raw.transitions:
+
+            ## check if the transition name is unique
+            if transition.cmd in [t.name for t in self.transitions]:
+                raise ValueError(
+                    f"Duplicate transition name '{transition.cmd}' from transition object '{transition.id}'"
+                )
+
             tr = Transition(
-                name=transition.id,
+                name=transition.cmd,
                 source=transition.source,
                 destination=transition.dest,
                 arguments=[],  # list(google.protobuf.any_pb2.Any)
             )
 
-            # Get the pre and post transition sequences for the transition
-            pre_transitions: PreOrPostTransitionSequence = (
-                self._fill_pre_post_transition_sequence_oks(
-                    "pre", tr, raw.pre_transitions
-                )
-            )
-            post_transitions: PreOrPostTransitionSequence = (
-                self._fill_pre_post_transition_sequence_oks(
-                    "post", tr, raw.post_transitions
-                )
-            )
+            arguments = []
+            pre = transition.pre_transition
+            if pre is not None:
+                seq = PreOrPostTransitionSequence(tr,"pre")
+                ## add the action
+                for a in pre.actions :
+                    ## The action could be registerered by many transisionts 
+                    if a.name not in self.actions:
+                        self.actions[a.name] = FSMActionFactory.get().get_action(
+                            a.name, a 
+                    )
+                    seq.add_callback(
+                        action=self.actions[a.name],
+                        mandatory=a.name in pre.mandatory,
+                    )    
+                arguments += seq.get_arguments()
+                self.pre_transitions[tr] = seq
+                            
+            post = transition.post_transition
+            if post is not None:
+                seq = PreOrPostTransitionSequence(tr,"post")
+                ## add the action
+                for a in post.actions :
+                    ## The action could be registerered by many transisionts 
+                    if a.name not in self.actions:
+                        self.actions[a.name] = FSMActionFactory.get().get_action(
+                            a.name, a 
+                    )
+                    seq.add_callback(
+                        action=self.actions[a.name],
+                        mandatory=a.name in post.mandatory,
+                    )    
+                arguments += seq.get_arguments()
+                self.post_transitions[tr] = seq
 
-            # Add the pre and post transition sequence arguments to the transition
-            if tr.arguments is not None:
-                tr.arguments += pre_transitions.get_arguments()
-                tr.arguments += post_transitions.get_arguments()
+            ## fill the arguments
+            ## at this points all the actions are registered we just need to register arguments
+            if arguments is not None:
+                tr.arguments += arguments
+                
+            self.transitions.append(tr)
 
-            # Store the pre and post transition sequences for the transition
-            self.pre_transitions[tr] = pre_transitions
-            self.post_transitions[tr] = post_transitions
-
-            # Add the transition to the list of transitions
-            self.transitions += [tr]
-
-        # Fill the sequences of commands to execute for each transition
+        ## fill the sequences
         for sequence in raw.command_sequences:
-            seq_id = sequence.id
-            cmd_ids = [cmd.id for cmd in sequence.sequence]
+            seq_id = sequence.name 
+            if seq_id in [t.name for t in self.transitions]:
+                raise ValueError(
+                    f"Duplicate transition name '{seq_id}' from sequence object'{sequence.id}'"
+                ) 
+            if seq_id in [s.id for s in self.sequences]:
+                raise ValueError(
+                    f"Duplicate sequence name '{seq_id}' from sequence object'{sequence.id}'"
+                ) 
+            
+            cmd_ids = [tr.cmd for tr in sequence.sequence]
+
+            for c in cmd_ids:
+                if c not in [t.name for t in self.transitions]:
+                    raise ValueError(
+                        f"Transition name '{c}' from sequence object '{sequence.id}' does not match any transitions in this FSM configuration"
+                    )
+
             self.sequences.append(FSMSequence(id=seq_id, command_ids=cmd_ids))
+        
 
     def get_actions(self) -> dict[str, FSMActionProtocol]:
         return self.actions
