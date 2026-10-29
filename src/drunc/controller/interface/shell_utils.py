@@ -14,8 +14,6 @@ from urllib.parse import urlparse
 
 import click
 import grpc
-from google.protobuf import json_format
-
 from daqpytools.logging.formatter import DATE_TIME_BASE_FORMAT, TIME_ZONE
 from druncschema.common_pb2 import LoggerTarget
 from druncschema.controller_pb2 import (
@@ -31,6 +29,7 @@ from druncschema.controller_pb2 import (
 from druncschema.description_pb2 import Description
 from druncschema.generic_pb2 import bool_msg, float_msg, int_msg, string_msg
 from druncschema.request_response_pb2 import ResponseFlag
+from google.protobuf import json_format
 from rich.console import Console, ConsoleOptions, Group, RenderResult
 from rich.measure import Measurement
 from rich.progress import (

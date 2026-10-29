@@ -3,13 +3,13 @@ from unittest.mock import MagicMock
 
 import grpc
 import pytest
+from druncschema.controller_pb2 import ExecuteFSMCommandResponse, FSMResponseFlag
+from druncschema.request_response_pb2 import ResponseFlag
 from google.rpc import error_details_pb2
 
 import drunc.controller.controller as controller_module
 from drunc.controller.controller import Controller
-from drunc.exceptions import DruncCommandException, ChildCommandException
-from druncschema.controller_pb2 import ExecuteFSMCommandResponse, FSMResponseFlag
-from druncschema.request_response_pb2 import ResponseFlag
+from drunc.exceptions import ChildCommandException, DruncCommandException
 from drunc.utils.grpc_utils import GrpcErrorDetails, ServerTimeout
 
 

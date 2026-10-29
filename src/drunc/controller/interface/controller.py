@@ -15,13 +15,13 @@ from drunc.grpc_settings import (
     CONTROLLER_SERVER_GRPC_MAX_WORKERS,
 )
 from drunc.utils.configuration import OKSKey
+from drunc.utils.grpc_utils import RichErrorServerInterceptor
 from drunc.utils.utils import (
     get_logger,
     get_root_logger,
     resolve_localhost_and_127_ip_to_network_ip,
     validate_command_facility,
 )
-from drunc.utils.grpc_utils import RichErrorServerInterceptor
 
 
 @click.command()
