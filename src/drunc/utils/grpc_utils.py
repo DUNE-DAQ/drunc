@@ -2,9 +2,8 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
-import logging
 import traceback
+from dataclasses import dataclass
 from typing import Callable, NoReturn, TypeVar, cast
 
 import grpc
@@ -21,7 +20,6 @@ from drunc.exceptions import (
     DruncCommandException,
     DruncException,
 )
-
 from drunc.utils.utils import get_logger
 
 
@@ -115,6 +113,9 @@ class ServerUnreachable(DruncException):
 
 
 class ServerTimeout(DruncException):
+
+    grpc_error_code = code_pb2.DEADLINE_EXCEEDED
+
     """Exception raised when the gRPC server times out."""
 
     def __init__(self, message: str) -> None:
@@ -474,7 +475,7 @@ class RichErrorServerInterceptor(grpc.ServerInterceptor):
                 )
             except grpc.RpcError:
                 raise
-            except Exception as error:
+            except Exception:
                 trace_logger = get_logger(
                     "grpc.unexpected_errors",
                     rich_handler=False)

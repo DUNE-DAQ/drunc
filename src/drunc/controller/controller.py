@@ -4,7 +4,6 @@ import time
 from concurrent.futures import ThreadPoolExecutor
 from typing import Callable, List, TypeVar
 
-from click import command
 import grpc
 from daqpytools.logging import LogHandlerConf, setup_daq_ers_logger
 from druncschema.authoriser_pb2 import ActionType, SystemType
@@ -46,7 +45,7 @@ from druncschema.opmon.generic_pb2 import RunInfo
 from druncschema.request_response_pb2 import ResponseFlag
 from druncschema.token_pb2 import Token
 from google.protobuf.message import Message
-from google.rpc import code_pb2
+from google.rpc import code_pb2, error_details_pb2
 from grpc import ServicerContext
 
 from drunc.authoriser.configuration import DummyAuthoriserConfHandler
@@ -544,12 +543,26 @@ class Controller(ControllerServicer):
         Returns:
             A response of `response_type` representing the child failure.
         """
+        # write failure to the controllers log for debugging purposes
         self.log.error(f"Child '{child.name}' failed: {failure}")
+
+        unexpected_failure = any(
+            isinstance(detail, error_details_pb2.ErrorInfo)
+            and detail.domain == "drunc"
+            and detail.reason == "UNEXPECTED_SERVER_ERROR"
+            for detail in failure.specialised_details
+        )
+
+        flag = (
+            ResponseFlag.UNHANDLED_EXCEPTION_THROWN
+            if unexpected_failure
+            else ResponseFlag.DRUNC_EXCEPTION_THROWN
+        )
 
         return response_type(
             token=None,
             name=child.name,
-            flag=ResponseFlag.DRUNC_EXCEPTION_THROWN,
+            flag=flag,
             error=ResponseError(
             message=str(failure),
             details=[
@@ -655,16 +668,17 @@ class Controller(ControllerServicer):
         def safe_call(child: ChildNode, target: str) -> T:
             try:
                 return child_callable(child, target)
-            except ServerTimeout:
+            except ServerTimeout: # don't treat this is a regular child failure, just propagate it
                 raise
             except (grpc.RpcError, DruncException) as error:
                 rpc_error: BaseException | None = None
                 if isinstance(error, (grpc.RpcError, ServerUnreachable)):
+                    # ServerUnreachable may wrap the original gRPC error
                     rpc_error = error
                     while rpc_error is not None and not isinstance(
                         rpc_error, grpc.RpcError
                     ):
-                        rpc_error = rpc_error.__cause__
+                        rpc_error = rpc_error.__cause__ # extract its status and structured details
 
                 if isinstance(rpc_error, grpc.RpcError):
                     rich = extract_grpc_rich_error(rpc_error)
@@ -675,6 +689,7 @@ class Controller(ControllerServicer):
                     child_code = rich.code
                     child_message = rich.message
                 elif isinstance(error, DruncException):
+                    # if no underlying gRPC error use DruncException's own structured details.
                     child_details = error.rich_details
                     child_code = code_pb2.Code.Name(error.grpc_error_code)
                     child_message = str(error)
@@ -691,6 +706,7 @@ class Controller(ControllerServicer):
                 if degrade_response is not None:
                     return degrade_response(child, child_error)
 
+                # if no degradation propagate the wrapper and keep the original exception as for debugging.
                 raise child_error from error
                 
 
@@ -1143,7 +1159,10 @@ class Controller(ControllerServicer):
             except ServerTimeout as e:
                 response.fsm_flag = FSMResponseFlag.FSM_FAILED
                 self.stateful_node.to_error()
-                self.log.error(f"FSM command '{command_name}' failed: {e}")
+                self.log.error(
+                    f"FSM command '{command_name}' failed: {e}",
+                    extra=self.handlerconf.ERS,
+                )
                 return response
 
             # Finish propagating FSM transition to children.
@@ -1822,9 +1841,7 @@ class Controller(ControllerServicer):
             response.flag = ResponseFlag.NOT_EXECUTED_BAD_REQUEST_FORMAT
             return response
 
-        # This node.
-        if request.target == self.name or request.execute_along_path:
-            request.target = ""
+        execute_on_this_node = request.target == self.name or request.execute_along_path
 
         # Children nodes (ignore exclusion).
         child_list = self.address_target_path(
@@ -1834,14 +1851,14 @@ class Controller(ControllerServicer):
         )
         connected_indices, disconnected_indices = self._partition_connected_children(
             child_list,
-            operation_name="who_is_in_charge",
+            operation_name="send_log",
         )
         child_responses = self.propagate_concurrently(
             lambda child, target: child.send_log(
                 request.text,
                 request.severity,
                 request.logger,
-                request.target,
+                target,
                 request.execute_along_path,
                 request.execute_on_all_subsequent_children_in_path,
             ),
@@ -1862,7 +1879,7 @@ class Controller(ControllerServicer):
         response.children.extend(child_responses)
 
         # This node.
-        if request.target in [self.name, ""] or request.execute_along_path:
+        if execute_on_this_node:
             if request.logger == LoggerTarget.ECHO:
                 self.log.critical("Echo logging is not implemented")
                 return SendLogResponse(
