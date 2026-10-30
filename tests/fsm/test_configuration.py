@@ -32,9 +32,17 @@ def test_test_fsm() :
     assert Counter(oks_sequences) == Counter(expected_sequences)
 
     oks_actions = [a for a in configuration.get_actions().keys()]
-    expected_actions = ['user-provided-run-number', 'file-run-registry', 'trigger-rate-specifier']
+    expected_actions = ['user-provided-run-number', 'file-run-registry', 'trigger-rate-specifier', "file-logbook"]
     assert Counter(oks_actions) == Counter(expected_actions)
-    
+
+    pre_transitions = configuration.get_pre_transitions_sequences()
+    expected_transitions = [t.name for t in pre_transitions.keys()]
+    assert Counter(expected_transitions) == Counter(["start", "change_rate"])
+
+    post_transitions = configuration.get_post_transitions_sequences()
+    expected_transitions = [t.name for t in post_transitions.keys()]
+    assert Counter(expected_transitions) == Counter(["start", "drain_dataflow"])
+
 
 def test_prod_fsm() :
     # the actions of prod FSM require a drunc.json file which is not expected
