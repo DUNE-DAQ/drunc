@@ -1,0 +1,37 @@
+name: Setup dev nightly
+description: Create and initialize a dev nightly DBT area
+
+outputs:
+  workarea:
+    description: Absolute path to the initialized DBT workarea
+    value: ${{ steps.create.outputs.workarea }}
+  nightly_identifier:
+    description: Workarea identifier
+    value: ${{ steps.create.outputs.nightly_identifier }}
+
+runs:
+  using: composite
+  steps:
+    - name: Create dev nightly workarea
+      id: create
+      shell: bash
+      run: |
+        set -eo pipefail
+        mkdir -p "$GITHUB_WORKSPACE/nightly"
+        cd "$GITHUB_WORKSPACE/nightly"
+
+        source /cvmfs/dunedaq.opensciencegrid.org/setup_dunedaq.sh
+        setup_dbt latest
+        dbt-create -n last_fddaq
+
+        shopt -s nullglob
+        workareas=( "$GITHUB_WORKSPACE"/nightly/NFD_DEV* )
+        if [[ ${#workareas[@]} -ne 1 || ! -d "${workareas[0]}" ]]; then
+          echo "Expected exactly one NFD_DEV workarea under $GITHUB_WORKSPACE/nightly" >&2
+          exit 1
+        fi
+
+        workarea="$(realpath "${workareas[0]}")"
+        source "$workarea/env.sh"
+        echo "workarea=$workarea" >> "$GITHUB_OUTPUT"
+        echo "nightly_identifier=$(basename "$workarea")" >> "$GITHUB_OUTPUT"

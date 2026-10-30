@@ -1,0 +1,48 @@
+{
+  "schema_version": 1,
+  "packages": [
+    {
+      "repository": "DUNE-DAQ/drunc",
+      "name": "drunc",
+      "kind": "python",
+      "destination": "pythoncode/drunc",
+      "python_install": true,
+      "install_extras": ["test"],
+      "order": 30,
+      "baseline": {
+        "strategy": "workflow_checkout",
+        "revision": "workflow_selected"
+      }
+    },
+    {
+      "repository": "DUNE-DAQ/druncschema",
+      "name": "druncschema",
+      "kind": "dbt_source",
+      "destination": "sourcecode/druncschema",
+      "python_install": true,
+      "install_extras": ["dev"],
+      "order": 10,
+      "baseline": {
+        "strategy": "main_pr_branch_then_develop",
+        "branch_source": "main_pr_head",
+        "fallback_repository": "DUNE-DAQ/druncschema",
+        "fallback_branch": "develop"
+      }
+    },
+    {
+      "repository": "DUNE-DAQ/daqpytools",
+      "name": "daqpytools",
+      "kind": "python",
+      "destination": "pythoncode/daqpytools",
+      "python_install": true,
+      "install_extras": ["test"],
+      "order": 20,
+      "baseline": {
+        "strategy": "main_pr_branch_then_develop",
+        "branch_source": "main_pr_head",
+        "fallback_repository": "DUNE-DAQ/daqpytools",
+        "fallback_branch": "develop"
+      }
+    }
+  ]
+}
