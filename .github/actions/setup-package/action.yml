@@ -1,0 +1,164 @@
+name: Setup package
+description: Check out a package into a nightly workarea and optionally install it
+
+inputs:
+  workarea:
+    description: Absolute path to the initialized DBT workarea
+    required: true
+  repository:
+    description: GitHub owner/repository for the preferred package checkout
+    required: true
+  revision:
+    description: Branch or commit SHA to check out
+    required: true
+  workflow_checkout:
+    description: Use the exact repository revision selected by the workflow
+    required: false
+    default: "false"
+  destination:
+    description: Fixed workarea-relative package path
+    required: true
+  fallback_repository:
+    description: Repository to use if the preferred branch does not exist
+    required: false
+    default: ""
+  fallback_revision:
+    description: Fallback branch to use if the preferred branch does not exist
+    required: false
+    default: ""
+  python_install:
+    description: Whether to install this package with Python
+    required: false
+    default: "true"
+  install_extras:
+    description: Trusted package extras to install
+    required: false
+    default: ""
+
+outputs:
+  checkout_sha:
+    description: Commit SHA checked out for this package
+    value: ${{ steps.setup.outputs.checkout_sha }}
+  selected_repository:
+    description: Repository selected for this package
+    value: ${{ steps.setup.outputs.selected_repository }}
+  selected_revision:
+    description: Branch or SHA selected for this package
+    value: ${{ steps.setup.outputs.selected_revision }}
+
+runs:
+  using: composite
+  steps:
+    - name: Check out and install package
+      id: setup
+      shell: bash
+      env:
+        WORKAREA: ${{ inputs.workarea }}
+        REPOSITORY: ${{ inputs.repository }}
+        REVISION: ${{ inputs.revision }}
+        WORKFLOW_CHECKOUT: ${{ inputs.workflow_checkout }}
+        DESTINATION: ${{ inputs.destination }}
+        FALLBACK_REPOSITORY: ${{ inputs.fallback_repository }}
+        FALLBACK_REVISION: ${{ inputs.fallback_revision }}
+        PYTHON_INSTALL: ${{ inputs.python_install }}
+        INSTALL_EXTRAS: ${{ inputs.install_extras }}
+      run: |
+        set -eo pipefail
+
+        valid_repository() {
+          [[ "$1" =~ ^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$ ]]
+        }
+
+        if [[ "$WORKFLOW_CHECKOUT" != "true" ]] && ! valid_repository "$REPOSITORY"; then
+          echo "Invalid package repository: $REPOSITORY" >&2
+          exit 1
+        fi
+        if [[ -n "$FALLBACK_REPOSITORY" ]] && ! valid_repository "$FALLBACK_REPOSITORY"; then
+          echo "Invalid fallback repository: $FALLBACK_REPOSITORY" >&2
+          exit 1
+        fi
+        if [[ ! "$DESTINATION" =~ ^(pythoncode|sourcecode)/[A-Za-z0-9_.-]+$ ]]; then
+          echo "Package destination must be a fixed path under pythoncode or sourcecode" >&2
+          exit 1
+        fi
+        if [[ ! -d "$WORKAREA" ]]; then
+          echo "Workarea does not exist: $WORKAREA" >&2
+          exit 1
+        fi
+
+        selected_repository="$REPOSITORY"
+        selected_revision="$REVISION"
+        if [[ "$WORKFLOW_CHECKOUT" == "true" ]]; then
+          selected_repository="$GITHUB_REPOSITORY"
+          selected_revision="$GITHUB_SHA"
+          workspace_sha="$(git -C "$GITHUB_WORKSPACE" rev-parse HEAD)"
+          if [[ "$workspace_sha" != "$GITHUB_SHA" ]]; then
+            echo "Workflow checkout is at $workspace_sha, expected $GITHUB_SHA" >&2
+            exit 1
+          fi
+        else
+          if [[ "$REVISION" =~ ^[0-9a-fA-F]{40,64}$ ]]; then
+            is_commit_sha=true
+          else
+            is_commit_sha=false
+            if ! git check-ref-format --branch "$REVISION" >/dev/null; then
+              echo "Invalid package revision: $REVISION" >&2
+              exit 1
+            fi
+          fi
+
+          if [[ "$is_commit_sha" == false ]]; then
+          branch_status=0
+          git ls-remote --exit-code --heads \
+            "https://github.com/$REPOSITORY.git" \
+            "refs/heads/$REVISION" >/dev/null || branch_status=$?
+
+          if [[ "$branch_status" -eq 2 ]]; then
+            if [[ -z "$FALLBACK_REPOSITORY" || -z "$FALLBACK_REVISION" ]]; then
+              echo "Branch $REVISION does not exist in $REPOSITORY and no fallback is configured" >&2
+              exit 1
+            fi
+            fallback_status=0
+            git ls-remote --exit-code --heads \
+              "https://github.com/$FALLBACK_REPOSITORY.git" \
+              "refs/heads/$FALLBACK_REVISION" >/dev/null || fallback_status=$?
+            if [[ "$fallback_status" -ne 0 ]]; then
+              echo "Fallback branch $FALLBACK_REVISION is unavailable in $FALLBACK_REPOSITORY" >&2
+              exit 1
+            fi
+            selected_repository="$FALLBACK_REPOSITORY"
+            selected_revision="$FALLBACK_REVISION"
+          elif [[ "$branch_status" -ne 0 ]]; then
+            echo "Could not query $REPOSITORY for branch $REVISION (git ls-remote exit $branch_status)" >&2
+            exit 1
+          fi
+          fi
+        fi
+
+        package_path="$WORKAREA/$DESTINATION"
+        if [[ -e "$package_path" ]]; then
+          echo "Package destination already exists: $package_path" >&2
+          exit 1
+        fi
+        mkdir -p "$(dirname "$package_path")"
+        if [[ "$WORKFLOW_CHECKOUT" == "true" ]]; then
+          git clone --quiet --no-hardlinks --no-checkout "$GITHUB_WORKSPACE" "$package_path"
+          git -C "$package_path" remote set-url origin "https://github.com/$GITHUB_REPOSITORY.git"
+        else
+          git clone --no-checkout "https://github.com/$selected_repository.git" "$package_path"
+        fi
+        git -C "$package_path" checkout --detach "$selected_revision"
+
+        checkout_sha="$(git -C "$package_path" rev-parse HEAD)"
+        source "$WORKAREA/env.sh"
+        if [[ "$PYTHON_INSTALL" == "true" ]]; then
+          install_target="$package_path"
+          if [[ -n "$INSTALL_EXTRAS" ]]; then
+            install_target="${package_path}[${INSTALL_EXTRAS}]"
+          fi
+          python -m pip install "$install_target"
+        fi
+
+        echo "checkout_sha=$checkout_sha" >> "$GITHUB_OUTPUT"
+        echo "selected_repository=$selected_repository" >> "$GITHUB_OUTPUT"
+        echo "selected_revision=$selected_revision" >> "$GITHUB_OUTPUT"
