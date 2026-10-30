@@ -63,7 +63,7 @@
 
 <oks-data>
 
-<info name="" type="" num-of-items="3" oks-format="data" oks-version="862f2957270" created-by="mroda" created-on="mroda-xpsp" creation-time="20261030T102632" last-modified-by="mroda" last-modified-on="mroda-xpsp" last-modification-time="20261030T103811"/>
+<info name="" type="" num-of-items="8" oks-format="data" oks-version="862f2957270" created-by="mroda" created-on="mroda-xpsp" creation-time="20261030T102632" last-modified-by="mroda" last-modified-on="mroda-xpsp" last-modification-time="20261030T105757"/>
 
 <include>
  <file path="schema/confmodel/dunedaq.schema.xml"/>
@@ -74,6 +74,21 @@
 </comments>
 
 
+<obj class="FSMconfiguration" id="conflicting_sequence">
+ <attr name="states" type="string">
+  <data val="&quot;initial&quot;"/>
+  <data val="&quot;configured&quot;"/>
+  <data val="&quot;ready&quot;"/>
+ </attr>
+ <attr name="initial_state" type="string" val="initial"/>
+ <rel name="transitions">
+  <ref class="FSMtransition" id="conf_1"/>
+ </rel>
+ <rel name="command_sequences">
+  <ref class="FSMsequence" id="wrong_sequence"/>
+ </rel>
+</obj>
+
 <obj class="FSMconfiguration" id="redundant_transitions">
  <attr name="states" type="string">
   <data val="&quot;initial&quot;"/>
@@ -83,6 +98,38 @@
  <rel name="transitions">
   <ref class="FSMtransition" id="conf_1"/>
   <ref class="FSMtransition" id="conf_2"/>
+ </rel>
+</obj>
+
+<obj class="FSMconfiguration" id="unrelated_transition">
+ <attr name="states" type="string">
+  <data val="&quot;initial&quot;"/>
+  <data val="&quot;configured&quot;"/>
+  <data val="&quot;ready&quot;"/>
+ </attr>
+ <attr name="initial_state" type="string" val="initial"/>
+ <rel name="transitions">
+  <ref class="FSMtransition" id="conf_1"/>
+  <ref class="FSMtransition" id="start"/>
+ </rel>
+ <rel name="command_sequences">
+  <ref class="FSMsequence" id="almost_ok_sequence"/>
+ </rel>
+</obj>
+
+<obj class="FSMsequence" id="almost_ok_sequence">
+ <attr name="name" type="string" val="start_run"/>
+ <rel name="sequence">
+  <ref class="FSMtransition" id="start"/>
+  <ref class="FSMtransition" id="conf_2"/>
+ </rel>
+</obj>
+
+<obj class="FSMsequence" id="wrong_sequence">
+ <attr name="name" type="string" val="start"/>
+ <rel name="sequence">
+  <ref class="FSMtransition" id="conf_1"/>
+  <ref class="FSMtransition" id="start"/>
  </rel>
 </obj>
 
@@ -97,6 +144,13 @@
  <attr name="source" type="string" val="initial"/>
  <attr name="dest" type="string" val="configured"/>
  <attr name="cmd" type="string" val="conf"/>
+ <attr name="reload_configuration" type="bool" val="0"/>
+</obj>
+
+<obj class="FSMtransition" id="start">
+ <attr name="source" type="string" val="configured"/>
+ <attr name="dest" type="string" val="ready"/>
+ <attr name="cmd" type="string" val="start"/>
  <attr name="reload_configuration" type="bool" val="0"/>
 </obj>
 

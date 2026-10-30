@@ -53,3 +53,45 @@ def test_prod_fsm() :
             session_name="test",
         )
 
+def test_reduntant_commands_fsm() :
+    # the actions of prod FSM require a drunc.json file which is not expected
+    # so this test is supposed to fail
+    conf_path = "config/drunc/fsm_with_errors.data.xml"
+
+    with pytest.raises(ValueError):
+        configuration = config.FSMConfHandler.from_oks(
+            url="oksconflibs:" + conf_path,
+            oks_key=utils.OKSKey(
+                schema_file="schema/confmodel/dunedaq.schema.xml",
+                class_name="FSMconfiguration",
+                obj_uid="redundant_transitions",
+                session="one-controller-config", 
+            ),
+            session_name="test",
+        )
+
+    with pytest.raises(ValueError):
+        configuration = config.FSMConfHandler.from_oks(
+            url="oksconflibs:" + conf_path,
+            oks_key=utils.OKSKey(
+                schema_file="schema/confmodel/dunedaq.schema.xml",
+                class_name="FSMconfiguration",
+                obj_uid="conflicting_sequence",
+                session="one-controller-config", 
+            ),
+            session_name="test",
+        )
+
+    with pytest.raises(ValueError):
+        configuration = config.FSMConfHandler.from_oks(
+            url="oksconflibs:" + conf_path,
+            oks_key=utils.OKSKey(
+                schema_file="schema/confmodel/dunedaq.schema.xml",
+                class_name="FSMconfiguration",
+                obj_uid="unrelated_transition",
+                session="one-controller-config", 
+            ),
+            session_name="test",
+        )
+
+
