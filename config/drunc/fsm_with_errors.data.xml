@@ -1,0 +1,103 @@
+<?xml version="1.0" encoding="ASCII"?>
+
+<!-- oks-data version 2.2 -->
+
+
+<!DOCTYPE oks-data [
+  <!ELEMENT oks-data (info, (include)?, (comments)?, (obj)+)>
+  <!ELEMENT info EMPTY>
+  <!ATTLIST info
+      name CDATA #IMPLIED
+      type CDATA #IMPLIED
+      num-of-items CDATA #REQUIRED
+      oks-format CDATA #FIXED "data"
+      oks-version CDATA #REQUIRED
+      created-by CDATA #IMPLIED
+      created-on CDATA #IMPLIED
+      creation-time CDATA #IMPLIED
+      last-modified-by CDATA #IMPLIED
+      last-modified-on CDATA #IMPLIED
+      last-modification-time CDATA #IMPLIED
+  >
+  <!ELEMENT include (file)*>
+  <!ELEMENT file EMPTY>
+  <!ATTLIST file
+      path CDATA #REQUIRED
+  >
+  <!ELEMENT comments (comment)*>
+  <!ELEMENT comment EMPTY>
+  <!ATTLIST comment
+      creation-time CDATA #REQUIRED
+      created-by CDATA #REQUIRED
+      created-on CDATA #REQUIRED
+      author CDATA #REQUIRED
+      text CDATA #REQUIRED
+  >
+  <!ELEMENT obj (attr | rel)*>
+  <!ATTLIST obj
+      class CDATA #REQUIRED
+      id CDATA #REQUIRED
+  >
+  <!ELEMENT attr (data)*>
+  <!ATTLIST attr
+      name CDATA #REQUIRED
+      type (bool|s8|u8|s16|u16|s32|u32|s64|u64|float|double|date|time|string|uid|enum|class|-) "-"
+      val CDATA ""
+  >
+  <!ELEMENT data EMPTY>
+  <!ATTLIST data
+      val CDATA #REQUIRED
+  >
+  <!ELEMENT rel (ref)*>
+  <!ATTLIST rel
+      name CDATA #REQUIRED
+      class CDATA ""
+      id CDATA ""
+  >
+  <!ELEMENT ref EMPTY>
+  <!ATTLIST ref
+      class CDATA #REQUIRED
+      id CDATA #REQUIRED
+  >
+]>
+
+<oks-data>
+
+<info name="" type="" num-of-items="3" oks-format="data" oks-version="862f2957270" created-by="mroda" created-on="mroda-xpsp" creation-time="20261030T102632" last-modified-by="mroda" last-modified-on="mroda-xpsp" last-modification-time="20261030T103811"/>
+
+<include>
+ <file path="schema/confmodel/dunedaq.schema.xml"/>
+</include>
+
+<comments>
+ <comment creation-time="20261030T103811" created-by="mroda" created-on="mroda-xpsp" author="mroda" text="first error"/>
+</comments>
+
+
+<obj class="FSMconfiguration" id="redundant_transitions">
+ <attr name="states" type="string">
+  <data val="&quot;initial&quot;"/>
+  <data val="&quot;configured&quot;"/>
+ </attr>
+ <attr name="initial_state" type="string" val="initial"/>
+ <rel name="transitions">
+  <ref class="FSMtransition" id="conf_1"/>
+  <ref class="FSMtransition" id="conf_2"/>
+ </rel>
+</obj>
+
+<obj class="FSMtransition" id="conf_1">
+ <attr name="source" type="string" val="initial"/>
+ <attr name="dest" type="string" val="configured"/>
+ <attr name="cmd" type="string" val="conf"/>
+ <attr name="reload_configuration" type="bool" val="0"/>
+</obj>
+
+<obj class="FSMtransition" id="conf_2">
+ <attr name="source" type="string" val="initial"/>
+ <attr name="dest" type="string" val="configured"/>
+ <attr name="cmd" type="string" val="conf"/>
+ <attr name="reload_configuration" type="bool" val="0"/>
+</obj>
+
+</oks-data>
