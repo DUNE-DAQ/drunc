@@ -5,29 +5,51 @@ runs:
   using: composite
   steps:
     - name: Set up dev nightly
+      id: nightly
+      uses: ./.github/actions/setup-dev-nightly
+
+    - name: Set up druncschema
+      uses: ./.github/actions/setup-package
+      with:
+        workarea: ${{ steps.nightly.outputs.workarea }}
+        repository: ${{ env.REPO_OWNER }}/druncschema
+        revision: ${{ env.HEAD_REF }}
+        destination: sourcecode/druncschema
+        fallback_repository: DUNE-DAQ/druncschema
+        fallback_revision: develop
+        python_install: "true"
+        install_extras: dev
+
+    - name: Set up daqpytools
+      uses: ./.github/actions/setup-package
+      with:
+        workarea: ${{ steps.nightly.outputs.workarea }}
+        repository: ${{ env.REPO_OWNER }}/daqpytools
+        revision: ${{ env.HEAD_REF }}
+        destination: pythoncode/daqpytools
+        fallback_repository: DUNE-DAQ/daqpytools
+        fallback_revision: develop
+        python_install: "true"
+        install_extras: test
+
+    - name: Set up drunc
+      uses: ./.github/actions/setup-package
+      with:
+        workarea: ${{ steps.nightly.outputs.workarea }}
+        repository: DUNE-DAQ/drunc
+        revision: ${{ github.sha }}
+        workflow_checkout: "true"
+        destination: pythoncode/drunc
+        python_install: "true"
+        install_extras: test
+
+    - name: Build workarea
       shell: bash
+      env:
+        WORKAREA: ${{ steps.nightly.outputs.workarea }}
       run: |
-        mkdir nightly
-        cd nightly
-
-        source /cvmfs/dunedaq.opensciencegrid.org/setup_dunedaq.sh
-        setup_dbt latest
-        dbt-create -n last_fddaq
-
-        cd NFD_DEV*
-        source env.sh
-
-
-        cd sourcecode
-        git clone "https://github.com/${REPO_OWNER}/druncschema.git" -b "$HEAD_REF" || git clone https://github.com/DUNE-DAQ/druncschema.git
-        cd druncschema
-        pip install .[test]
-
-        cd ../../pythoncode
-        git clone "https://github.com/${REPO_OWNER}/drunc.git" -b "$HEAD_REF" || git clone https://github.com/DUNE-DAQ/drunc.git
-        cd drunc
-        pip install .[test]
-
-        cd ../..
+        set -eo pipefail
+        source "$WORKAREA/env.sh"
+        cd "$WORKAREA"
         dbt-build --skip-python-install
         dbt-workarea-env
