@@ -12,7 +12,7 @@
 <!-- drunc.authoriser -->
 <g id="node1" class="node">
 <title>drunc.authoriser</title>
-<g id="a_node1"><a xlink:href="https://github.com/DUNE-DAQ/drunc/blob/7497d5778c61489843bcb3a4143ae2b41ec46475/src/drunc/authoriser/__init__.py" xlink:title="drunc.authoriser" target="_blank">
+<g id="a_node1"><a xlink:href="https://github.com/DUNE-DAQ/drunc/blob/d80188a46ff60922b1d77f7a6c81180a5e5e7ac9/src/drunc/authoriser/__init__.py" xlink:title="drunc.authoriser" target="_blank">
 <polygon fill="#fff4b8" stroke="#8b7355" points="96,-36 0,-36 0,0 96,0 96,-36"/>
 <text text-anchor="middle" x="48" y="-15.5" font-family="Helvetica,sans-Serif" font-size="10.00">drunc.authoriser</text>
 </a>
@@ -21,7 +21,7 @@
 <!-- drunc.authoriser.configuration -->
 <g id="node2" class="node">
 <title>drunc.authoriser.configuration</title>
-<g id="a_node2"><a xlink:href="https://github.com/DUNE-DAQ/drunc/blob/7497d5778c61489843bcb3a4143ae2b41ec46475/src/drunc/authoriser/configuration.py" xlink:title="drunc.authoriser.configuration" target="_blank">
+<g id="a_node2"><a xlink:href="https://github.com/DUNE-DAQ/drunc/blob/d80188a46ff60922b1d77f7a6c81180a5e5e7ac9/src/drunc/authoriser/configuration.py" xlink:title="drunc.authoriser.configuration" target="_blank">
 <polygon fill="#fff4b8" stroke="#8b7355" points="316,-137 154,-137 154,-101 316,-101 316,-137"/>
 <text text-anchor="middle" x="235" y="-116.5" font-family="Helvetica,sans-Serif" font-size="10.00">drunc.authoriser.configuration</text>
 </a>
@@ -30,7 +30,7 @@
 <!-- drunc.authoriser.decorators -->
 <g id="node3" class="node">
 <title>drunc.authoriser.decorators</title>
-<g id="a_node3"><a xlink:href="https://github.com/DUNE-DAQ/drunc/blob/7497d5778c61489843bcb3a4143ae2b41ec46475/src/drunc/authoriser/decorators.py" xlink:title="drunc.authoriser.decorators" target="_blank">
+<g id="a_node3"><a xlink:href="https://github.com/DUNE-DAQ/drunc/blob/d80188a46ff60922b1d77f7a6c81180a5e5e7ac9/src/drunc/authoriser/decorators.py" xlink:title="drunc.authoriser.decorators" target="_blank">
 <polygon fill="#fff4b8" stroke="#8b7355" points="524,-36 374,-36 374,0 524,0 524,-36"/>
 <text text-anchor="middle" x="449" y="-15.5" font-family="Helvetica,sans-Serif" font-size="10.00">drunc.authoriser.decorators</text>
 </a>
@@ -39,7 +39,7 @@
 <!-- drunc.authoriser.dummy_authoriser -->
 <g id="node4" class="node">
 <title>drunc.authoriser.dummy_authoriser</title>
-<g id="a_node4"><a xlink:href="https://github.com/DUNE-DAQ/drunc/blob/7497d5778c61489843bcb3a4143ae2b41ec46475/src/drunc/authoriser/dummy_authoriser.py" xlink:title="drunc.authoriser.dummy_authoriser" target="_blank">
+<g id="a_node4"><a xlink:href="https://github.com/DUNE-DAQ/drunc/blob/d80188a46ff60922b1d77f7a6c81180a5e5e7ac9/src/drunc/authoriser/dummy_authoriser.py" xlink:title="drunc.authoriser.dummy_authoriser" target="_blank">
 <polygon fill="#fff4b8" stroke="#8b7355" points="330.5,-36 139.5,-36 139.5,0 330.5,0 330.5,-36"/>
 <text text-anchor="middle" x="235" y="-15.5" font-family="Helvetica,sans-Serif" font-size="10.00">drunc.authoriser.dummy_authoriser</text>
 </a>
@@ -54,7 +54,7 @@
 <!-- drunc.authoriser.exceptions -->
 <g id="node5" class="node">
 <title>drunc.authoriser.exceptions</title>
-<g id="a_node5"><a xlink:href="https://github.com/DUNE-DAQ/drunc/blob/7497d5778c61489843bcb3a4143ae2b41ec46475/src/drunc/authoriser/exceptions.py" xlink:title="drunc.authoriser.exceptions" target="_blank">
+<g id="a_node5"><a xlink:href="https://github.com/DUNE-DAQ/drunc/blob/d80188a46ff60922b1d77f7a6c81180a5e5e7ac9/src/drunc/authoriser/exceptions.py" xlink:title="drunc.authoriser.exceptions" target="_blank">
 <polygon fill="#fff4b8" stroke="#8b7355" points="719,-36 567,-36 567,0 719,0 719,-36"/>
 <text text-anchor="middle" x="643" y="-15.5" font-family="Helvetica,sans-Serif" font-size="10.00">drunc.authoriser.exceptions</text>
 </a>
