@@ -97,3 +97,13 @@ def echo(
     #         execute_along_path=execute_along_path,
     #         execute_on_all_subsequent_children_in_path=execute_on_all_subsequent_children_in_path,
     #     )
+
+
+@click.command("connect-to-pm")
+@click.argument("address", required=True)
+@click.pass_obj
+def connect_to_pm(obj: RunControlContext, address: str):
+    # switch log_echo to real log
+    log_echo.warning(f"trying to connect to pm at {address}")
+
+    obj.get_driver("run_control").connect_to_pm(address=address)

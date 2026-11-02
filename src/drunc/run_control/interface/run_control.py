@@ -124,38 +124,38 @@ def run_rc(
 
 @click.command()
 @click.argument("rc-port", type=int)
-@click.argument("process-manager", type=str, nargs=1)
-@click.argument("configuration-file", type=str, nargs=1)
-@click.argument("configuration-id", type=str, nargs=1)
-@click.argument("session-name", type=str, nargs=1)
-@click.option(
-    "-o/-no",
-    "--override-logs/--no-override-logs",
-    type=bool,
-    default=True,
-    help="Override logs, if --no-override-logs filenames have the timestamp of the run.",
-)  # For production, change default to false/remove it
-@click.option(
-    "-nsb",
-    "--no-stop-error-batch-mode",
-    is_flag=True,
-    default=False,
-    help=(
-        "The default behaviour of the unified shell is to exit if the root-controller "
-        "of the sessions is in error. This option will allow the unified shell to "
-        "continue executing commands, mainly for use in testing scenarios."
-    ),
-)
+# @click.argument("process-manager", type=str, nargs=1)
+# @click.argument("configuration-file", type=str, nargs=1)
+# @click.argument("configuration-id", type=str, nargs=1)
+# @click.argument("session-name", type=str, nargs=1)
+# @click.option(
+#     "-o/-no",
+#     "--override-logs/--no-override-logs",
+#     type=bool,
+#     default=True,
+#     help="Override logs, if --no-override-logs filenames have the timestamp of the run.",
+# )  # For production, change default to false/remove it
+# @click.option(
+#     "-nsb",
+#     "--no-stop-error-batch-mode",
+#     is_flag=True,
+#     default=False,
+#     help=(
+#         "The default behaviour of the unified shell is to exit if the root-controller "
+#         "of the sessions is in error. This option will allow the unified shell to "
+#         "continue executing commands, mainly for use in testing scenarios."
+#     ),
+# )
 @click.pass_context
 def rc_cli(
     ctx: click.core.Context,
     rc_port: int,
-    process_manager: str,
-    configuration_file: str,
-    configuration_id: str,
-    session_name: str,
-    no_stop_error_batch_mode: bool,
-    override_logs: bool,
+    # process_manager: str,
+    # configuration_file: str,
+    # configuration_id: str,
+    # session_name: str,
+    # no_stop_error_batch_mode: bool,
+    # override_logs: bool,
 ):
     get_root_logger("info")
 
@@ -172,68 +172,68 @@ def rc_cli(
 
     ## lets start with it being an address first..
 
-    process_manager_url: ParseResult = urlparse(process_manager)
+    # process_manager_url: ParseResult = urlparse(process_manager)
 
     # This is exactly copy pasted from the unified shell. Note we should probably synchronise this later on..
 
-    internal_pm = False
+    # internal_pm = False
 
-    if process_manager_url.scheme == "grpc":  # i.e. if it's an address
-        internal_pm = False
-        ctx.obj.log.info(
-            f"[green]Connecting to an existing process manager[/] at the address {process_manager_url.netloc}"
-        )
+    # if process_manager_url.scheme == "grpc":  # i.e. if it's an address
+    #     internal_pm = False
+    #     ctx.obj.log.info(
+    #         f"[green]Connecting to an existing process manager[/] at the address {process_manager_url.netloc}"
+    #     )
 
-        ctx.obj.reset(address_pm=process_manager_url.netloc)
+    #     ctx.obj.reset(address_pm=process_manager_url.netloc)
 
-        pm_type = ProcessManagerTypes[
-            ctx.obj.get_driver("process_manager").describe().type
-        ]
+    #     pm_type = ProcessManagerTypes[
+    #         ctx.obj.get_driver("process_manager").describe().type
+    #     ]
 
-        ctx.obj.log.info(
-            f"[green]Connected to the {pm_type.name} process manager[/] running at address {process_manager_url.netloc}"
-        )
-    else:
-        raise ValueError("Unsupported for now")
+    #     ctx.obj.log.info(
+    #         f"[green]Connected to the {pm_type.name} process manager[/] running at address {process_manager_url.netloc}"
+    #     )
+    # else:
+    #     raise ValueError("Unsupported for now")
 
-    if not validate_k8s_session_name(session_name) and (
-        pm_type == ProcessManagerTypes.K8s
-    ):
-        ctx.obj.log.error(
-            f"[red]Invalid session/namespace name [bold]({session_name})[/bold][/red]. "
-            "Must match RFC1123 label: lowercase alphanumeric or '-', start/end with "
-            "alphanumeric, max 63 chars."
-        )
-        sys.exit(1)
+    # if not validate_k8s_session_name(session_name) and (
+    #     pm_type == ProcessManagerTypes.K8s
+    # ):
+    #     ctx.obj.log.error(
+    #         f"[red]Invalid session/namespace name [bold]({session_name})[/bold][/red]. "
+    #         "Must match RFC1123 label: lowercase alphanumeric or '-', start/end with "
+    #         "alphanumeric, max 63 chars."
+    #     )
+    #     sys.exit(1)
 
-    # add configuration items
-    ctx.obj.configuration_file = (
-        lambda path: (
-            path if path.startswith("oksconflibs:") else f"oksconflibs:{path}"
-        )
-    )(configuration_file)
-    ctx.obj.configuration_id = configuration_id
-    ctx.obj.session_name = session_name
-    ctx.obj.no_stop_error_batch_mode = no_stop_error_batch_mode
-    ctx.obj.override_logs = override_logs
+    # # add configuration items
+    # ctx.obj.configuration_file = (
+    #     lambda path: (
+    #         path if path.startswith("oksconflibs:") else f"oksconflibs:{path}"
+    #     )
+    # )(configuration_file)
+    # ctx.obj.configuration_id = configuration_id
+    # ctx.obj.session_name = session_name
+    # ctx.obj.no_stop_error_batch_mode = no_stop_error_batch_mode
+    # ctx.obj.override_logs = override_logs
 
-    # Get the session DAL
-    db = conffwk.Configuration(ctx.obj.configuration_file)
-    session_dal = db.get_dal(class_name="Session", uid=ctx.obj.configuration_id)
-    app_log_path = session_dal.log_path
+    # # Get the session DAL
+    # db = conffwk.Configuration(ctx.obj.configuration_file)
+    # session_dal = db.get_dal(class_name="Session", uid=ctx.obj.configuration_id)
+    # app_log_path = session_dal.log_path
 
-    ctx.obj.log.info("Setting up the controller interface")
+    # ctx.obj.log.info("Setting up the controller interface")
 
-    # Keep track of whether the session uses a local connectivity service
-    ctx.obj.session_uses_local_connectivity_service = (
-        session_dal.connectivity_service.host == "localhost"
-    )
+    # # Keep track of whether the session uses a local connectivity service
+    # ctx.obj.session_uses_local_connectivity_service = (
+    #     session_dal.connectivity_service.host == "localhost"
+    # )
 
-    # Run a simple command (describe) to check the connection with the process manager
+    # # Run a simple command (describe) to check the connection with the process manager
 
-    ctx.obj.get_driver("process_manager").send_log(
-        f"{getpass.getuser()} connected from run control (!!)"
-    )
+    # ctx.obj.get_driver("process_manager").send_log(
+    #     f"{getpass.getuser()} connected from run control (!!)"
+    # )
 
     # running_mode = ProcessManagerRunningMode.Subprocess #not sure why this existrs
 

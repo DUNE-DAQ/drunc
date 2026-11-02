@@ -1,14 +1,13 @@
 import grpc
 from druncschema.common_pb2 import LoggerTarget, SendLogRequest, SendLogResponse
 from druncschema.description_pb2 import Description
-from druncschema.request_response_pb2 import Request
+from druncschema.request_response_pb2 import Request, Response
 from druncschema.run_control_pb2_grpc import RunControlStub
 from druncschema.token_pb2 import Token
+from druncschema.generic_pb2 import string_msg
+from druncschema.run_control_pb2 import ConnectToPMRequest
 
-from drunc.utils.grpc_utils import (
-    RichErrorClientInterceptor,
-    copy_token,
-)
+from drunc.utils.grpc_utils import RichErrorClientInterceptor, copy_token, pack_to_any
 from drunc.utils.utils import (
     get_logger,
 )
@@ -81,4 +80,16 @@ class RunControlDriver:
         )
         request.token.CopyFrom(self.token)
         response: SendLogResponse = self.stub.send_log(request, timeout=timeout)
+        return response
+
+    def connect_to_pm(
+        self,
+        address: str,
+        timeout: int | float = 60,
+    ):
+        request = ConnectToPMRequest(
+            token=copy_token(self.token),
+            address=address,
+        )
+        response: Response = self.stub.connect_to_pm(request, timeout=timeout)
         return response
