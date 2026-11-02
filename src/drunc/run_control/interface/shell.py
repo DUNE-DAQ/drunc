@@ -33,7 +33,7 @@ def rc_shell(ctx: click.core.Context, run_control_address: str):
 
     rc_shell_log = get_logger("run_control.shell")
 
-    ctx.obj.reset(address=run_control_address)
+    ctx.obj.reset(address_rc=run_control_address)
 
     try:
         rc_log.info("running a logger instance")
