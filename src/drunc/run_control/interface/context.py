@@ -15,6 +15,10 @@ class RunControlContext(ShellContext):
         self.log = None
         self.address_rc = None
         self.address_pm = None
+        self.configuration_file = None
+        self.configuration_id = None
+        self.session_name = None
+        self.override_logs = True
         self.log_debug = get_logger("etestg", rich_handler=True)
         super(RunControlContext, self).__init__(*args, **kwargs)
 
