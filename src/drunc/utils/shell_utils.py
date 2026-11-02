@@ -167,7 +167,7 @@ class ShellContext:
             log.exception(
                 "Controller-specific commands cannot be sent until the session is booted"
             )
-            log.debug(f"Drivers available are {self._drivers.keys()}")
+            log.critical(f"Drivers available are {self._drivers.keys()}")
             raise SystemExit(
                 1
             )  # used to avoid having to catch multiple Attribute errors when this function gets called

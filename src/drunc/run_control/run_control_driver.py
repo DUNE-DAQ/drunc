@@ -17,11 +17,11 @@ from drunc.utils.utils import (
 class RunControlDriver:
     def __init__(self, address: str, token: Token):
         self.log = get_logger("run_control_driver", rich_handler=True)
-        self.address = address
+        self.address_rc = address
         options = [
             ("grpc.keepalive_time_ms", 60000)  # pings the server every 60 seconds
         ]
-        raw_channel = grpc.insecure_channel(self.address, options=options)
+        raw_channel = grpc.insecure_channel(self.address_rc, options=options)
         rich_interceptor = RichErrorClientInterceptor(logger=self.log)
         self.channel = grpc.intercept_channel(raw_channel, rich_interceptor)
         self.stub = RunControlStub(self.channel)
