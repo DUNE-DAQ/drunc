@@ -162,6 +162,10 @@ def rc_cli(
     ctx.obj.log = get_logger("rc_cli_thing", rich_handler=True)
 
     ctx.obj.log.info("HELLO WORLD")
+
+
+
+
     # rc_cli_logger = get_logger(logger_name="RC_CLI_LOGGER", rich_handler=True)
 
     ### You will need to get the pprocess manager configuration first. Also note! We must be able to support the run control service to connect tto a process manager service!
@@ -250,5 +254,10 @@ def rc_cli(
     # There is a K8s validation step here first
 
     # pm_conf = get_process_manager_configuration(pm_conf) #import the definition and see where pm_conf can even come from
+
+
+
+
+
 
     run_rc(rc_address=f"0.0.0.0:{rc_port}")

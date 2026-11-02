@@ -1,7 +1,11 @@
 import abc
+import getpass
+
+from urllib.parse import ParseResult, urlparse
 
 from druncschema.authoriser_pb2 import ActionType, SystemType
 from druncschema.common_pb2 import LoggerTarget, SendLogRequest, SendLogResponse
+from collections.abc import MutableMapping
 from druncschema.description_pb2 import CommandDescription, Description
 from druncschema.request_response_pb2 import Request, ResponseFlag, Response
 from druncschema.run_control_pb2_grpc import RunControlServicer
@@ -11,7 +15,7 @@ from grpc import ServicerContext
 from drunc.authoriser.configuration import DummyAuthoriserConfHandler
 from drunc.authoriser.decorators import authentified_and_authorised
 from drunc.authoriser.dummy_authoriser import DummyAuthoriser
-from drunc.utils.utils import get_logger, log_echo
+from drunc.utils.utils import get_logger, log_echo, resolve_localhost_to_hostname
 
 
 class RunControl(abc.ABC, RunControlServicer):
@@ -28,6 +32,7 @@ class RunControl(abc.ABC, RunControlServicer):
         self.configuration_id = None
         self.session_name = None
         self.override_logs = True
+        self.drivers: MutableMapping[str, object] = {}
 
         dach = DummyAuthoriserConfHandler.from_pyobject(
             data=None  # TODO Skeleton: CONFIGURATION NEEDS UPDATING HERE
@@ -92,7 +97,37 @@ class RunControl(abc.ABC, RunControlServicer):
     def connect_to_pm(
         self, request: ConnectToPMRequest, context: ServicerContext
     ) -> Response:
-        self.log.info("PM address received: %s", request.address)
+        address_raw = request.address
+        self.log.info("PM address received: %s", address_raw)
+
+        address_raw: ParseResult = urlparse(address_raw)
+
+        address_raw = str(address_raw.netloc) if address_raw.netloc is not None else ""
+        address_raw = resolve_localhost_to_hostname(address_raw)
+
+        self.address_pm = address_raw
+
+        self.log.info(f"{address_raw=}")
+
+        from drunc.process_manager.process_manager_driver import (
+            ProcessManagerDriver,
+        )
+
+        self.drivers["process_manager"] = ProcessManagerDriver(
+            self.address_pm,
+            request.token,
+        )
+
+        self.log.info("made process manager driver")
+
+        # check if describe works
+
+        pm_type = self.drivers["process_manager"].describe().type
+        self.log.info(f"PM connected, type: {pm_type}")
+
+        self.drivers["process_manager"].send_log(
+            f"{getpass.getuser()} connected from run control (!!)"
+        )
 
         # TODO Skeleton: Will obviously need filling up as features pop in
         response = Response(
