@@ -3,8 +3,9 @@ import abc
 from druncschema.authoriser_pb2 import ActionType, SystemType
 from druncschema.common_pb2 import LoggerTarget, SendLogRequest, SendLogResponse
 from druncschema.description_pb2 import CommandDescription, Description
-from druncschema.request_response_pb2 import Request, ResponseFlag
+from druncschema.request_response_pb2 import Request, ResponseFlag, Response
 from druncschema.run_control_pb2_grpc import RunControlServicer
+from druncschema.run_control_pb2 import ConnectToPMRequest
 from grpc import ServicerContext
 
 from drunc.authoriser.configuration import DummyAuthoriserConfHandler
@@ -20,6 +21,13 @@ class RunControl(abc.ABC, RunControlServicer):
         # TODO: This needs to contain the configuration name
         self.log = get_logger("run_control.CONFIGURATION_NAME_run_control")
         self.name = "run_control"  # TODO Skeleton: needs to update
+
+        # A whole lot of configuration happpening here! We should dataclass this awayy later but for now.. fine
+        self.address_pm = None
+        self.configuration_file = None
+        self.configuration_id = None
+        self.session_name = None
+        self.override_logs = True
 
         dach = DummyAuthoriserConfHandler.from_pyobject(
             data=None  # TODO Skeleton: CONFIGURATION NEEDS UPDATING HERE
@@ -74,6 +82,21 @@ class RunControl(abc.ABC, RunControlServicer):
             info="no info for now",
             session="no session",
             commands=self.commands,
+            flag=ResponseFlag.EXECUTED_SUCCESSFULLY,
+            token=None,
+        )
+
+        return response
+
+    @authentified_and_authorised(action=ActionType.READ, system=SystemType.RUN_CONTROL)
+    def connect_to_pm(
+        self, request: ConnectToPMRequest, context: ServicerContext
+    ) -> Response:
+        self.log.info("PM address received: %s", request.address)
+
+        # TODO Skeleton: Will obviously need filling up as features pop in
+        response = Response(
+            name="unnamed",
             flag=ResponseFlag.EXECUTED_SUCCESSFULLY,
             token=None,
         )

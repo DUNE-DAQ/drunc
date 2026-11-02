@@ -14,11 +14,6 @@ class RunControlContext(ShellContext):
         self.status_receiver = None
         self.log = None
         self.address_rc = None
-        self.address_pm = None
-        self.configuration_file = None
-        self.configuration_id = None
-        self.session_name = None
-        self.override_logs = True
         self.log_debug = get_logger("etestg", rich_handler=True)
         super(RunControlContext, self).__init__(*args, **kwargs)
 
@@ -47,6 +42,7 @@ class RunControlContext(ShellContext):
         return create_dummy_token_from_uname()
 
     def create_drivers(self, **kwargs: object) -> MutableMapping[str, object]:
+        # revert this change
         ret: MutableMapping[str, object] = {}
 
         if self.address_rc:
@@ -55,15 +51,15 @@ class RunControlContext(ShellContext):
                 self._token,
             )
 
-        if self.address_pm:
-            from drunc.process_manager.process_manager_driver import (
-                ProcessManagerDriver,
-            )
+        # if self.address_pm:
+        #     from drunc.process_manager.process_manager_driver import (
+        #         ProcessManagerDriver,
+        #     )
 
-            ret["process_manager"] = ProcessManagerDriver(
-                self.address_pm,
-                self._token,
-            )
+        #     ret["process_manager"] = ProcessManagerDriver(
+        #         self.address_pm,
+        #         self._token,
+        #     )
 
         # This will come later
         # if self.address_controller != "":
