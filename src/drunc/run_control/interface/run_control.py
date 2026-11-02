@@ -7,6 +7,8 @@ from collections.abc import Callable
 from multiprocessing.sharedctypes import Synchronized
 from multiprocessing.synchronize import Event
 
+from urllib.parse import ParseResult, urlparse
+
 import click
 import grpc
 from druncschema.run_control_pb2_grpc import add_RunControlServicer_to_server
@@ -106,6 +108,69 @@ def run_rc(
 
 @click.command()
 @click.argument("rc-port", type=int)
-def rc_cli(rc_port: int):
+@click.argument("process-manager", type=str, nargs=1)
+def rc_cli(
+        ctx: click.core.Context,
+        rc_port: int, 
+        process_manager:str
+    ):
     get_root_logger("info")
+
+    ctx.obj.log.info("HELLO WORLD")
+    # rc_cli_logger = get_logger(logger_name="RC_CLI_LOGGER", rich_handler=True)
+    
+
+    ### You will need to get the pprocess manager configuration first. Also note! We must be able to support the run control service to connect tto a process manager service!
+
+    ## lets start with the basics, lets get the pm configuration connected 
+
+
+    ## oohh I see it does the connectiy connectty first
+
+    ## lets start with it being an address first.. 
+
+    process_manager_url: ParseResult = urlparse(process_manager)
+
+    # This is exactly copy pasted from the unified shell. Note we should probably synchronise this later on..
+
+    if process_manager_url.scheme == "grpc":  # i.e. if it's an address
+        
+        ctx.obj.log.info(
+            f"[green]Connecting to an existing process manager[/] at the address {process_manager_url.netloc}"
+        )
+
+        ctx.obj.reset(address_pm=process_manager_url.netloc)
+
+
+        ctx.obj.log.warning(ctx.obj.get_driver("process_manager").describe().type)
+
+
+        # running_mode = ProcessManagerRunningMode.Subprocess #not sure why this existrs
+        
+        
+        
+        
+        
+        
+        
+        # internal_pm = False
+        # running_mode = ProcessManagerRunningMode.Subprocess
+        # ctx.obj.reset(address_pm=process_manager_url.netloc)
+        # pm_type = ProcessManagerTypes[
+        #     ctx.obj.get_driver("process_manager").describe().type
+        # ]
+        # ctx.obj.log.info(
+        #     f"[green]Connected to the {pm_type.name} process manager[/] running at address {process_manager_url.netloc}"
+        # )
+    else: 
+        pass
+
+    # There is a K8s validation step here first
+
+
+    
+    # pm_conf = get_process_manager_configuration(pm_conf) #import the definition and see where pm_conf can even come from
+
+
+    
     run_rc(rc_address=f"0.0.0.0:{rc_port}")
