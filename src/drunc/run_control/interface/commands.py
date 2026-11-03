@@ -26,46 +26,17 @@ from drunc.utils.utils import get_logger, log_echo
 
 def session_empty(f: FC) -> FC:
     """
-    Decorator to inject the session name into the command function.
-
-    This is used to wrap the relevant unified shell commands, as the unified shell is
-    intended to only operate a single session at a time, and the session name is stored
-    in the context object.
-
-    Args:
-        f (FC): The command function to wrap.
-
-    Returns:
-        FC: The wrapped command function with the session name injected.
-
-    Raises:
-        None
+    Add later
     """
 
     @click.pass_context
     def wrapper(ctx: click.core.Context, *args: object, **kwargs: object) -> object:
         """
-        Wrapper function to inject the session name into the command function.
-
-        Args:
-            ctx (click.core.Context): The click context object.
-            *args (object): Positional arguments to pass to the command function.
-            **kwargs (object): Keyword arguments to pass to the command function.
-
-        Returns:
-            object: The result of invoking the command function with the session name
-                injected.
-
-        Raises:
-            None
+        Add later
         """
         kwargs["session"] = None
         return ctx.invoke(f, *args, **kwargs)
 
-    # The update_wrapper function is used to update the internal python methods for the
-    # functions so that the click decorators can be used with the session_injector
-    # decorator. This is necessary because the click decorators rely on the function
-    # signature to determine the parameters that are passed to the function
     return cast(FC, update_wrapper(wrapper, f))
 
 
@@ -167,14 +138,13 @@ def echo(
 @click.argument("address", required=True)
 @click.pass_obj
 def connect_to_pm(obj: RunControlContext, address: str):
-    # switch log_echo to real log
-    log_echo.warning(f"trying to connect to pm at {address}")
-
+    log = get_logger("run_control.shell")
+    log.warning(f"Connecting to pm at {address}")
     obj.get_run_control_driver().connect_to_pm(address=address)
 
 
 @click.command("ps")
-@session_empty
+@session_empty  # injected at the run control server
 @add_query_options_no_session(at_least_one=False, all_processes_by_default=True)
 @ps_decorators
 @click.pass_obj
@@ -187,10 +157,7 @@ def ps(
 ) -> None:
     log_rc_cmd(obj)
     log = get_logger("run_control.shell")
-
     log.info(f"Running ps with query {query}")
-
-    # session is empty since its gonna be injected later on
 
     results = obj.get_run_control_driver().ps(query)
 

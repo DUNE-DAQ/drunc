@@ -18,22 +18,13 @@ class RunControlContext(ShellContext):
         super(RunControlContext, self).__init__(*args, **kwargs)
 
     def reset(self, *args, **kwargs) -> None:
-        self.log_debug.info("in here")
-
-        def get_reset_address(address_key: str):
-            address_raw = kwargs[address_key]
-            if address_raw is None:
-                return None
-            address = str(address_raw) if address_raw is not None else ""
-            return resolve_localhost_to_hostname(address)
-
-        # these are the possibe keys. Will need to check for the existence of this and then only apply it to the relevant ones
-        address_keys = ("address_rc", "address_pm")
-        for address_key in address_keys:
-            if address_key in kwargs:
-                setattr(self, address_key, get_reset_address(address_key))
-
-        # you'll have to check the address again!
+        if "address_rc" in kwargs:
+            address = kwargs["address_rc"]
+            self.address_rc = (
+                resolve_localhost_to_hostname(str(address))
+                if address is not None
+                else None
+            )
         super(RunControlContext, self)._reset(
             name="run_control_context", token_args={}, driver_args={}
         )
@@ -42,33 +33,12 @@ class RunControlContext(ShellContext):
         return create_dummy_token_from_uname()
 
     def create_drivers(self, **kwargs: object) -> MutableMapping[str, object]:
-        # revert this change
         ret: MutableMapping[str, object] = {}
-
         if self.address_rc:
             ret["run_control"] = RunControlDriver(
                 self.address_rc,
                 self._token,
             )
-
-        # if self.address_pm:
-        #     from drunc.process_manager.process_manager_driver import (
-        #         ProcessManagerDriver,
-        #     )
-
-        #     ret["process_manager"] = ProcessManagerDriver(
-        #         self.address_pm,
-        #         self._token,
-        #     )
-
-        # This will come later
-        # if self.address_controller != "":
-        #     from drunc.controller.controller_driver import ControllerDriver
-
-        #     ret["controller"] = ControllerDriver(
-        #         self.address_controller,
-        #         self._token,
-        #     )
         return ret
 
     def terminate(self) -> None:
