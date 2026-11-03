@@ -55,6 +55,7 @@ from drunc.utils.shell_utils import format_table_width
 from drunc.utils.utils import format_name_for_cli, get_logger, get_shared_rich_console
 
 log = get_logger("controller.iface.shell_utils")
+is_interactive = sys.stdout.isatty() and os.environ.get("TERM") != "dumb"
 
 
 @dataclass(slots=True)
@@ -673,6 +674,7 @@ def tree_prefix(i: int, n: int) -> str:
     else:
         return next
 
+
 def parse_bool(value: bool | str) -> bool:
     """Convert a boolean string to a bool.
 
@@ -729,9 +731,7 @@ def validate_and_format_fsm_arguments(
     # Strip out any arguments that are None, as they are considered not passed, and will
     # be set to default values if they exist, or raise an error if they are mandatory
     # without default value
-    arguments = {
-        k: v for k, v in (arguments or {}).items() if v is not None
-    }
+    arguments = {k: v for k, v in (arguments or {}).items() if v is not None}
 
     # Iterate over the command's argument descriptions, validate the passed arguments,
     # and format them to be sent to the controller
@@ -893,20 +893,24 @@ def run_one_fsm_command(
                 execute_on_all_subsequent_children_in_path=execute_on_all_subsequent_children_in_path,
                 timeout=timeout,
             )
+            if is_interactive:
+                with StatusTableUpdater(obj) as updater:
+                    task = updater.add_task(
+                        f"Waiting for [yellow]{transition_name}[/yellow] to complete...",
+                        total=timeout,
+                    )
+                    while time.time() - time_start < timeout and not future.done():
+                        updater.update(task, completed=time.time() - time_start)
+                        updater.update_table()
+                        time.sleep(0.005)
 
-            with StatusTableUpdater(obj) as updater:
-                task = updater.add_task(
-                    f"Waiting for [yellow]{transition_name}[/yellow] to complete...",
-                    total=timeout,
-                )
-                while time.time() - time_start < timeout and not future.done():
-                    updater.update(task, completed=time.time() - time_start)
                     updater.update_table()
-                    time.sleep(0.5)
-
-                updater.update_table()
-
-            result = future.result(timeout=1)
+                result = future.result(timeout=1)
+            else:
+                log.info(
+                    f"Waiting for [yellow]{transition_name}[/yellow] to complete... (non-interactive)"
+                )
+                result = future.result(timeout=timeout)
 
     except ArgumentException as ae:
         log.exception(
