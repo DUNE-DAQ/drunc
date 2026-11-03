@@ -5,15 +5,6 @@ from typing import cast
 import click
 import click_shell
 
-from drunc.utils.grpc_utils import ServerUnreachable
-from drunc.utils.utils import (
-    CONTEXT_SETTINGS,
-    format_name_for_cli,
-    get_logger,
-    get_root_logger,
-    validate_command_facility,
-)
-
 from drunc.run_control.interface.commands import (
     connect_to_pm,
     echo,
@@ -21,6 +12,14 @@ from drunc.run_control.interface.commands import (
     ps,
     set_session_config,
     valid,
+)
+from drunc.utils.grpc_utils import ServerUnreachable
+from drunc.utils.utils import (
+    CONTEXT_SETTINGS,
+    format_name_for_cli,
+    get_logger,
+    get_root_logger,
+    validate_command_facility,
 )
 
 

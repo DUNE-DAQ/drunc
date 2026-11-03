@@ -1,15 +1,19 @@
 import abc
 import getpass
-
+from collections.abc import MutableMapping
+from dataclasses import asdict, dataclass, fields
 from urllib.parse import ParseResult, urlparse
 
 from druncschema.authoriser_pb2 import ActionType, SystemType
 from druncschema.common_pb2 import LoggerTarget, SendLogRequest, SendLogResponse
-from collections.abc import MutableMapping
 from druncschema.description_pb2 import CommandDescription, Description
-from druncschema.request_response_pb2 import Request, ResponseFlag, Response
-from druncschema.run_control_pb2_grpc import RunControlServicer
+from druncschema.process_manager_pb2 import (
+    ProcessInstanceList,
+    ProcessQuery,
+)
+from druncschema.request_response_pb2 import Request, Response, ResponseFlag
 from druncschema.run_control_pb2 import ConnectToPMRequest, SessionConfiguration
+from druncschema.run_control_pb2_grpc import RunControlServicer
 from grpc import ServicerContext
 
 from drunc.authoriser.configuration import DummyAuthoriserConfHandler
@@ -18,26 +22,12 @@ from drunc.authoriser.dummy_authoriser import DummyAuthoriser
 from drunc.utils.utils import get_logger, log_echo, resolve_localhost_to_hostname
 
 
-from druncschema.process_manager_pb2 import (
-    BootRequest,
-    LogLines,
-    LogRequest,
-    ProcessDescription,
-    ProcessInstanceList,
-    ProcessMetadata,
-    ProcessQuery,
-    ProcessRestriction,
-)
-
-from dataclasses import asdict, dataclass, fields
-
 @dataclass
 class SessionConfig:
     configuration_file: str = ""
     configuration_id: str = ""
     session_name: str = ""
     valid: bool = False
-
 
 
 class RunControl(abc.ABC, RunControlServicer):
@@ -50,9 +40,9 @@ class RunControl(abc.ABC, RunControlServicer):
 
         # A whole lot of configuration happpening here! We should dataclass this awayy later but for now.. fine
         self.address_pm = None
-        
+
         self.session_config = SessionConfig()
-        
+
         self.override_logs = True
         self.drivers: MutableMapping[str, object] = {}
 
@@ -77,14 +67,13 @@ class RunControl(abc.ABC, RunControlServicer):
             ),
         ]
 
-
     def set_session_config(
         self,
         config: SessionConfiguration,
         context: ServicerContext,
     ) -> Response:
         self.session_config.valid = False
-        
+
         for field in fields(self.session_config):
             if field.name == "valid":
                 continue
@@ -97,7 +86,6 @@ class RunControl(abc.ABC, RunControlServicer):
             token=config.token,
             flag=ResponseFlag.EXECUTED_SUCCESSFULLY,
         )
-
 
     @authentified_and_authorised(
         action=ActionType.READ,
@@ -171,7 +159,6 @@ class RunControl(abc.ABC, RunControlServicer):
 
         return response
 
-
     def boot():
         # workflow:
         """
@@ -179,7 +166,7 @@ class RunControl(abc.ABC, RunControlServicer):
         2. in boot, check if valid is valid. if not, exit and say 'make sure u validate!'
         3. if valid, boot as usual
         """
-        
+
         pass
 
     @authentified_and_authorised(action=ActionType.READ, system=SystemType.RUN_CONTROL)
@@ -227,12 +214,11 @@ class RunControl(abc.ABC, RunControlServicer):
 
         return response
 
-
     @authentified_and_authorised(action=ActionType.READ, system=SystemType.RUN_CONTROL)
-    def ps(self, request: ProcessQuery, context: ServicerContext) -> ProcessInstanceList:
-
+    def ps(
+        self, request: ProcessQuery, context: ServicerContext
+    ) -> ProcessInstanceList:
         self.log.info(f"{self.name} running ps")
-
 
         request.session = self.session_config.session_name
 
@@ -245,21 +231,18 @@ class RunControl(abc.ABC, RunControlServicer):
         results = pm_driver.ps(request)
 
         # self.log.info(f"returning")
-        
+
         return results
 
-
         # NOTE THAT SESSION SHOULD BE FILLED FORM THE RUN CONTROL
 
         # NOTE THAT SESSION SHOULD BE FILLED FORM THE RUN CONTROL
 
-        # call in the pmd 
-        # use the pmd to send a message to the pms 
-        # get the pms output 
+        # call in the pmd
+        # use the pmd to send a message to the pms
+        # get the pms output
 
         # that should be returned as a respoinse thing
 
-
         # log_pm_cmd(obj)
         # ps_impl(obj, query, long_format, width, fit)
-

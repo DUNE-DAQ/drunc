@@ -4,7 +4,7 @@ from druncschema.token_pb2 import Token
 
 from drunc.run_control.run_control_driver import RunControlDriver
 from drunc.utils.shell_utils import ShellContext, create_dummy_token_from_uname
-from drunc.utils.utils import resolve_localhost_to_hostname, get_logger
+from drunc.utils.utils import get_logger, resolve_localhost_to_hostname
 
 
 class RunControlContext(ShellContext):
