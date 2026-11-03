@@ -14,11 +14,16 @@ from drunc.process_manager.interface.cli_argument import (
 )
 from drunc.process_manager.interface.context import ProcessManagerContext
 from drunc.process_manager.process_manager_driver import ProcessManagerDriver
-from drunc.process_manager.utils import tabulate_process_instance_list
+from drunc.process_manager.utils import print_ps_table, tabulate_process_instance_list
 from drunc.unified_shell.context import UnifiedShellContext
-from drunc.utils.shell_utils import InterruptedCommand, format_table_width, log_pm_cmd
-from drunc.utils.shell_utils import wait as shell_wait
-from drunc.utils.utils import get_logger, log_echo, resolve_context_peer
+from drunc.utils.shell_utils import InterruptedCommand, log_pm_cmd
+from drunc.utils.utils import (
+    format_table_width,
+    get_logger,
+    log_echo,
+    resolve_context_peer,
+)
+from drunc.utils.utils import wait as shell_wait
 
 
 def _pm_driver(
@@ -284,7 +289,7 @@ def terminate(obj: ProcessManagerContext, width: int | None, fit: bool) -> None:
     table = tabulate_process_instance_list(
         result, "Terminated process", False, width=width
     )
-    table = format_table_width(obj, table, fit)
+    table = format_table_width(obj._console, table, fit)
     obj.print(table, soft_wrap=not fit)
     obj.delete_driver("controller")
 
@@ -382,7 +387,7 @@ def kill_impl(
     if not result:
         return
     table = tabulate_process_instance_list(result, "Killed process", False, width=width)
-    table = format_table_width(obj, table, fit)
+    table = format_table_width(obj._console, table, fit)
     obj.print(table, soft_wrap=not fit)
 
 
@@ -475,7 +480,7 @@ def flush_impl(
     table = tabulate_process_instance_list(
         result, "Flushed process", False, width=width
     )
-    table = format_table_width(obj, table, fit)
+    table = format_table_width(obj._console, table, fit)
     obj.print(table, soft_wrap=not fit)
 
 
@@ -741,33 +746,7 @@ def ps_impl(
     pm_driver = obj.get_pm_driver()
     results = pm_driver.ps(query)
 
-    # Inject session name if exits
-    ## Session name can come from either the process manager shell with --session
-    ## Or in the unified shell, where the session name is injected automatically
-
-    session_name = (
-        getattr(query, "session", None) or getattr(obj, "session_name", None) or ""
-    )
-    title = f"Processes running{f' in session {session_name}' if session_name else ''}"
-    # If there are processes running, tabulate them, otherwise log that there are no
-    # processes running.
-    if results.values:
-        table = tabulate_process_instance_list(
-            results,
-            title=title,
-            long=long_format,
-            width=width,
-        )
-
-        table = format_table_width(obj, table, fit)
-        obj.print(table, soft_wrap=not fit)
-    else:
-        if session_name:
-            log.info(
-                f"No processes running in session [green]{escape(session_name)}[/green]"
-            )
-        else:
-            log.info("No processes running")
+    print_ps_table(query, results, obj, log, long_format, width, fit)
 
 
 @click.command("echo")

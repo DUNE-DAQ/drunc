@@ -51,8 +51,12 @@ from drunc.utils.grpc_utils import (
     ServerUnreachable,
     unpack_any,
 )
-from drunc.utils.shell_utils import format_table_width
-from drunc.utils.utils import format_name_for_cli, get_logger, get_shared_rich_console
+from drunc.utils.utils import (
+    format_name_for_cli,
+    format_table_width,
+    get_logger,
+    get_shared_rich_console,
+)
 
 log = get_logger("controller.iface.shell_utils")
 is_interactive = sys.stdout.isatty() and os.environ.get("TERM") != "dumb"
@@ -1019,10 +1023,10 @@ def run_one_fsm_command(
 
     add_to_table(t, result)
 
-    execution_report_table = format_table_width(obj, t, False)
+    execution_report_table = format_table_width(obj._console, t, False)
     obj.print(execution_report_table, soft_wrap=True)
 
-    status_table = format_table_width(obj, render_status_table(obj), False)
+    status_table = format_table_width(obj._console, render_status_table(obj), False)
     obj.print(status_table, soft_wrap=True)
 
     obj.print_status_summary()

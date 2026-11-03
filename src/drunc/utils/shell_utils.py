@@ -3,14 +3,11 @@
 import abc
 import getpass
 from collections.abc import MutableMapping
-from time import sleep
 from typing import Protocol
 
 import click
 from druncschema.token_pb2 import Token
-from rich.console import Console, Group
-from rich.measure import Measurement
-from rich.table import Table
+from rich.console import Console
 
 from drunc.controller.controller_driver import ControllerDriver
 from drunc.exceptions import DruncShellException
@@ -310,75 +307,6 @@ class ShellContext:
             log.info(
                 f"Current FSM status is [green]{current_state}[/green]. Available transitions are [green]{'[/green], [green]'.join(available_actions)}[/green]. Available sequence commands are [green]{'[/green], [green]'.join(available_sequences)}[/green]."
             )
-
-
-def format_table_width(
-    ctx_or_console: ShellContext | Console,
-    table: Table | Group,
-    fit: bool,
-) -> Table | Group:
-    """Configure a table or group of tables for single-line row formatting.
-
-    Args:
-        ctx_or_console: Shell context or Rich Console instance.
-        table: Table or Group of tables to format.
-        fit: If True, constrains the table to the console width (using ellipsis truncation
-            to keep single lines). If False, expands the table to its full unconstrained
-            content width without truncating.
-
-    Returns:
-        The formatted table or group.
-    """
-    # Duck-type Console extraction
-    console = (
-        ctx_or_console._console
-        if hasattr(ctx_or_console, "_console")
-        else ctx_or_console
-    )
-
-    # Recursively format Group instances
-    if isinstance(table, Group):
-        for renderable in table.renderables:
-            if isinstance(renderable, (Table, Group)):
-                format_table_width(console, renderable, fit=fit)
-        return table
-
-    table.expand = False
-
-    # 1. Prevent cell line-splitting so each row is always strictly 1 visual line
-    for col in table.columns:
-        col.no_wrap = True
-
-    if fit:
-        # Constrain to the terminal window; columns will truncate with '…' instead of wrapping
-        table.width = console.width
-    else:
-        # Measure and set the true content width up to 10,000 characters
-        options = console.options.update(max_width=10000)
-        table.width = Measurement.get(console, options, table).maximum
-
-    return table
-
-
-def wait(log, sleep_time: int, progress_steps: int | None = None):
-    extra_info = "" if not progress_steps else f" with {progress_steps} steps printed"
-
-    log.info(
-        f"Command [green]wait[/green] running for {sleep_time} seconds{extra_info}."
-    )
-
-    if not progress_steps or progress_steps <= 0:
-        sleep(sleep_time)
-    else:
-        interval = sleep_time / max(progress_steps, 1)
-        elapsed = 0.0
-        while elapsed < sleep_time:
-            chunk = min(interval, sleep_time - elapsed)
-            sleep(chunk)
-            elapsed += chunk
-            log.info(f"Progress: {elapsed:g} / {sleep_time} seconds")
-
-    log.info(f"Command [green]wait[/green] ran for {sleep_time} seconds.")
 
 
 def log_shell_cmd(obj: ShellContext, driver: LoggableDriver):

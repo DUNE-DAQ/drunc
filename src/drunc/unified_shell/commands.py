@@ -29,8 +29,8 @@ from drunc.process_manager.interface.commands import (
 from drunc.process_manager.interface.context import ProcessManagerContext
 from drunc.process_manager.utils import tabulate_process_instance_list
 from drunc.unified_shell.context import UnifiedShellContext, UnifiedShellMode
-from drunc.utils.shell_utils import InterruptedCommand, format_table_width, log_pm_cmd
-from drunc.utils.utils import get_logger, log_echo
+from drunc.utils.shell_utils import InterruptedCommand, log_pm_cmd
+from drunc.utils.utils import format_table_width, get_logger, log_echo
 
 
 @click.command("boot")
@@ -356,7 +356,7 @@ def terminate(
         result, "Terminated process", False, width=width
     )
 
-    table = format_table_width(obj, table, fit=fit)
+    table = format_table_width(obj._console, table, fit=fit)
     obj.print(table, soft_wrap=not fit)
     obj.delete_driver("controller")
 
