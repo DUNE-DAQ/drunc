@@ -12,6 +12,8 @@ from drunc.utils.utils import (
     get_logger,
 )
 
+from druncschema.run_control_pb2 import ConnectToPMRequest, SessionConfiguration
+
 from druncschema.process_manager_pb2 import (
     BootRequest,
     LogLines,
@@ -116,7 +118,32 @@ class RunControlDriver:
         response = self.stub.ps(request, timeout=timeout)
         return response
 
-        
 
-        
+    def valid(self, timeout: int | float = 60) -> Response:
+        """Set the server's session configuration valid flag to true."""
+        request = Request(token=copy_token(self.token))
+        return self.stub.valid(request, timeout=timeout)
 
+    def set_session_config(
+        self,
+        configuration_file: str = "",
+        configuration_id: str = "",
+        session_name: str = "",
+        timeout: int | float = 60,
+    ) -> Response:
+        request = SessionConfiguration(
+            token=copy_token(self.token),
+            configuration_file=configuration_file,
+            configuration_id=configuration_id,
+            session_name=session_name,
+        )
+        return self.stub.set_session_config(request, timeout=timeout)
+
+
+    def print_session_config(
+        self,
+        timeout: int | float = 60,
+    ) -> SessionConfiguration:
+        request = Request(token=copy_token(self.token))
+        return self.stub.print_session_config(request, timeout=timeout)
+            

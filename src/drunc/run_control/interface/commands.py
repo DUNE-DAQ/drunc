@@ -15,6 +15,9 @@ from druncschema.process_manager_pb2 import (
     ProcessQuery,
 )
 
+from druncschema.request_response_pb2 import ResponseFlag
+from rich.table import Table
+
 from drunc.utils.shell_utils import log_rc_cmd
 
 from rich.markup import escape
@@ -238,3 +241,62 @@ def ps(
         else:
             log.info("No processes running")
 
+
+@click.command("set-session-config")
+@click.option("--configuration-file", default="", help="Configuration file.")
+@click.option("--configuration-id", default="", help="Configuration ID.")
+@click.option("--session-name", default="", help="Session name.")
+@click.pass_obj
+def set_session_config(
+    obj: RunControlContext,
+    configuration_file: str,
+    configuration_id: str,
+    session_name: str,
+) -> None:
+    """Update session settings; empty values leave existing settings unchanged."""
+    if not any((configuration_file, configuration_id, session_name)):
+        raise click.UsageError("Provide at least one configuration option.")
+
+    log_rc_cmd(obj)
+    response = obj.get_run_control_driver().set_session_config(
+        configuration_file=configuration_file,
+        configuration_id=configuration_id,
+        session_name=session_name,
+    )
+    if response.flag != ResponseFlag.EXECUTED_SUCCESSFULLY:
+        raise click.ClickException(
+            f"Configuration update failed: {ResponseFlag.Name(response.flag)}"
+        )
+
+    obj.print("Session configuration updated.")
+
+
+@click.command("print-session-config")
+@click.pass_obj
+def print_session_config(obj: RunControlContext) -> None:
+    """Display the server's current session configuration."""
+    log_rc_cmd(obj)
+    config = obj.get_run_control_driver().print_session_config()
+
+    table = Table(title="Session configuration")
+    table.add_column("Setting")
+    table.add_column("Value")
+    table.add_row("Configuration file", config.configuration_file)
+    table.add_row("Configuration ID", config.configuration_id)
+    table.add_row("Session name", config.session_name)
+    table.add_row("Valid", str(config.valid))
+    obj.print(table)
+
+
+@click.command("valid")
+@click.pass_obj
+def valid(obj: RunControlContext) -> None:
+    """Set the server's session configuration valid flag to true."""
+    log_rc_cmd(obj)
+    response = obj.get_run_control_driver().valid()
+    if response.flag != ResponseFlag.EXECUTED_SUCCESSFULLY:
+        raise click.ClickException(
+            f"Setting valid flag failed: {ResponseFlag.Name(response.flag)}"
+        )
+
+    obj.print("Session configuration valid flag set to True.")

@@ -5,7 +5,6 @@ from typing import cast
 import click
 import click_shell
 
-from drunc.run_control.interface.commands import echo, connect_to_pm, ps
 from drunc.utils.grpc_utils import ServerUnreachable
 from drunc.utils.utils import (
     CONTEXT_SETTINGS,
@@ -13,6 +12,15 @@ from drunc.utils.utils import (
     get_logger,
     get_root_logger,
     validate_command_facility,
+)
+
+from drunc.run_control.interface.commands import (
+    connect_to_pm,
+    echo,
+    print_session_config,
+    ps,
+    set_session_config,
+    valid,
 )
 
 
@@ -65,7 +73,14 @@ def rc_shell(ctx: click.core.Context, run_control_address: str):
 
     ctx.call_on_close(cleanup)
 
-    exposed_run_control_commands = [echo, connect_to_pm, ps]
+    exposed_run_control_commands = [
+        echo,
+        connect_to_pm,
+        ps,
+        set_session_config,
+        print_session_config,
+        valid,
+    ]
 
     # cast the command group
     command_group = cast(click.core.Group, ctx.command)

@@ -9,7 +9,7 @@ from collections.abc import MutableMapping
 from druncschema.description_pb2 import CommandDescription, Description
 from druncschema.request_response_pb2 import Request, ResponseFlag, Response
 from druncschema.run_control_pb2_grpc import RunControlServicer
-from druncschema.run_control_pb2 import ConnectToPMRequest
+from druncschema.run_control_pb2 import ConnectToPMRequest, SessionConfiguration
 from grpc import ServicerContext
 
 from drunc.authoriser.configuration import DummyAuthoriserConfHandler
@@ -29,6 +29,17 @@ from druncschema.process_manager_pb2 import (
     ProcessRestriction,
 )
 
+from dataclasses import asdict, dataclass, fields
+
+@dataclass
+class SessionConfig:
+    configuration_file: str = ""
+    configuration_id: str = ""
+    session_name: str = ""
+    valid: bool = False
+
+
+
 class RunControl(abc.ABC, RunControlServicer):
     rc_type = "Hehehehe"
 
@@ -39,9 +50,9 @@ class RunControl(abc.ABC, RunControlServicer):
 
         # A whole lot of configuration happpening here! We should dataclass this awayy later but for now.. fine
         self.address_pm = None
-        self.configuration_file = None
-        self.configuration_id = None
-        self.session_name = "emir-test"
+        
+        self.session_config = SessionConfig()
+        
         self.override_logs = True
         self.drivers: MutableMapping[str, object] = {}
 
@@ -58,7 +69,63 @@ class RunControl(abc.ABC, RunControlServicer):
                 help="Describe self (return a list of commands, the type of endpoint, the name and session).",
                 return_type="description_pb2.Description",
             ),
+            CommandDescription(
+                name="valid",
+                data_type=["request_response_pb2.Request"],
+                help="Set the session configuration valid flag to true.",
+                return_type="request_response_pb2.Response",
+            ),
         ]
+
+
+    def set_session_config(
+        self,
+        config: SessionConfiguration,
+        context: ServicerContext,
+    ) -> Response:
+        self.session_config.valid = False
+        
+        for field in fields(self.session_config):
+            if field.name == "valid":
+                continue
+            value = getattr(config, field.name)
+            if value:
+                setattr(self.session_config, field.name, value)
+
+        return Response(
+            name=self.name,
+            token=config.token,
+            flag=ResponseFlag.EXECUTED_SUCCESSFULLY,
+        )
+
+
+    @authentified_and_authorised(
+        action=ActionType.READ,
+        system=SystemType.RUN_CONTROL,
+    )
+    def print_session_config(
+        self,
+        request: Request,
+        context: ServicerContext,
+    ) -> SessionConfiguration:
+        """Return the current session configuration."""
+        return SessionConfiguration(
+            token=request.token,
+            **asdict(self.session_config),
+        )
+
+    @authentified_and_authorised(
+        action=ActionType.UPDATE,
+        system=SystemType.RUN_CONTROL,
+    )
+    def valid(self, request: Request, context: ServicerContext) -> Response:
+        """Set the session configuration valid flag to true."""
+        self.session_config.valid = True
+        return Response(
+            name=self.name,
+            token=request.token,
+            flag=ResponseFlag.EXECUTED_SUCCESSFULLY,
+        )
 
     def send_log(
         self,
@@ -103,6 +170,17 @@ class RunControl(abc.ABC, RunControlServicer):
         )
 
         return response
+
+
+    def boot():
+        # workflow:
+        """
+        1. add a 'valid' in the dataclass
+        2. in boot, check if valid is valid. if not, exit and say 'make sure u validate!'
+        3. if valid, boot as usual
+        """
+        
+        pass
 
     @authentified_and_authorised(action=ActionType.READ, system=SystemType.RUN_CONTROL)
     def connect_to_pm(
@@ -156,17 +234,17 @@ class RunControl(abc.ABC, RunControlServicer):
         self.log.info(f"{self.name} running ps")
 
 
-        request.session = self.session_name
+        request.session = self.session_config.session_name
 
         # need checks to see if the driver exists
 
-        self.log.info(f"getting driver")
+        # self.log.info(f"getting driver")
         pm_driver = self.drivers["process_manager"]
 
-        self.log.info(f"Sending request")
+        # self.log.info(f"Sending request")
         results = pm_driver.ps(request)
 
-        self.log.info(f"returning")
+        # self.log.info(f"returning")
         
         return results
 
@@ -184,5 +262,4 @@ class RunControl(abc.ABC, RunControlServicer):
 
         # log_pm_cmd(obj)
         # ps_impl(obj, query, long_format, width, fit)
-
 
