@@ -31,7 +31,7 @@ class SessionConfig:
 
 
 class RunControl(abc.ABC, RunControlServicer):
-    rc_type = "Hehehehe"
+    rc_type = "run_control"
 
     def __init__(self):
         # TODO: This needs to contain the configuration name
@@ -251,5 +251,11 @@ class RunControl(abc.ABC, RunControlServicer):
                 flag=ResponseFlag.NOT_EXECUTED_NOT_READY,
             )
         pm_driver = self.drivers["process_manager"]
+
+        # Will need cleaning later
+        args = f" with request {request}" if request else ""
+        msg = f"{getpass.getuser()} sent ps{args} via {self.rc_type}"
+        pm_driver.send_log(msg)
+
         results = pm_driver.ps(request)
         return results
