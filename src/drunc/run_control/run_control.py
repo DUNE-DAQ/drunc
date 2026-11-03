@@ -37,12 +37,8 @@ class RunControl(abc.ABC, RunControlServicer):
         # TODO: This needs to contain the configuration name
         self.log = get_logger("run_control.CONFIGURATION_NAME_run_control")
         self.name = "run_control"  # TODO Skeleton: needs to update
-
-        # A whole lot of configuration happpening here! We should dataclass this awayy later but for now.. fine
         self.address_pm = None
-
         self.session_config = SessionConfig()
-
         self.override_logs = True
         self.drivers: MutableMapping[str, object] = {}
 
@@ -55,14 +51,44 @@ class RunControl(abc.ABC, RunControlServicer):
         self.commands = [
             CommandDescription(
                 name="describe",
-                data_type=["None"],
-                help="Describe self (return a list of commands, the type of endpoint, the name and session).",
+                data_type=["request_response_pb2.Request"],
+                help="Describe the server and its supported commands.",
                 return_type="description_pb2.Description",
+            ),
+            CommandDescription(
+                name="send_log",
+                data_type=["common_pb2.SendLogRequest"],
+                help="Log a message on the server.",
+                return_type="common_pb2.SendLogResponse",
+            ),
+            CommandDescription(
+                name="connect_to_pm",
+                data_type=["run_control_pb2.ConnectToPMRequest"],
+                help="Connect Run Control to a process manager.",
+                return_type="request_response_pb2.Response",
+            ),
+            CommandDescription(
+                name="ps",
+                data_type=["process_manager_pb2.ProcessQuery"],
+                help="List processes matching the query within the configured session.",
+                return_type="process_manager_pb2.ProcessInstanceList",
+            ),
+            CommandDescription(
+                name="set_session_config",
+                data_type=["run_control_pb2.SessionConfiguration"],
+                help="Update non-empty session settings and reset the valid flag.",
+                return_type="request_response_pb2.Response",
+            ),
+            CommandDescription(
+                name="print_session_config",
+                data_type=["request_response_pb2.Request"],
+                help="Return the current session configuration and valid flag.",
+                return_type="run_control_pb2.SessionConfiguration",
             ),
             CommandDescription(
                 name="valid",
                 data_type=["request_response_pb2.Request"],
-                help="Set the session configuration valid flag to true.",
+                help="Set the session configuration valid flag to true without validation.",
                 return_type="request_response_pb2.Response",
             ),
         ]
@@ -177,13 +203,10 @@ class RunControl(abc.ABC, RunControlServicer):
         self.log.info("PM address received: %s", address_raw)
 
         address_raw: ParseResult = urlparse(address_raw)
-
         address_raw = str(address_raw.netloc) if address_raw.netloc is not None else ""
         address_raw = resolve_localhost_to_hostname(address_raw)
 
         self.address_pm = address_raw
-
-        self.log.info(f"{address_raw=}")
 
         from drunc.process_manager.process_manager_driver import (
             ProcessManagerDriver,
@@ -194,10 +217,9 @@ class RunControl(abc.ABC, RunControlServicer):
             request.token,
         )
 
-        self.log.info("made process manager driver")
+        self.log.debug("made process manager driver")
 
         # check if describe works
-
         pm_type = self.drivers["process_manager"].describe().type
         self.log.info(f"PM connected, type: {pm_type}")
 
@@ -211,7 +233,6 @@ class RunControl(abc.ABC, RunControlServicer):
             flag=ResponseFlag.EXECUTED_SUCCESSFULLY,
             token=None,
         )
-
         return response
 
     @authentified_and_authorised(action=ActionType.READ, system=SystemType.RUN_CONTROL)
@@ -222,27 +243,13 @@ class RunControl(abc.ABC, RunControlServicer):
 
         request.session = self.session_config.session_name
 
-        # need checks to see if the driver exists
-
-        # self.log.info(f"getting driver")
+        if "process_manager" not in self.drivers:
+            self.log.error("Cannot list processes: process manager is not connected")
+            return ProcessInstanceList(
+                name=self.name,
+                token=request.token,
+                flag=ResponseFlag.NOT_EXECUTED_NOT_READY,
+            )
         pm_driver = self.drivers["process_manager"]
-
-        # self.log.info(f"Sending request")
         results = pm_driver.ps(request)
-
-        # self.log.info(f"returning")
-
         return results
-
-        # NOTE THAT SESSION SHOULD BE FILLED FORM THE RUN CONTROL
-
-        # NOTE THAT SESSION SHOULD BE FILLED FORM THE RUN CONTROL
-
-        # call in the pmd
-        # use the pmd to send a message to the pms
-        # get the pms output
-
-        # that should be returned as a respoinse thing
-
-        # log_pm_cmd(obj)
-        # ps_impl(obj, query, long_format, width, fit)
