@@ -128,6 +128,9 @@ def get_detector_name(configuration) -> str:
 
 
 def get_segment_lookup_timeout(segment_conf, base_timeout=60):
+    """
+    Retrieve the name of a detector from the configuration.
+    """
     def recurse_segment(segment, recursion_count: int = 1) -> int:
         if segment.segments == []:
             return recursion_count
