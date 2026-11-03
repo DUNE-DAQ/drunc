@@ -4,6 +4,7 @@ from collections.abc import MutableMapping
 from dataclasses import asdict, dataclass, fields
 from urllib.parse import ParseResult, urlparse
 
+import conffwk
 from druncschema.authoriser_pb2 import ActionType, SystemType
 from druncschema.common_pb2 import LoggerTarget, SendLogRequest, SendLogResponse
 from druncschema.description_pb2 import CommandDescription, Description
@@ -14,7 +15,7 @@ from druncschema.process_manager_pb2 import (
 from druncschema.request_response_pb2 import Request, Response, ResponseFlag
 from druncschema.run_control_pb2 import ConnectToPMRequest, SessionConfiguration
 from druncschema.run_control_pb2_grpc import RunControlServicer
-from grpc import ServicerContext
+from grpc import ServicerContext, StatusCode
 
 from drunc.authoriser.configuration import DummyAuthoriserConfHandler
 from drunc.authoriser.decorators import authentified_and_authorised
@@ -107,6 +108,16 @@ class RunControl(abc.ABC, RunControlServicer):
             if value:
                 setattr(self.session_config, field.name, value)
 
+            # Cant believe we have to do this
+            if field.name == "configuration_file":
+                self.session_config.configuration_file = (
+                    lambda path: (
+                        path
+                        if path.startswith("oksconflibs:")
+                        else f"oksconflibs:{path}"
+                    )
+                )(self.session_config.configuration_file)
+
         return Response(
             name=self.name,
             token=config.token,
@@ -132,8 +143,37 @@ class RunControl(abc.ABC, RunControlServicer):
         action=ActionType.UPDATE,
         system=SystemType.RUN_CONTROL,
     )
-    def valid(self, request: Request, context: ServicerContext) -> Response:
+    def validate(self, request: Request, context: ServicerContext) -> Response:
         """Set the session configuration valid flag to true."""
+
+        self.session_config.valid = False
+
+        required_fields = ("configuration_file", "configuration_id", "session_name")
+        missing = [
+            name
+            for name in required_fields
+            if not getattr(self.session_config, name).strip()
+        ]
+
+        if missing:
+            message = f"Missing session configuration fields: {', '.join(missing)}"
+            self.log.error(message)
+            context.abort(StatusCode.INVALID_ARGUMENT, message)
+
+        try:
+            db = conffwk.Configuration(self.session_config.configuration_file)
+        except Exception as e:
+            message = f"Invalid file: {e}"
+            self.log.error(message)
+            context.abort(StatusCode.INVALID_ARGUMENT, message)
+
+        try:
+            db.get_dal(class_name="Session", uid=self.session_config.configuration_id)
+        except Exception as e:
+            message = f"Some invaild id: {e}"
+            self.log.error(message)
+            context.abort(StatusCode.INVALID_ARGUMENT, message)
+
         self.session_config.valid = True
         return Response(
             name=self.name,

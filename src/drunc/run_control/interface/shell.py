@@ -11,7 +11,7 @@ from drunc.run_control.interface.commands import (
     print_session_config,
     ps,
     set_session_config,
-    valid,
+    validate,
 )
 from drunc.utils.grpc_utils import ServerUnreachable
 from drunc.utils.utils import (
@@ -78,7 +78,7 @@ def rc_shell(ctx: click.core.Context, run_control_address: str):
         ps,
         set_session_config,
         print_session_config,
-        valid,
+        validate,
     ]
 
     # cast the command group
