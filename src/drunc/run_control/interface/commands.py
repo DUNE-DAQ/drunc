@@ -221,3 +221,6 @@ def validate(obj: RunControlContext) -> None:
         )
 
     obj.print("Session configuration valid flag set to True.")
+
+
+BOOT IS ADDED IN THE SERVER NOW ADD IT HERE AND TH8E SHELL AND THE DRUNSCHEMA AND THEN TEST ITTT

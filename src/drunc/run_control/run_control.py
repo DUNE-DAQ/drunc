@@ -13,7 +13,7 @@ from druncschema.process_manager_pb2 import (
     ProcessQuery,
 )
 from druncschema.request_response_pb2 import Request, Response, ResponseFlag
-from druncschema.run_control_pb2 import ConnectToPMRequest, SessionConfiguration
+from druncschema.run_control_pb2 import ConnectToPMRequest, SessionConfiguration, RCBootRequest
 from druncschema.run_control_pb2_grpc import RunControlServicer
 from grpc import ServicerContext, StatusCode
 
@@ -22,7 +22,8 @@ from drunc.authoriser.decorators import authentified_and_authorised
 from drunc.authoriser.dummy_authoriser import DummyAuthoriser
 from drunc.utils.utils import get_logger, log_echo, resolve_localhost_to_hostname
 
-
+from drunc.utils.shell_utils import InterruptedCommand
+from drunc.exceptions import DruncSetupException
 @dataclass
 class SessionConfig:
     configuration_file: str = ""
@@ -225,7 +226,7 @@ class RunControl(abc.ABC, RunControlServicer):
 
         return response
 
-    def boot():
+    def boot(self, breq: RCBootRequest, context: ServicerContext) -> Response:
         # workflow:
         """
         1. add a 'valid' in the dataclass
@@ -233,7 +234,79 @@ class RunControl(abc.ABC, RunControlServicer):
         3. if valid, boot as usual
         """
 
-        pass
+        if not self.session_config.valid:
+            context.abort(StatusCode.INVALID_ARGUMENT, "session config not valid! please validate")
+
+        try:
+            pm_driver = self.get_driver("process_manager")
+        except ValueError:
+            message = "Cannot boot: process manager is not connected"
+            self.log.error(message)
+            context.abort(StatusCode.INVALID_ARGUMENT, message)
+
+        try:
+            results = pm_driver.boot(
+                conf_file=self.session_config.configuration_file,
+                conf_id=self.session_config.configuration_id,
+                user=breq.user,
+                session_name=self.session_config.session_name,
+                log_level=breq.controller_log_level,
+                override_logs=breq.override_logs_boot,
+                sleep_between_app_boot=breq.sleep_between_app_boot,
+            )
+
+            if results is None:
+                self.log.error("Boot request did not return any results.")
+                return
+            for result in results:
+                expected_booted_processes += 1
+                self.log.debug(
+                    f"Booting process: {result.values[0].process_description.metadata.name}"
+                )
+                if not result:
+                    break
+                self.log.debug(
+                    f"'{result.values[0].process_description.metadata.name}' ({result.values[0].uuid.uuid}) started"
+                )
+
+        except InterruptedCommand:
+            self.log.warning("Booting interrupted")
+            return
+        except DruncSetupException as e:
+            self.log.error(e)
+            return
+
+        processes = pm_driver.ps(ProcessQuery(user=breq.user, session=self.session_config.session_name))
+        if not processes.values:
+            self.log.debug("No processes found after boot - stopping due to previous errors")
+            return
+
+        # TODO Skeleton: Will obviously need filling up as features pop in
+        response = Response(
+            name="unnamed",
+            flag=ResponseFlag.EXECUTED_SUCCESSFULLY,
+            token=None,
+        )
+        return response
+        
+
+        ## To be dealt with later!
+        # controller_address = pm_driver.controller_address
+        # if controller_address:
+        #     self.log.debug(f"Controller endpoint is '{controller_address}'")
+        #     self.log.debug("Connecting the unified_shell to the controller endpoint")
+        #     obj.set_controller_driver(controller_address)
+        #     controller_setup(obj, controller_address)
+        # else:
+        #     log.error("Could not understand where the controller is!")
+        #     return
+
+
+        ## Add a bunch of error handling herer
+            
+
+
+
 
     @authentified_and_authorised(action=ActionType.READ, system=SystemType.RUN_CONTROL)
     def connect_to_pm(
@@ -283,15 +356,13 @@ class RunControl(abc.ABC, RunControlServicer):
 
         request.session = self.session_config.session_name
 
-        if "process_manager" not in self.drivers:
-            self.log.error("Cannot list processes: process manager is not connected")
-            return ProcessInstanceList(
-                name=self.name,
-                token=request.token,
-                flag=ResponseFlag.NOT_EXECUTED_NOT_READY,
-            )
-        pm_driver = self.drivers["process_manager"]
-
+        try:
+            pm_driver = self.get_driver("process_manager")
+        except ValueError:
+            message = "Cannot list processes: process manager is not connected"
+            self.log.error(message)
+            context.abort(StatusCode.INVALID_ARGUMENT, message)
+            
         # Will need cleaning later
         args = f" with request {request}" if request else ""
         msg = f"{getpass.getuser()} sent ps{args} via {self.rc_type}"
@@ -299,3 +370,11 @@ class RunControl(abc.ABC, RunControlServicer):
 
         results = pm_driver.ps(request)
         return results
+
+    def get_driver(self, driver_key):
+        if driver_key not in self.drivers:
+            self.log.error(f"{driver_key} is not yet initialised. Please do so!")
+            raise ValueError("bad key")
+        return self.drivers[driver_key]
+
+
