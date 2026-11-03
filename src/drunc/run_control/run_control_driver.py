@@ -12,6 +12,17 @@ from drunc.utils.utils import (
     get_logger,
 )
 
+from druncschema.process_manager_pb2 import (
+    BootRequest,
+    LogLines,
+    LogRequest,
+    ProcessDescription,
+    ProcessInstanceList,
+    ProcessMetadata,
+    ProcessQuery,
+    ProcessRestriction,
+)
+
 
 class RunControlDriver:
     def __init__(self, address: str, token: Token):
@@ -93,3 +104,19 @@ class RunControlDriver:
         )
         response: Response = self.stub.connect_to_pm(request, timeout=timeout)
         return response
+
+
+
+    def ps(
+        self,
+        request: ProcessQuery,
+        timeout: int | float = 60,
+    ) -> ProcessInstanceList:
+        request.token.CopyFrom(self.token)
+        response = self.stub.ps(request, timeout=timeout)
+        return response
+
+        
+
+        
+
