@@ -209,12 +209,12 @@ def print_session_config(obj: RunControlContext) -> None:
     obj.print(table)
 
 
-@click.command("valid")
+@click.command("validate")
 @click.pass_obj
-def valid(obj: RunControlContext) -> None:
+def validate(obj: RunControlContext) -> None:
     """Set the server's session configuration valid flag to true."""
     log_rc_cmd(obj)
-    response = obj.get_run_control_driver().valid()
+    response = obj.get_run_control_driver().validate()
     if response.flag != ResponseFlag.EXECUTED_SUCCESSFULLY:
         raise click.ClickException(
             f"Setting valid flag failed: {ResponseFlag.Name(response.flag)}"

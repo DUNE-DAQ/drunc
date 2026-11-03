@@ -106,10 +106,10 @@ class RunControlDriver:
         response = self.stub.ps(request, timeout=timeout)
         return response
 
-    def valid(self, timeout: int | float = 60) -> Response:
+    def validate(self, timeout: int | float = 60) -> Response:
         """Set the server's session configuration valid flag to true."""
         request = Request(token=copy_token(self.token))
-        return self.stub.valid(request, timeout=timeout)
+        return self.stub.validate(request, timeout=timeout)
 
     def set_session_config(
         self,
