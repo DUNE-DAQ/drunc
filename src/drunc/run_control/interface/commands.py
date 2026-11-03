@@ -1,42 +1,27 @@
-import click
-from druncschema.common_pb2 import LoggerTarget
 from functools import update_wrapper
-from drunc.run_control.interface.context import RunControlContext
-from drunc.utils.utils import get_logger, log_echo
-
 from typing import cast
 
+import click
 from click.decorators import FC
-
-from drunc.process_manager.interface.cli_argument import add_query_options_no_session
-
+from druncschema.common_pb2 import LoggerTarget
 from druncschema.process_manager_pb2 import (
-    ProcessInstance,
     ProcessQuery,
 )
-
 from druncschema.request_response_pb2 import ResponseFlag
+from rich.markup import escape
 from rich.table import Table
 
-from drunc.utils.shell_utils import log_rc_cmd
-
-from rich.markup import escape
-
+from drunc.process_manager.interface.cli_argument import add_query_options_no_session
 from drunc.process_manager.interface.commands import (
-    flush_decorators,
-    flush_impl,
-    kill_decorators,
-    kill_impl,
-    logs_decorators,
-    logs_impl,
     ps_decorators,
-    ps_impl,
-    restart_impl,
 )
-
-from drunc.utils.shell_utils import InterruptedCommand, format_table_width, log_pm_cmd
-
 from drunc.process_manager.utils import tabulate_process_instance_list
+from drunc.run_control.interface.context import RunControlContext
+from drunc.utils.shell_utils import (
+    format_table_width,
+    log_rc_cmd,
+)
+from drunc.utils.utils import get_logger, log_echo
 
 
 def session_empty(f: FC) -> FC:
@@ -200,25 +185,20 @@ def ps(
     width: int | None,
     fit: bool,
 ) -> None:
-
     log_rc_cmd(obj)
-    log = get_logger("run_control.shell")    
-
+    log = get_logger("run_control.shell")
 
     log.info(f"Running ps with query {query}")
 
-
     # session is empty since its gonna be injected later on
-
 
     results = obj.get_run_control_driver().ps(query)
 
     log.info("received results")
 
-
     # Copy pasted from ps_impl!
     session_name = (
-    getattr(query, "session", None) or getattr(obj, "session_name", None) or ""
+        getattr(query, "session", None) or getattr(obj, "session_name", None) or ""
     )
     title = f"Processes running{f' in session {session_name}' if session_name else ''}"
     # If there are processes running, tabulate them, otherwise log that there are no

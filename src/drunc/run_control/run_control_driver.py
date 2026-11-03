@@ -1,28 +1,18 @@
 import grpc
 from druncschema.common_pb2 import LoggerTarget, SendLogRequest, SendLogResponse
 from druncschema.description_pb2 import Description
+from druncschema.process_manager_pb2 import (
+    ProcessInstanceList,
+    ProcessQuery,
+)
 from druncschema.request_response_pb2 import Request, Response
+from druncschema.run_control_pb2 import ConnectToPMRequest, SessionConfiguration
 from druncschema.run_control_pb2_grpc import RunControlStub
 from druncschema.token_pb2 import Token
-from druncschema.generic_pb2 import string_msg
-from druncschema.run_control_pb2 import ConnectToPMRequest
 
-from drunc.utils.grpc_utils import RichErrorClientInterceptor, copy_token, pack_to_any
+from drunc.utils.grpc_utils import RichErrorClientInterceptor, copy_token
 from drunc.utils.utils import (
     get_logger,
-)
-
-from druncschema.run_control_pb2 import ConnectToPMRequest, SessionConfiguration
-
-from druncschema.process_manager_pb2 import (
-    BootRequest,
-    LogLines,
-    LogRequest,
-    ProcessDescription,
-    ProcessInstanceList,
-    ProcessMetadata,
-    ProcessQuery,
-    ProcessRestriction,
 )
 
 
@@ -107,8 +97,6 @@ class RunControlDriver:
         response: Response = self.stub.connect_to_pm(request, timeout=timeout)
         return response
 
-
-
     def ps(
         self,
         request: ProcessQuery,
@@ -117,7 +105,6 @@ class RunControlDriver:
         request.token.CopyFrom(self.token)
         response = self.stub.ps(request, timeout=timeout)
         return response
-
 
     def valid(self, timeout: int | float = 60) -> Response:
         """Set the server's session configuration valid flag to true."""
@@ -139,11 +126,9 @@ class RunControlDriver:
         )
         return self.stub.set_session_config(request, timeout=timeout)
 
-
     def print_session_config(
         self,
         timeout: int | float = 60,
     ) -> SessionConfiguration:
         request = Request(token=copy_token(self.token))
         return self.stub.print_session_config(request, timeout=timeout)
-            

@@ -1,20 +1,11 @@
 from __future__ import annotations
 
-import getpass
-import conffwk
-
 import concurrent
 import signal
 import types
 from collections.abc import Callable
 from multiprocessing.sharedctypes import Synchronized
 from multiprocessing.synchronize import Event
-
-from drunc.utils.grpc_utils import ServerUnreachable
-
-import sys
-
-from urllib.parse import ParseResult, urlparse
 
 import click
 import grpc
@@ -31,15 +22,6 @@ from drunc.utils.utils import (
     get_logger,
     get_root_logger,
     resolve_localhost_and_127_ip_to_network_ip,
-)
-
-from drunc.process_manager.utils import get_pm_type_from_name, validate_k8s_session_name
-
-from drunc.process_manager.configuration import (
-    ProcessManagerRunningMode,
-    ProcessManagerTypes,
-    get_process_manager_configuration,
-    validate_pm_config,
 )
 
 _cleanup_coroutines: list[Callable[[], None]] = []
@@ -163,9 +145,6 @@ def rc_cli(
 
     ctx.obj.log.info("HELLO WORLD")
 
-
-
-
     # rc_cli_logger = get_logger(logger_name="RC_CLI_LOGGER", rich_handler=True)
 
     ### You will need to get the pprocess manager configuration first. Also note! We must be able to support the run control service to connect tto a process manager service!
@@ -254,10 +233,5 @@ def rc_cli(
     # There is a K8s validation step here first
 
     # pm_conf = get_process_manager_configuration(pm_conf) #import the definition and see where pm_conf can even come from
-
-
-
-
-
 
     run_rc(rc_address=f"0.0.0.0:{rc_port}")
