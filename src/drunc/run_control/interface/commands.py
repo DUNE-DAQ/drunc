@@ -8,17 +8,15 @@ from druncschema.process_manager_pb2 import (
     ProcessQuery,
 )
 from druncschema.request_response_pb2 import ResponseFlag
-from rich.markup import escape
 from rich.table import Table
 
 from drunc.process_manager.interface.cli_argument import add_query_options_no_session
 from drunc.process_manager.interface.commands import (
     ps_decorators,
 )
-from drunc.process_manager.utils import tabulate_process_instance_list
+from drunc.process_manager.utils import print_ps_table
 from drunc.run_control.interface.context import RunControlContext
 from drunc.utils.shell_utils import (
-    format_table_width,
     log_rc_cmd,
 )
 from drunc.utils.utils import get_logger, log_echo
@@ -160,33 +158,9 @@ def ps(
     log.info(f"Running ps with query {query}")
 
     results = obj.get_run_control_driver().ps(query)
-
     log.info("received results")
 
-    # Copy pasted from ps_impl!
-    session_name = (
-        getattr(query, "session", None) or getattr(obj, "session_name", None) or ""
-    )
-    title = f"Processes running{f' in session {session_name}' if session_name else ''}"
-    # If there are processes running, tabulate them, otherwise log that there are no
-    # processes running.
-    if results.values:
-        table = tabulate_process_instance_list(
-            results,
-            title=title,
-            long=long_format,
-            width=width,
-        )
-
-        table = format_table_width(obj, table, fit)
-        obj.print(table, soft_wrap=not fit)
-    else:
-        if session_name:
-            log.info(
-                f"No processes running in session [green]{escape(session_name)}[/green]"
-            )
-        else:
-            log.info("No processes running")
+    print_ps_table(query, results, obj, log, long_format, width, fit)
 
 
 @click.command("set-session-config")

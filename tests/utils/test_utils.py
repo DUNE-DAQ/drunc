@@ -1,3 +1,4 @@
+import logging
 import multiprocessing
 import os
 import socket
@@ -6,12 +7,16 @@ import time
 import click
 import psutil
 import pytest
+from rich.console import Console, Group
+from rich.measure import Measurement
+from rich.table import Table
 
 from drunc.exceptions import DruncSetupException
 from drunc.utils.utils import (
     ControlType,
     IncorrectAddress,
     expand_path,
+    format_table_width,
     get_control_type_and_uri_from_cli,
     get_new_port,
     get_random_string,
@@ -24,7 +29,66 @@ from drunc.utils.utils import (
     resolve_localhost_and_127_ip_to_network_ip,
     resolve_localhost_to_hostname,
     validate_command_facility,
+    wait,
 )
+
+
+@pytest.mark.parametrize("fit", [True, False])
+def test_format_table_width(fit):
+    console = Console(width=20)
+    table = Table(expand=True)
+    table.add_column("Process")
+    table.add_row("a-process-name-longer-than-the-console")
+
+    assert format_table_width(console, table, fit) is table
+    assert all(column.no_wrap for column in table.columns)
+    expected_width = (
+        console.width
+        if fit
+        else Measurement.get(
+            console, console.options.update(max_width=10000), table
+        ).maximum
+    )
+    assert table.width == expected_width
+    if not fit:
+        assert table.width > console.width
+
+
+def test_format_table_width_nested_group():
+    console = Console(width=30)
+    first = Table("First", expand=True)
+    second = Table("Second", expand=True)
+    group = Group(first, Group("unchanged text", second))
+
+    assert format_table_width(console, group, fit=True) is group
+    for table in (first, second):
+        assert table.width == console.width
+        assert all(column.no_wrap for column in table.columns)
+
+
+@pytest.mark.parametrize("progress_steps", [None, 0, -1, 3])
+def test_wait(monkeypatch, caplog, progress_steps):
+    sleep_calls = []
+    monkeypatch.setattr("drunc.utils.utils.time.sleep", sleep_calls.append)
+    logger = logging.getLogger("test_wait")
+
+    with caplog.at_level(logging.INFO, logger=logger.name):
+        wait(logger, 5, progress_steps)
+
+    assert sum(sleep_calls) == pytest.approx(5)
+    progress = [
+        record.message for record in caplog.records if "Progress:" in record.message
+    ]
+    if progress_steps == 3:
+        assert len(sleep_calls) == 3
+        assert len(progress) == 3
+        assert progress[-1] == "Progress: 5 / 5 seconds"
+    else:
+        assert sleep_calls == [5]
+        assert not progress
+    assert (
+        caplog.records[-1].message == "Command [green]wait[/green] ran for 5 seconds."
+    )
 
 
 def test_get_random_string():

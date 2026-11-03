@@ -51,8 +51,12 @@ from drunc.utils.grpc_utils import (
     ServerUnreachable,
     unpack_any,
 )
-from drunc.utils.shell_utils import format_table_width
-from drunc.utils.utils import format_name_for_cli, get_logger, get_shared_rich_console
+from drunc.utils.utils import (
+    format_name_for_cli,
+    format_table_width,
+    get_logger,
+    get_shared_rich_console,
+)
 
 log = get_logger("controller.iface.shell_utils")
 
@@ -673,6 +677,7 @@ def tree_prefix(i: int, n: int) -> str:
     else:
         return next
 
+
 def parse_bool(value: bool | str) -> bool:
     """Convert a boolean string to a bool.
 
@@ -729,9 +734,7 @@ def validate_and_format_fsm_arguments(
     # Strip out any arguments that are None, as they are considered not passed, and will
     # be set to default values if they exist, or raise an error if they are mandatory
     # without default value
-    arguments = {
-        k: v for k, v in (arguments or {}).items() if v is not None
-    }
+    arguments = {k: v for k, v in (arguments or {}).items() if v is not None}
 
     # Iterate over the command's argument descriptions, validate the passed arguments,
     # and format them to be sent to the controller
@@ -1000,10 +1003,10 @@ def run_one_fsm_command(
 
     add_to_table(t, result)
 
-    execution_report_table = format_table_width(obj, t, False)
+    execution_report_table = format_table_width(obj._console, t, False)
     obj.print(execution_report_table, soft_wrap=True)
 
-    status_table = format_table_width(obj, render_status_table(obj), False)
+    status_table = format_table_width(obj._console, render_status_table(obj), False)
     obj.print(status_table, soft_wrap=True)
 
     obj.print_status_summary()
