@@ -18,6 +18,17 @@ from drunc.authoriser.dummy_authoriser import DummyAuthoriser
 from drunc.utils.utils import get_logger, log_echo, resolve_localhost_to_hostname
 
 
+from druncschema.process_manager_pb2 import (
+    BootRequest,
+    LogLines,
+    LogRequest,
+    ProcessDescription,
+    ProcessInstanceList,
+    ProcessMetadata,
+    ProcessQuery,
+    ProcessRestriction,
+)
+
 class RunControl(abc.ABC, RunControlServicer):
     rc_type = "Hehehehe"
 
@@ -30,7 +41,7 @@ class RunControl(abc.ABC, RunControlServicer):
         self.address_pm = None
         self.configuration_file = None
         self.configuration_id = None
-        self.session_name = None
+        self.session_name = "emir-test"
         self.override_logs = True
         self.drivers: MutableMapping[str, object] = {}
 
@@ -137,3 +148,41 @@ class RunControl(abc.ABC, RunControlServicer):
         )
 
         return response
+
+
+    @authentified_and_authorised(action=ActionType.READ, system=SystemType.RUN_CONTROL)
+    def ps(self, request: ProcessQuery, context: ServicerContext) -> ProcessInstanceList:
+
+        self.log.info(f"{self.name} running ps")
+
+
+        request.session = self.session_name
+
+        # need checks to see if the driver exists
+
+        self.log.info(f"getting driver")
+        pm_driver = self.drivers["process_manager"]
+
+        self.log.info(f"Sending request")
+        results = pm_driver.ps(request)
+
+        self.log.info(f"returning")
+        
+        return results
+
+
+        # NOTE THAT SESSION SHOULD BE FILLED FORM THE RUN CONTROL
+
+        # NOTE THAT SESSION SHOULD BE FILLED FORM THE RUN CONTROL
+
+        # call in the pmd 
+        # use the pmd to send a message to the pms 
+        # get the pms output 
+
+        # that should be returned as a respoinse thing
+
+
+        # log_pm_cmd(obj)
+        # ps_impl(obj, query, long_format, width, fit)
+
+

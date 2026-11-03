@@ -14,6 +14,7 @@ from rich.table import Table
 from drunc.controller.controller_driver import ControllerDriver
 from drunc.exceptions import DruncShellException
 from drunc.process_manager.process_manager_driver import ProcessManagerDriver
+from drunc.run_control.run_control_driver import RunControlDriver
 from drunc.utils.utils import get_logger
 
 
@@ -213,6 +214,26 @@ class ShellContext:
 
         return ctrld
 
+    def get_run_control_driver(self, quiet_fail: bool = False) -> RunControlDriver:
+        """
+        Get the root controller driver from the context.
+
+        Args:
+            quiet_fail: If True, return None on failure instead of raising an exception.
+
+        Returns:
+            ControllerDriver: The process manager driver.
+
+        Raises:
+            RuntimeError: If the process manager driver is not initialized.
+        """
+        rcd = self.get_driver("run_control", quiet_fail=quiet_fail)
+
+        if not isinstance(rcd, RunControlDriver):
+            raise RuntimeError("RunControlDriver is not loaded!")
+
+        return rcd
+
     def has_driver(self, name: str) -> bool:
         """Check if a driver exists in the context.
 
@@ -355,7 +376,8 @@ def wait(log, sleep_time: int, progress_steps: int | None = None):
     log.info(f"Command [green]wait[/green] ran for {sleep_time} seconds.")
 
 
-def log_pm_cmd(obj: ShellContext) -> None:
+# We should obviously make a driver base class
+def log_shell_cmd(obj: ShellContext, driver: RunControlDriver | ProcessManagerDriver | ControllerDriver):
     """Log a process-manager shell command with only explicitly provided arguments.
 
     The current Click command context is inspected and only parameters whose source is
@@ -369,7 +391,6 @@ def log_pm_cmd(obj: ShellContext) -> None:
     Args:
         obj (ShellContext): Active shell context used to send the log message.
     """
-
     ctx_cmd = click.get_current_context(silent=True)
     cmd_name = ctx_cmd.command.name if ctx_cmd and ctx_cmd.command else None
     parms_dict: dict[str, str] = {}
@@ -386,6 +407,15 @@ def log_pm_cmd(obj: ShellContext) -> None:
 
     args = f" with arguments {parms_dict}" if parms_dict else ""
     session = f" for session {obj.session_name}" if hasattr(obj, "session_name") else ""
-    msg = f"{getpass.getuser()} sent {cmd_name}{args}{session} via {obj.get_shell_id()}"
+    msg = f"{getpass.getuser()} sent {cmd_name}{args}{session} via {obj.get_shell_id()}"    
+    driver.send_log(msg)
+    
+def log_pm_cmd(obj: ShellContext) -> None:
     pm_driver = obj.get_pm_driver()
-    pm_driver.send_log(msg)
+    log_shell_cmd(obj, pm_driver)
+
+def log_rc_cmd(obj:ShellContext) -> None:
+    """Above but its the RC"""
+    rc_driver = obj.get_run_control_driver()
+    log_shell_cmd(obj, rc_driver)
+
