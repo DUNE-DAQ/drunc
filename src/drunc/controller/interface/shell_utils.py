@@ -27,9 +27,15 @@ from druncschema.controller_pb2 import (
     StatusResponse,
 )
 from druncschema.description_pb2 import Description
-from druncschema.generic_pb2 import bool_msg, float_msg, int_msg, string_msg
+from druncschema.generic_pb2 import (
+    bool_msg,
+    float_msg,
+    int_msg,
+    ResponseError,
+    string_msg,
+)
 from druncschema.request_response_pb2 import ResponseFlag
-from google.protobuf import json_format
+from google.rpc import error_details_pb2
 from rich.console import Console, ConsoleOptions, Group, RenderResult
 from rich.measure import Measurement
 from rich.progress import (
@@ -42,6 +48,7 @@ from rich.progress import (
 )
 from rich.table import Table
 from rich.text import Text
+from rich.tree import Tree
 
 from drunc.controller.interface.context import ControllerContext
 from drunc.controller.utils import get_all_apps_with_named_substate
@@ -68,7 +75,17 @@ class FSMExecutionResponseLike(Protocol):
     name: str
     flag: int
     fsm_flag: int
+    error: ResponseError
     children: Sequence["FSMExecutionResponseLike"]
+
+
+class FSMCommandFailure(DruncShellException, click.ClickException):
+    def __init__(self, message: str, logger) -> None:
+        self.logger = logger
+        super().__init__(message)
+
+    def show(self, file=None) -> None:
+        self.logger.error(f"[red]{self.format_message()}[/red]")
 
 
 def match_children(
@@ -958,62 +975,58 @@ def run_one_fsm_command(
     if not result:
         return
 
-    t = Table(title=f"{transition_name} execution report")
-    t.add_column("Name")
-    t.add_column("Command execution")
-    t.add_column("FSM transition")
+    report = Tree(Text(f"{transition_name} execution report", style="bold"))
+    failed_nodes: list[str] = []
 
-    def bool_to_success(
-        flag_message: int, message_type: type[ResponseFlag] | type[FSMResponseFlag]
-    ) -> str:
-        flag = message_type.Name(flag_message).replace("_", " ").title()
-        success = False
-
-        if (
-            message_type == FSMResponseFlag
-            and flag_message == FSMResponseFlag.FSM_EXECUTED_SUCCESSFULLY
-        ):
-            success = True
-        if (
-            message_type == ResponseFlag
-            and flag_message == ResponseFlag.EXECUTED_SUCCESSFULLY
-        ):
-            success = True
-
-        return f"[dark_green]{flag}[/]" if success else f"[red]{flag}[/]"
-
-    def add_to_table(
-        table: Table, response: FSMExecutionResponseLike, prefix: str = "", parent_path: str = ""
+    def add_response(
+        branch: Tree, response: FSMExecutionResponseLike, parent_path: str = ""
     ) -> None:
-        table.add_row(
-            prefix + response.name,
-            bool_to_success(response.flag, message_type=ResponseFlag),
-            bool_to_success(response.fsm_flag, message_type=FSMResponseFlag),
+        successful = (
+            response.flag == ResponseFlag.EXECUTED_SUCCESSFULLY
+            and response.fsm_flag == FSMResponseFlag.FSM_EXECUTED_SUCCESSFULLY
         )
-
         node_path = f"{parent_path}/{response.name}" if parent_path else response.name
+        if not successful:
+            failed_nodes.append(node_path)
 
-        if response.HasField("error"):
-            log.error("%s: %s", node_path, response.error.message)
-            for detail in response.error.details:
-                try:
-                    rendered_detail = json_format.MessageToJson(detail)
-                except (TypeError, ValueError):
-                    rendered_detail = f"Unparsed rich detail: {detail.type_url}"
-                log.error("%s rich detail: %s", node_path, rendered_detail)
+        if response.flag != ResponseFlag.EXECUTED_SUCCESSFULLY:
+            status = ResponseFlag.Name(response.flag)
+        else:
+            status = FSMResponseFlag.Name(response.fsm_flag)
+            status = status.removeprefix("FSM_")
 
-        for child_response in sorted(response.children, key=lambda c: c.name):
-            add_to_table(table, child_response, "  " + prefix, node_path)
+        status = status.replace("_", " ").title()
 
-    add_to_table(t, result)
+        label = Text(response.name, style="bold")
+        label.append("  ")
+        label.append(status, style="green" if successful else "red")
+        error_message = ""
+        for detail in response.error.details:
+            if detail.Is(error_details_pb2.ErrorInfo.DESCRIPTOR):
+                error_info = unpack_any(detail, error_details_pb2.ErrorInfo)
+                if error_info.reason != "ChildCommandException":
+                    error_message = error_info.metadata.get("message", error_message)
+        error_message = error_message or response.error.message
+        if error_message:
+            label.append(f":  {error_message}", style="red")
 
-    execution_report_table = format_table_width(obj, t, False)
-    obj.print(execution_report_table, soft_wrap=True)
+        child_branch = branch.add(label)
+        for child in sorted(response.children, key=lambda child: child.name):
+            add_response(child_branch, child, node_path)
+
+    add_response(report, result)
 
     status_table = format_table_width(obj, render_status_table(obj), False)
     obj.print(status_table, soft_wrap=True)
 
     obj.print_status_summary()
+
+    if failed_nodes:
+        obj.print(report)
+        raise FSMCommandFailure(
+            f"FSM command '{transition_name}' failed on: {', '.join(failed_nodes)}",
+            logger=obj.log,
+        )
 
 
 def generate_fsm_command(ctx, transition: FSMCommandDescription, controller_name: str):

@@ -522,133 +522,56 @@ class Controller(ControllerServicer):
             if child.included or include_excluded_nodes
         ]
 
-
-    def _degrade_response(
-        self,
-        response_type: type[T],
-        child: ChildNode,
-        failure: ChildCommandException,
-    ) -> T:
-        """Convert a child failure into a normal typed response.
-
-        The returned response uses `DRUNC_EXCEPTION_THROWN` and stores the original 
-        child's error details. This allows responses to be returned without
-        aborting the RPC.
-
-        Args:
-            response_type: Protobuf response class.
-            child: Child node whose command failed.
-            failure: Non-terminal wrapper containing the child's error details.
-
-        Returns:
-            A response of `response_type` representing the child failure.
-        """
-        # write failure to the controllers log for debugging purposes
-        self.log.error(f"Child '{child.name}' failed: {failure}")
-
-        unexpected_failure = any(
-            isinstance(detail, error_details_pb2.ErrorInfo)
-            and detail.domain == "drunc"
-            and detail.reason == "UNEXPECTED_SERVER_ERROR"
-            for detail in failure.specialised_details
-        )
-
-        flag = (
-            ResponseFlag.UNHANDLED_EXCEPTION_THROWN
-            if unexpected_failure
-            else ResponseFlag.DRUNC_EXCEPTION_THROWN
-        )
-
-        return response_type(
-            token=None,
-            name=child.name,
-            flag=flag,
-            error=ResponseError(
-            message=str(failure),
-            details=[
-                pack_to_any(detail)
-                for detail in failure.rich_details
-                ],
-            ),
-        )
-
-
-    def _degrade_status_response(
-        self,
-        child: ChildNode,
-        failure: ChildCommandException,
-    ) -> StatusResponse:
-        """Convert a child failure into an error-state status response. Needed as StatusResponse
-        contains additional fields compared to the generic responses.
-
-        Args:
-            child: Child node whose status request failed.
-            failure: Non-terminal wrapper containing the child's error details.
-
-        Returns:
-            A `StatusResponse` marked as a DRUNC exception and reporting the
-            child as being in an error state.
-        """
-        response = self._degrade_response(StatusResponse, child, failure)
-        response.status.CopyFrom(
-            Status(
-                state="error",
-                sub_state="error",
-                in_error=True,
-                included=child.included,
+    def _populate_response_error(
+        self, response, error: Exception, command_name: str, *, log_extra=None
+    ) -> None:
+        """Populate common error fields without changing children or command state."""
+        if isinstance(error, DruncException):
+            self.log.error(f"Command '{command_name}' failed: {error}", extra=log_extra)
+            response.flag = ResponseFlag.DRUNC_EXCEPTION_THROWN
+            error_message = str(error)
+            error_details = error.rich_details
+        else:
+            self.log.exception(
+                f"Unexpected failure executing command '{command_name}'",
+                extra=log_extra,
+            )
+            response.flag = ResponseFlag.UNHANDLED_EXCEPTION_THROWN
+            error_message = (
+                f"Unexpected failure executing command '{command_name}' on "
+                f"'{self.name}'; check controller logs"
+            )
+            error_details = [
+                error_details_pb2.ErrorInfo(
+                    reason="UNEXPECTED_SERVER_ERROR",
+                    domain="drunc",
+                    metadata={"message": error_message},
+                )
+            ]
+        response.error.CopyFrom(
+            ResponseError(
+                message=error_message,
+                details=[pack_to_any(detail) for detail in error_details],
             )
         )
-        return response
 
-
-    def _degrade_fsm_response(
-        self,
-        child: ChildNode,
-        failure: ChildCommandException,
-        command_name: str,
-    ) -> ExecuteFSMCommandResponse:
-        """Convert a child RPC failure into a failed FSM command response.
-
-        Args:
-            child: Child node whose FSM command failed.
-            failure: Non-terminal wrapper containing the child's error details.
-            command_name: Name of the FSM command that was executed.
-
-        Returns:
-            An `ExecuteFSMCommandResponse` with `FSM_FAILED` and the original
-            child's structured error details.
-        """
-        response = self._degrade_response(
-            ExecuteFSMCommandResponse,
-            child,
-            failure,
+    @staticmethod
+    def _fsm_tree_failed(
+        response: ExecuteFSMCommandResponse | ExecuteExpertCommandResponse,
+    ) -> bool:
+        """Check command flags throughout a response's subtree."""
+        return (
+            response.flag != ResponseFlag.EXECUTED_SUCCESSFULLY
+            or response.fsm_flag != FSMResponseFlag.FSM_EXECUTED_SUCCESSFULLY
+            or any(Controller._fsm_tree_failed(child) for child in response.children)
         )
-        response.command_name = command_name
-        response.fsm_flag = FSMResponseFlag.FSM_FAILED
-        return response
 
-
-    def _degrade_expert_fsm_command_response(
-            self,
-            child: ChildNode,
-            failure: ChildCommandException,
-        ) -> ExecuteExpertCommandResponse:
-        """Convert a child RPC failure into a failed expert command response."""
-        response = self._degrade_response(
-            ExecuteExpertCommandResponse,
-            child,
-            failure,
-        )
-        response.fsm_flag = FSMResponseFlag.FSM_FAILED
-        return response
-
-    
     @staticmethod
     def propagate_concurrently(
         child_callable: Callable[[ChildNode, str], T],
         child_list: list[tuple[ChildNode, str]],
         indices: list[int] | None = None,
-        degrade_response: Callable[[ChildNode, ChildCommandException], T] | None = None,
+        failure_response: Callable[[ChildNode], T] | None = None,
     ) -> list[T]:
         """Propagate commands concurrently to a list of children.
             maintaining the ordering of the children in the response list.
@@ -659,7 +582,10 @@ class Controller(ControllerServicer):
             child_list: List of (node, target) for each addressed child.
             indices: Optional list of indices selecting which entries from
                 ``child_list`` to execute.
-            degrade_response: Callable[[ChildNode, ChildCommandException], T] | None: Optional callable to convert a child failure into a response.
+            failure_response: Create a failure response for each child when an error occurs.
+                Successful responses are unchanged.
+                Timeouts and unexpected exceptions become error responses when
+                a factory is supplied.
 
         Returns:
             List of responses from each child.
@@ -667,14 +593,44 @@ class Controller(ControllerServicer):
 
         def safe_call(child: ChildNode, target: str) -> T:
             try:
-                return child_callable(child, target)
-            except ServerTimeout: # don't treat this is a regular child failure, just propagate it
-                raise
-            except (grpc.RpcError, DruncException) as error:
-                rpc_error: BaseException | None = None
-                if isinstance(error, (grpc.RpcError, ServerUnreachable)):
+                return child_callable(child, target) # preserve the child's response
+            except Exception as error:
+                if not isinstance(error, (grpc.RpcError, DruncException)):
+                    if failure_response is None:
+                        raise
+
+                    log = get_logger("controller.core.propagate_concurrently")
+                    log.exception(f"Unexpected failure contacting child '{child.name}'")
+                    message = (
+                        f"Unexpected failure contacting child '{child.name}'; "
+                        "check controller logs"
+                    )
+                    response = failure_response(child)
+                    response.flag = ResponseFlag.UNHANDLED_EXCEPTION_THROWN
+                    response.error.CopyFrom(
+                        ResponseError(
+                            message=message,
+                            details=[
+                                pack_to_any(
+                                    error_details_pb2.ErrorInfo(
+                                        reason="UNEXPECTED_SERVER_ERROR",
+                                        domain="drunc",
+                                        metadata={
+                                            "child_name": child.name,
+                                            "message": message,
+                                        },
+                                    )
+                                )
+                            ],
+                        )
+                    )
+                    return response
+
+                if isinstance(error, ServerTimeout) and failure_response is None:
+                    raise
+                rpc_error: BaseException | None = error
+                if isinstance(error, ServerUnreachable):
                     # ServerUnreachable may wrap the original gRPC error
-                    rpc_error = error
                     while rpc_error is not None and not isinstance(
                         rpc_error, grpc.RpcError
                     ):
@@ -693,8 +649,6 @@ class Controller(ControllerServicer):
                     child_details = error.rich_details
                     child_code = code_pb2.Code.Name(error.grpc_error_code)
                     child_message = str(error)
-                else:
-                    raise
 
                 child_error = ChildCommandException(
                     child_name=child.name,
@@ -703,12 +657,36 @@ class Controller(ControllerServicer):
                     child_message=child_message,
                 )
 
-                if degrade_response is not None:
-                    return degrade_response(child, child_error)
+                # if no fallback response factory is provided, raise the original child error
+                if failure_response is None:
+                    raise child_error from error
 
-                # if no degradation propagate the wrapper and keep the original exception as for debugging.
-                raise child_error from error
-                
+                response = failure_response(child)
+
+                # Separate unexpected server errors from handled DRUNC exceptions.
+                unexpected_failure = any(
+                    isinstance(detail, error_details_pb2.ErrorInfo)
+                    and detail.domain == "drunc"
+                    and detail.reason == "UNEXPECTED_SERVER_ERROR"
+                    for detail in child_error.specialised_details
+                )
+                response.flag = (
+                    ResponseFlag.UNHANDLED_EXCEPTION_THROWN
+                    if unexpected_failure
+                    else ResponseFlag.DRUNC_EXCEPTION_THROWN
+                )
+                response.error.CopyFrom(
+                    ResponseError(
+                        message=str(child_error),
+                        details=[
+                            pack_to_any(detail) for detail in child_error.rich_details
+                        ],
+                    )
+                )
+                get_logger("controller.core.propagate_concurrently").error(
+                    str(child_error)
+                )
+                return response
 
         selected_child_list = (
             child_list if indices is None else [child_list[i] for i in indices]
@@ -797,56 +775,68 @@ class Controller(ControllerServicer):
 
         try:
             # Parse and validate target.
-            request.target = self.parse_target_string(request.target)
-        except ValueError:
-            response.flag = ResponseFlag.NOT_EXECUTED_BAD_REQUEST_FORMAT
-            return response
+            try:
+                request.target = self.parse_target_string(request.target)
+            except ValueError:
+                response.flag = ResponseFlag.NOT_EXECUTED_BAD_REQUEST_FORMAT
+                return response
 
-        # This node.
-        if request.target == self.name or request.execute_along_path:
-            status = get_status_message(self)
-            response.status.CopyFrom(status)
+            # This node.
+            if request.target == self.name or request.execute_along_path:
+                status = get_status_message(self)
+                response.status.CopyFrom(status)
 
-        # Children nodes (ignore exclusion).
-        child_list = self.address_target_path(
-            request.target,
-            request.execute_on_all_subsequent_children_in_path,
-            include_excluded_nodes=True,
-        )
-        connected_indices, disconnected_indices = self._partition_connected_children(
-            child_list,
-            operation_name="status",
-        )
-        child_responses = self.propagate_concurrently(
-            lambda child, target: child.status(
-                target,
-                request.execute_along_path,
+            # Children nodes (ignore exclusion).
+            child_list = self.address_target_path(
+                request.target,
                 request.execute_on_all_subsequent_children_in_path,
-            ),
-            child_list,
-            indices=connected_indices,
-            degrade_response=self._degrade_status_response, # convert child failure into a StatusResponse with error info
-
-        )
-        child_responses.extend(
-            [
-                StatusResponse(
-                    token=None,
-                    name=child_list[i][0].name,
+                include_excluded_nodes=True,
+            )
+            connected_indices, disconnected_indices = self._partition_connected_children(
+                child_list,
+                operation_name="status",
+            )
+            child_responses = self.propagate_concurrently(
+                lambda child, target: child.status(
+                    target,
+                    request.execute_along_path,
+                    request.execute_on_all_subsequent_children_in_path,
+                ),
+                child_list,
+                indices=connected_indices,
+                failure_response=lambda child: StatusResponse(
+                    name=child.name,
                     status=Status(
-                        state="disconnected",
-                        sub_state="disconnected",
-                        in_error=child_list[i][0].state.in_error(),
-                        included=child_list[i][0].included,
+                        state="error",
+                        sub_state="error",
+                        in_error=True,
+                        included=child.included,
                     ),
-                    flag=ResponseFlag.NOT_EXECUTED_NOT_READY,
-                )
-                for i in disconnected_indices
-            ]
-        )
-        response.children.extend(child_responses)
-
-        return response
+                ),
+            )
+            child_responses.extend(
+                [
+                    StatusResponse(
+                        token=None,
+                        name=child_list[i][0].name,
+                        status=Status(
+                            state="disconnected",
+                            sub_state="disconnected",
+                            in_error=child_list[i][0].state.in_error(),
+                            included=child_list[i][0].included,
+                        ),
+                        flag=ResponseFlag.NOT_EXECUTED_NOT_READY,
+                    )
+                    for i in disconnected_indices
+                ]
+            )
+            response.children.extend(child_responses)
+            return response
+        except grpc.RpcError:
+            raise
+        except Exception as error:
+            self._populate_response_error(response, error, "status")
+            return response
 
     @authentified_and_authorised(action=ActionType.READ, system=SystemType.CONTROLLER)
     @publish_command_time
@@ -896,12 +886,8 @@ class Controller(ControllerServicer):
             ),
             child_list,
             indices=connected_indices,
-            degrade_response=lambda child, failure: self._degrade_response(
-                DescribeResponse,
-                child,
-                failure,
-                )
-            )
+            failure_response=lambda child: DescribeResponse(name=child.name),
+        )
         
         child_responses.extend(
             [
@@ -980,12 +966,8 @@ class Controller(ControllerServicer):
             ),
             child_list,
             indices=connected_indices,
-            degrade_response=lambda child, failure: self._degrade_response(
-                DescribeFSMResponse,
-                child,
-                failure,
-                )
-            )
+            failure_response=lambda child: DescribeFSMResponse(name=child.name),
+        )
         child_responses.extend(
             [
                 DescribeFSMResponse(
@@ -1019,188 +1001,212 @@ class Controller(ControllerServicer):
             fsm_flag=FSMResponseFlag.FSM_EXECUTED_SUCCESSFULLY,
             flag=ResponseFlag.EXECUTED_SUCCESSFULLY,
         )
-        # Parse and validate target.
+        command_name = response.command_name
+        transition_started = False
         try:
-            request.target = self.parse_target_string(request.target)
-        except ValueError:
-            response.flag = ResponseFlag.NOT_EXECUTED_BAD_REQUEST_FORMAT
-            return response
-
-        # Extract command information.
-        command = request.command
-        command_name = command.command_name
-
-        fsm_cmd_log = f"FSM command run: {command_name} for target {request.target} "
-        if command_name == "start" and (
-            cmd := self.stateful_node.decode_fsm_arguments(command)
-        ):
-            fsm_cmd_log += f"with arguments {cmd}"
-        elif command_name == "stop":
-            fsm_cmd_log += f"for run number {self.runinfo.get('run', 'unknown')}"
-        self.log.info(fsm_cmd_log)
-
-        child_list = self.address_target_path(
-            request.target,
-            request.execute_on_all_subsequent_children_in_path,
-        )
-        connected_indices, disconnected_indices = self._partition_connected_children(
-            child_list,
-            operation_name=f"execute_fsm_command:{command_name}",
-        )
-        for i in disconnected_indices:
-            response.children.append(
-                ExecuteFSMCommandResponse(
-                    token=None,
-                    name=child_list[i][0].name,
-                    command_name=command_name,
-                    fsm_flag=FSMResponseFlag.FSM_FAILED,
-                    flag=ResponseFlag.NOT_EXECUTED_NOT_READY,
-                )
-            )
-
-        # Extract FSM transition.
-        transition = self.stateful_node.get_fsm_transition(command_name)
-        self.log.debug(f"FSM transition: {transition}")
-
-        # Check controller readiness.
-        if not self.stateful_node.get_ready_state():
-            self.log.error(
-                f"Command '{command_name}' not executed: controller is not ready."
-            )
-            response.fsm_flag = FSMResponseFlag.FSM_FAILED
-            response.flag = ResponseFlag.NOT_EXECUTED_NOT_READY
-            return response
-
-        # Check if node is in error.
-        if self.stateful_node.node_is_in_error():
-            self.log.error(
-                f"Command '{command_name}' not executed: node is in error.",
-                extra=self.handlerconf.ERS,
-            )
-            response.fsm_flag = FSMResponseFlag.FSM_NOT_EXECUTED_IN_ERROR
-            return response
-
-        # Check if node is excluded.
-        if not self.stateful_node.node_is_included():
-            self.log.error(f"Command '{command_name}' not executed: node is excluded.")
-            response.fsm_flag = FSMResponseFlag.FSM_NOT_EXECUTED_EXCLUDED
-            return response
-
-        # Check if transition is possible from current state.
-        if not self.stateful_node.can_transition(transition):
-            state = self.stateful_node.get_node_operational_state()
-            self.log.error(
-                f"Command '{command_name}' not executed: not possible from state '{state}'."
-            )
-            response.fsm_flag = FSMResponseFlag.FSM_INVALID_TRANSITION
-            return response
-
-        # Execute FSM transition on this node.
-        if request.target == self.name or request.execute_along_path:
-            fsm_args = self.stateful_node.decode_fsm_arguments(command)
-            fsm_data = self.stateful_node.prepare_transition(
-                transition=transition,
-                transition_args=fsm_args,
-                transition_data=command.data,
-                ctx=self,
-            )
-
-            # If the command publishes to ELisa Logbook, make sure that .dotdrunc.json
-            # is present and well formatted
-            using_elisa_logbook = "elisa-logbook" in self.fsm_config.get_actions()
-            if using_elisa_logbook and command_name in ["start", "drain_dataflow"]:
-                try:
-                    get_dotdrunc_json()
-                except (DotDruncJsonIncorrectFormat, DotDruncJsonNotFound) as e:
-                    self.log.warning(f"ELisa Logbook entry will not be posted. {e}")
-
-            if command_name == "start":
-                self.controller_publisher(
-                    message=RunInfo(
-                        run_type=self.runinfo.get("production_vs_test", ""),
-                        run_number=self.runinfo.get("run", 0),
-                        disable_data_storage=self.runinfo.get(
-                            "disable_data_storage", False
-                        ),
-                        trigger_rate=self.runinfo.get("trigger_rate", 0.0),
-                        run_time_at_start=int(self.runinfo.get("run_time_at_start", 0)),
-                        run_time_since_start=0,
-                        run_config_file=self.configuration.oks_path,
-                        run_config_name=self.configuration.oks_key.session,
-                    ),
-                    custom_origin=self.custom_origin,
-                )
-
-            # Begin propagating FSM transition to children.
-            self.stateful_node.propagate_transition_mark(transition)
-
-            # Child FSMCommands are *NOT THE SAME* as the parent one!
-            # TODO: this is quite misleading and error prone. Needs looking into.
-            child_command = FSMCommand()
-            child_command.CopyFrom(command)
-            child_command.data = fsm_data
+            # Parse and validate target.
             try:
+                request.target = self.parse_target_string(request.target)
+            except ValueError:
+                response.flag = ResponseFlag.NOT_EXECUTED_BAD_REQUEST_FORMAT
+                return response
+
+            # Extract command information.
+            command = request.command
+
+            fsm_cmd_log = f"FSM command run: {command_name} for target {request.target} "
+            if command_name == "start" and (
+                cmd := self.stateful_node.decode_fsm_arguments(command)
+            ):
+                fsm_cmd_log += f"with arguments {cmd}"
+            elif command_name == "stop":
+                fsm_cmd_log += f"for run number {self.runinfo.get('run', 'unknown')}"
+            self.log.info(fsm_cmd_log)
+
+            child_list = self.address_target_path(
+                request.target,
+                request.execute_on_all_subsequent_children_in_path,
+            )
+            connected_indices, disconnected_indices = self._partition_connected_children(
+                child_list,
+                operation_name=f"execute_fsm_command:{command_name}",
+            )
+            for i in disconnected_indices:
+                response.children.append(
+                    ExecuteFSMCommandResponse(
+                        token=None,
+                        name=child_list[i][0].name,
+                        command_name=command_name,
+                        fsm_flag=FSMResponseFlag.FSM_FAILED,
+                        flag=ResponseFlag.NOT_EXECUTED_NOT_READY,
+                    )
+                )
+
+            # Extract FSM transition.
+            transition = self.stateful_node.get_fsm_transition(command_name)
+            self.log.debug(f"FSM transition: {transition}")
+
+            # Check controller readiness.
+            if not self.stateful_node.get_ready_state():
+                self.log.error(
+                    f"Command '{command_name}' not executed: controller is not ready."
+                )
+                response.fsm_flag = FSMResponseFlag.FSM_FAILED
+                response.flag = ResponseFlag.NOT_EXECUTED_NOT_READY
+                return response
+
+            # Check if node is in error.
+            if self.stateful_node.node_is_in_error():
+                self.log.error(
+                    f"Command '{command_name}' not executed: node is in error.",
+                    extra=self.handlerconf.ERS,
+                )
+                response.fsm_flag = FSMResponseFlag.FSM_NOT_EXECUTED_IN_ERROR
+                return response
+
+            # Check if node is excluded.
+            if not self.stateful_node.node_is_included():
+                self.log.error(f"Command '{command_name}' not executed: node is excluded.")
+                response.fsm_flag = FSMResponseFlag.FSM_NOT_EXECUTED_EXCLUDED
+                return response
+
+            # Check if transition is possible from current state.
+            if not self.stateful_node.can_transition(transition):
+                state = self.stateful_node.get_node_operational_state()
+                self.log.error(
+                    f"Command '{command_name}' not executed: not possible from state '{state}'."
+                )
+                response.fsm_flag = FSMResponseFlag.FSM_INVALID_TRANSITION
+                return response
+
+            # Execute FSM transition on this node.
+            if request.target == self.name or request.execute_along_path:
+                fsm_args = self.stateful_node.decode_fsm_arguments(command)
+                transition_started = True
+                fsm_data = self.stateful_node.prepare_transition(
+                    transition=transition,
+                    transition_args=fsm_args,
+                    transition_data=command.data,
+                    ctx=self,
+                )
+
+                # If the command publishes to ELisa Logbook, make sure that .dotdrunc.json
+                # is present and well formatted
+                using_elisa_logbook = "elisa-logbook" in self.fsm_config.get_actions()
+                if using_elisa_logbook and command_name in ["start", "drain_dataflow"]:
+                    try:
+                        get_dotdrunc_json()
+                    except (DotDruncJsonIncorrectFormat, DotDruncJsonNotFound) as e:
+                        self.log.warning(f"ELisa Logbook entry will not be posted. {e}")
+
+                if command_name == "start":
+                    self.controller_publisher(
+                        message=RunInfo(
+                            run_type=self.runinfo.get("production_vs_test", ""),
+                            run_number=self.runinfo.get("run", 0),
+                            disable_data_storage=self.runinfo.get(
+                                "disable_data_storage", False
+                            ),
+                            trigger_rate=self.runinfo.get("trigger_rate", 0.0),
+                            run_time_at_start=int(self.runinfo.get("run_time_at_start", 0)),
+                            run_time_since_start=0,
+                            run_config_file=self.configuration.oks_path,
+                            run_config_name=self.configuration.oks_key.session,
+                        ),
+                        custom_origin=self.custom_origin,
+                    )
+
+                # Begin propagating FSM transition to children.
+                self.stateful_node.propagate_transition_mark(transition)
+
+                # Child FSMCommands are *NOT THE SAME* as the parent one!
+                # TODO: this is quite misleading and error prone. Needs looking into.
+                child_command = FSMCommand()
+                child_command.CopyFrom(command)
+                child_command.data = fsm_data
+                try:
+                    child_responses = self.propagate_concurrently(
+                        lambda child, target: child.execute_fsm_command(
+                            child_command,
+                            target,
+                            request.execute_along_path,
+                            request.execute_on_all_subsequent_children_in_path,
+                        ),
+                        child_list,
+                        indices=connected_indices,
+                        failure_response=lambda child: ExecuteFSMCommandResponse(
+                            name=child.name,
+                            command_name=command_name,
+                            fsm_flag=FSMResponseFlag.FSM_FAILED,
+                        ),
+                    )
+                    response.children.extend(child_responses)
+                except ServerTimeout as e:
+                    response.fsm_flag = FSMResponseFlag.FSM_FAILED
+                    self.stateful_node.to_error()
+                    self.log.error(
+                        f"FSM command '{command_name}' failed: {e}",
+                        extra=self.handlerconf.ERS,
+                    )
+                    return response
+
+                # Finish propagating FSM transition to children.
+                self.stateful_node.finish_propagating_transition_mark(transition)
+
+                # Start FSM transition on this node.
+                self.stateful_node.start_transition_mark(transition)
+
+                # Finish FSM transition on this node.
+                self.stateful_node.terminate_transition_mark(transition)
+
+                fsm_data = self.stateful_node.finalise_transition(
+                    transition=transition,
+                    transition_args=fsm_args,
+                    transition_data=fsm_data,
+                    ctx=self,
+                )
+
+            # Children nodes.
+            else:
                 child_responses = self.propagate_concurrently(
                     lambda child, target: child.execute_fsm_command(
-                        child_command,
+                        command,
                         target,
                         request.execute_along_path,
                         request.execute_on_all_subsequent_children_in_path,
                     ),
                     child_list,
                     indices=connected_indices,
-                    degrade_response=lambda child, failure: self._degrade_fsm_response(
-                        child,
-                        failure,
-                        command_name,
+                    failure_response=lambda child: ExecuteFSMCommandResponse(
+                        name=child.name,
+                        command_name=command_name,
+                        fsm_flag=FSMResponseFlag.FSM_FAILED,
                     ),
                 )
                 response.children.extend(child_responses)
-            except ServerTimeout as e:
+
+            if any(self._fsm_tree_failed(child) for child in response.children):
                 response.fsm_flag = FSMResponseFlag.FSM_FAILED
-                self.stateful_node.to_error()
-                self.log.error(
-                    f"FSM command '{command_name}' failed: {e}",
-                    extra=self.handlerconf.ERS,
-                )
-                return response
-
-            # Finish propagating FSM transition to children.
-            self.stateful_node.finish_propagating_transition_mark(transition)
-
-            # Start FSM transition on this node.
-            self.stateful_node.start_transition_mark(transition)
-
-            # Finish FSM transition on this node.
-            self.stateful_node.terminate_transition_mark(transition)
-
-            fsm_data = self.stateful_node.finalise_transition(
-                transition=transition,
-                transition_args=fsm_args,
-                transition_data=fsm_data,
-                ctx=self,
+                if not response.HasField("error"):
+                    response.error.CopyFrom(
+                        ResponseError(
+                            message=f"One or more descendants of '{response.name}' failed"
+                        )
+                    )
+            return response
+        except grpc.RpcError:
+            raise
+        except Exception as error:
+            self._populate_response_error(
+                response, error, command_name, log_extra=self.handlerconf.ERS
             )
-
-        # Children nodes.
-        else:
-            child_responses = self.propagate_concurrently(
-                lambda child, target: child.execute_fsm_command(
-                    command,
-                    target,
-                    request.execute_along_path,
-                    request.execute_on_all_subsequent_children_in_path,
-                ),
-                child_list,
-                indices=connected_indices,
-                degrade_response=lambda child, failure: self._degrade_fsm_response(
-                    child,
-                    failure,
-                    command_name,
-                ),
-            )
-            response.children.extend(child_responses)
-
-        return response
+            if transition_started:
+                try:
+                    self.stateful_node.to_error()
+                except Exception:
+                    self.log.exception("Failed to place controller in error state")
+            response.fsm_flag = FSMResponseFlag.FSM_FAILED
+            return response
 
     @authentified_and_authorised(action=ActionType.EXPERT, system=SystemType.CONTROLLER)
     @in_control
@@ -1245,11 +1251,10 @@ class Controller(ControllerServicer):
             ),
             child_list,
             indices=connected_indices,
-            degrade_response=lambda child, failure: self._degrade_expert_fsm_command_response(
-                                child,
-                                failure,
-                            ),
-            
+            failure_response=lambda child: ExecuteExpertCommandResponse(
+                name=child.name,
+                fsm_flag=FSMResponseFlag.FSM_FAILED,
+            ),
         )
         child_responses.extend(
             [
@@ -1264,6 +1269,14 @@ class Controller(ControllerServicer):
         )
         response.children.extend(child_responses)
 
+        if any(self._fsm_tree_failed(child) for child in response.children):
+            response.fsm_flag = FSMResponseFlag.FSM_FAILED
+            if not response.HasField("error"):
+                response.error.CopyFrom(
+                    ResponseError(
+                        message=f"One or more descendants of '{response.name}' failed"
+                    )
+                )
         return response
 
     @authentified_and_authorised(action=ActionType.UPDATE, system=SystemType.CONTROLLER)
@@ -1305,7 +1318,7 @@ class Controller(ControllerServicer):
             ),
             child_list,
             indices=connected_indices,
-            degrade_response=lambda child, failure: self._degrade_response(IncludeResponse, child, failure)
+            failure_response=lambda child: IncludeResponse(name=child.name),
         )
         # Disconnected children can't be reached via gRPC/REST, but we can still mark
         # them included locally so this controller can route commands to them again.
@@ -1371,8 +1384,7 @@ class Controller(ControllerServicer):
             ),
             child_list,
             indices=connected_indices,
-            degrade_response=lambda child, failure: self._degrade_response(ExcludeResponse, child, failure)
-
+            failure_response=lambda child: ExcludeResponse(name=child.name),
         )
         # Disconnected children can't be reached via gRPC/REST, but we can still mark
         # them excluded locally so this controller stops routing commands to them.
@@ -1435,7 +1447,7 @@ class Controller(ControllerServicer):
             ),
             child_list,
             indices=connected_indices,
-            degrade_response=lambda child, failure: self._degrade_response(RecomputeStatusResponse, child, failure),
+            failure_response=lambda child: RecomputeStatusResponse(name=child.name),
         )
         child_responses.extend(
             [
@@ -1463,7 +1475,15 @@ class Controller(ControllerServicer):
                 lambda child, target: child.status(target, False, False),
                 child_status_list,
                 indices=connected_status_indices,
-                degrade_response=self._degrade_status_response,
+                failure_response=lambda child: StatusResponse(
+                    name=child.name,
+                    status=Status(
+                        state="error",
+                        sub_state="error",
+                        in_error=True,
+                        included=child.included,
+                    ),
+                ),
             )
             child_status_responses.extend(
                 [
@@ -1569,7 +1589,7 @@ class Controller(ControllerServicer):
             ),
             child_list,
             indices=connected_indices,
-            degrade_response=lambda child, failure: self._degrade_response(TakeControlResponse, child, failure),
+            failure_response=lambda child: TakeControlResponse(name=child.name),
         )
         child_responses.extend(
             [
@@ -1646,7 +1666,7 @@ class Controller(ControllerServicer):
             ),
             child_list,
             indices=connected_indices,
-            degrade_response=lambda child, failure: self._degrade_response(SurrenderControlResponse, child, failure),
+            failure_response=lambda child: SurrenderControlResponse(name=child.name),
         )
         child_responses.extend(
             [
@@ -1720,7 +1740,7 @@ class Controller(ControllerServicer):
             ),
             child_list,
             indices=connected_indices,
-            degrade_response=lambda child, failure: self._degrade_response(WhoIsInChargeResponse, child, failure),
+            failure_response=lambda child: WhoIsInChargeResponse(name=child.name),
         )
         child_responses.extend(
             [
@@ -1785,7 +1805,7 @@ class Controller(ControllerServicer):
             ),
             child_list,
             indices=connected_indices,
-            degrade_response=lambda child, failure: self._degrade_response(ToErrorResponse, child, failure),
+            failure_response=lambda child: ToErrorResponse(name=child.name),
         )
         child_responses.extend(
             [
@@ -1864,7 +1884,7 @@ class Controller(ControllerServicer):
             ),
             child_list,
             indices=connected_indices,
-            degrade_response=lambda child, failure: self._degrade_response(SendLogResponse, child, failure),
+            failure_response=lambda child: SendLogResponse(name=child.name),
         )
         child_responses.extend(
             [

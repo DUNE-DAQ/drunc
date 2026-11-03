@@ -475,7 +475,7 @@ class RichErrorServerInterceptor(grpc.ServerInterceptor):
                 )
             except grpc.RpcError:
                 raise
-            except Exception:
+            except Exception as error:
                 trace_logger = get_logger(
                     "grpc.unexpected_errors",
                     rich_handler=False)
@@ -492,7 +492,7 @@ class RichErrorServerInterceptor(grpc.ServerInterceptor):
                 abort_with_rich_details(
                     context,
                     code_pb2.INTERNAL,
-                    "Unexpected internal server error. Check log file for details.",
+                    str(error),
                     details,
                 )
 
