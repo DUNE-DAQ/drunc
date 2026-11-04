@@ -548,22 +548,12 @@ class Controller(ControllerServicer):
                     metadata={"message": error_message},
                 )
             ]
+        # populate the protobuf
         response.error.CopyFrom(
             ResponseError(
                 message=error_message,
                 details=[pack_to_any(detail) for detail in error_details],
             )
-        )
-
-    @staticmethod
-    def _fsm_tree_failed(
-        response: ExecuteFSMCommandResponse | ExecuteExpertCommandResponse,
-    ) -> bool:
-        """Check command flags throughout a response's subtree."""
-        return (
-            response.flag != ResponseFlag.EXECUTED_SUCCESSFULLY
-            or response.fsm_flag != FSMResponseFlag.FSM_EXECUTED_SUCCESSFULLY
-            or any(Controller._fsm_tree_failed(child) for child in response.children)
         )
 
     @staticmethod
@@ -592,42 +582,37 @@ class Controller(ControllerServicer):
         """
 
         def safe_call(child: ChildNode, target: str) -> T:
+            """Wrapper for child_callable that handles exceptions and failure responses."""
             try:
                 return child_callable(child, target) # preserve the child's response
             except Exception as error:
                 if not isinstance(error, (grpc.RpcError, DruncException)):
-                    if failure_response is None:
+                    if failure_response is None: 
                         raise
 
                     log = get_logger("controller.core.propagate_concurrently")
-                    log.exception(f"Unexpected failure contacting child '{child.name}'")
+                    log.exception(
+                            "Unexpected failure contacting child '%s': %s", child.name, error
+                        )
                     message = (
-                        f"Unexpected failure contacting child '{child.name}'; "
-                        "check controller logs"
+                        f"Unexpected failure contacting child '{child.name}'. "
+                        "Check controller logs"
                     )
+                    error_info = error_details_pb2.ErrorInfo(
+                        reason="UNEXPECTED_SERVER_ERROR",
+                        domain="drunc",
+                        metadata={"child_name": child.name, "message": message},
+                    )
+
                     response = failure_response(child)
                     response.flag = ResponseFlag.UNHANDLED_EXCEPTION_THROWN
                     response.error.CopyFrom(
-                        ResponseError(
-                            message=message,
-                            details=[
-                                pack_to_any(
-                                    error_details_pb2.ErrorInfo(
-                                        reason="UNEXPECTED_SERVER_ERROR",
-                                        domain="drunc",
-                                        metadata={
-                                            "child_name": child.name,
-                                            "message": message,
-                                        },
-                                    )
-                                )
-                            ],
-                        )
+                        ResponseError(message=message, details=[pack_to_any(error_info)])
                     )
                     return response
 
                 if isinstance(error, ServerTimeout) and failure_response is None:
-                    raise
+                    raise # should this propagate the server timeout as is or return a normal response?
                 rpc_error: BaseException | None = error
                 if isinstance(error, ServerUnreachable):
                     # ServerUnreachable may wrap the original gRPC error
@@ -832,8 +817,6 @@ class Controller(ControllerServicer):
             )
             response.children.extend(child_responses)
             return response
-        except grpc.RpcError:
-            raise
         except Exception as error:
             self._populate_response_error(response, error, "status")
             return response
@@ -1185,17 +1168,7 @@ class Controller(ControllerServicer):
                 )
                 response.children.extend(child_responses)
 
-            if any(self._fsm_tree_failed(child) for child in response.children):
-                response.fsm_flag = FSMResponseFlag.FSM_FAILED
-                if not response.HasField("error"):
-                    response.error.CopyFrom(
-                        ResponseError(
-                            message=f"One or more descendants of '{response.name}' failed"
-                        )
-                    )
             return response
-        except grpc.RpcError:
-            raise
         except Exception as error:
             self._populate_response_error(
                 response, error, command_name, log_extra=self.handlerconf.ERS
@@ -1269,14 +1242,6 @@ class Controller(ControllerServicer):
         )
         response.children.extend(child_responses)
 
-        if any(self._fsm_tree_failed(child) for child in response.children):
-            response.fsm_flag = FSMResponseFlag.FSM_FAILED
-            if not response.HasField("error"):
-                response.error.CopyFrom(
-                    ResponseError(
-                        message=f"One or more descendants of '{response.name}' failed"
-                    )
-                )
         return response
 
     @authentified_and_authorised(action=ActionType.UPDATE, system=SystemType.CONTROLLER)

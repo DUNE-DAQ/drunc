@@ -48,7 +48,6 @@ from rich.progress import (
 )
 from rich.table import Table
 from rich.text import Text
-from rich.tree import Tree
 
 from drunc.controller.interface.context import ControllerContext
 from drunc.controller.utils import get_all_apps_with_named_substate
@@ -77,6 +76,23 @@ class FSMExecutionResponseLike(Protocol):
     fsm_flag: int
     error: ResponseError
     children: Sequence["FSMExecutionResponseLike"]
+
+
+def get_response_error_details(response: FSMExecutionResponseLike) -> str:
+    messages = [response.error.message] if response.error.message else []
+    for detail in response.error.details:
+        error_info = error_details_pb2.ErrorInfo()
+        if not detail.Unpack(error_info):
+            continue
+        detail_messages = [
+            error_info.metadata[key]
+            for key in ("message", "child_message")
+            if error_info.metadata.get(key)
+        ]
+        for message in detail_messages or [error_info.reason]:
+            if message and message not in messages:
+                messages.append(message)
+    return "; ".join(messages)
 
 
 class FSMCommandFailure(DruncShellException, click.ClickException):
@@ -975,46 +991,54 @@ def run_one_fsm_command(
     if not result:
         return
 
-    report = Tree(Text(f"{transition_name} execution report", style="bold"))
+    t = Table(title=f"{transition_name} execution report")
+    t.add_column("Name")
+    t.add_column("Command execution")
+    t.add_column("FSM transition")
+    t.add_column("Info")
     failed_nodes: list[str] = []
 
-    def add_response(
-        branch: Tree, response: FSMExecutionResponseLike, parent_path: str = ""
+    def bool_to_success(
+        flag_message: int, message_type: type[ResponseFlag] | type[FSMResponseFlag]
+    ) -> str:
+        flag = message_type.Name(flag_message).replace("_", " ").title()
+        success = False
+
+        if (
+            message_type == FSMResponseFlag
+            and flag_message == FSMResponseFlag.FSM_EXECUTED_SUCCESSFULLY
+        ):
+            success = True
+        if (
+            message_type == ResponseFlag
+            and flag_message == ResponseFlag.EXECUTED_SUCCESSFULLY
+        ):
+            success = True
+
+        return f"[dark_green]{flag}[/]" if success else f"[red]{flag}[/]"
+
+    def add_to_table(
+        table: Table, response: FSMExecutionResponseLike, prefix: str = "",
+        parent_path: str = "",
     ) -> None:
-        successful = (
-            response.flag == ResponseFlag.EXECUTED_SUCCESSFULLY
-            and response.fsm_flag == FSMResponseFlag.FSM_EXECUTED_SUCCESSFULLY
-        )
+        executed_command = response.flag == ResponseFlag.EXECUTED_SUCCESSFULLY
         node_path = f"{parent_path}/{response.name}" if parent_path else response.name
-        if not successful:
+        if not executed_command or response.fsm_flag != FSMResponseFlag.FSM_EXECUTED_SUCCESSFULLY:
             failed_nodes.append(node_path)
 
-        if response.flag != ResponseFlag.EXECUTED_SUCCESSFULLY:
-            status = ResponseFlag.Name(response.flag)
-        else:
-            status = FSMResponseFlag.Name(response.fsm_flag)
-            status = status.removeprefix("FSM_")
+        table.add_row(
+            prefix + response.name,
+            bool_to_success(response.flag, message_type=ResponseFlag),
+            bool_to_success(response.fsm_flag, message_type=FSMResponseFlag),
+            Text(get_response_error_details(response), style="red"),
+        )
+        for child_response in sorted(response.children, key=lambda child: child.name):
+            add_to_table(table, child_response, "  " + prefix, node_path)
 
-        status = status.replace("_", " ").title()
+    add_to_table(t, result)
 
-        label = Text(response.name, style="bold")
-        label.append("  ")
-        label.append(status, style="green" if successful else "red")
-        error_message = ""
-        for detail in response.error.details:
-            if detail.Is(error_details_pb2.ErrorInfo.DESCRIPTOR):
-                error_info = unpack_any(detail, error_details_pb2.ErrorInfo)
-                if error_info.reason != "ChildCommandException":
-                    error_message = error_info.metadata.get("message", error_message)
-        error_message = error_message or response.error.message
-        if error_message:
-            label.append(f":  {error_message}", style="red")
-
-        child_branch = branch.add(label)
-        for child in sorted(response.children, key=lambda child: child.name):
-            add_response(child_branch, child, node_path)
-
-    add_response(report, result)
+    execution_report_table = format_table_width(obj, t, False)
+    obj.print(execution_report_table, soft_wrap=True)
 
     status_table = format_table_width(obj, render_status_table(obj), False)
     obj.print(status_table, soft_wrap=True)
@@ -1022,7 +1046,6 @@ def run_one_fsm_command(
     obj.print_status_summary()
 
     if failed_nodes:
-        obj.print(report)
         raise FSMCommandFailure(
             f"FSM command '{transition_name}' failed on: {', '.join(failed_nodes)}",
             logger=obj.log,
