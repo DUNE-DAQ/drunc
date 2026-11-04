@@ -118,6 +118,21 @@ def get_status_table(
         describe_response: DescribeResponse,
         prefix: str,
     ) -> None:
+        """
+        Adds the status of a single process to the table.
+
+        Args:
+            table: The table to add the status to
+            status_response: The status response for the process
+            describe_response: The describe response for the process
+            prefix: A prefix to add to the process name in the table
+
+        Returns:
+            None
+
+        Raises:
+            None
+        """
         status = status_response.status
         description = describe_response.description
         if status is None or description is None:
