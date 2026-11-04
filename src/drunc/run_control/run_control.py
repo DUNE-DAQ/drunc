@@ -425,7 +425,7 @@ class RunControl(abc.ABC, RunControlServicer):
             self.log.error(message)
             context.abort(StatusCode.INVALID_ARGUMENT, message)
 
-        result = pm_driver.logs(log_req)
+        result = pm_driver.logs(log_req, raise_on_error=True)
         return result
 
     @authentified_and_authorised(action=ActionType.READ, system=SystemType.RUN_CONTROL)
