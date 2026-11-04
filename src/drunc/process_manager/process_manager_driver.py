@@ -30,11 +30,16 @@ from druncschema.process_manager_pb2 import (
 from druncschema.process_manager_pb2_grpc import ProcessManagerStub
 from druncschema.request_response_pb2 import Request, ResponseFlag
 from druncschema.token_pb2 import Token
+from google.rpc import code_pb2
 
 from drunc.connectivity_service.client import ConnectivityServiceClient
 from drunc.connectivity_service.exceptions import ApplicationLookupUnsuccessful
 from drunc.controller.utils import get_segment_lookup_timeout
-from drunc.exceptions import DruncSetupException, DruncShellException
+from drunc.exceptions import (
+    DruncCommandException,
+    DruncSetupException,
+    DruncShellException,
+)
 from drunc.process_manager.oks_parser import AppInfo, get_full_db_path
 from drunc.process_manager.utils import get_log_path, get_rte_script
 from drunc.utils.grpc_utils import (
@@ -905,7 +910,18 @@ To debug it, close drunc and run the following command:
         response = self.stub.kill(request, timeout=timeout)
         return response
 
-    def logs(self, request: LogRequest, timeout: int | float = 60) -> LogLines | None:
+    def logs(
+        self,
+        request: LogRequest,
+        timeout: int | float = 60,
+        *,
+        raise_on_error: bool = False,
+    ) -> LogLines | None:
+        """Fetch logs, optionally raising errors for forwarding through another RPC.
+
+        By default, response errors are logged and return None for shell callers.
+        RPC services should set raise_on_error to preserve error details for clients.
+        """
         request.token.CopyFrom(self.token)
         response = self.stub.logs(request, timeout=timeout)
 
@@ -914,12 +930,22 @@ To debug it, close drunc and run the following command:
             lines = response.lines
             if len(lines) == 1:
                 lines = lines[0]
-            self.log.warning(f"Bad query for logs: {lines}")
+            message = f"Bad query for logs: {lines}"
+            self.log.warning(message)
+            if raise_on_error:
+                raise DruncCommandException(
+                    message,
+                    grpc_error_code=code_pb2.INVALID_ARGUMENT,
+                    domain="ProcessManager.logs",
+                )
             return None
 
         # Check for other error flags
         if response.flag == ResponseFlag.DRUNC_EXCEPTION_THROWN:
-            self.log.error(f"Exception occurred on server: {response.lines}")
+            message = f"Exception occurred on server: {response.lines}"
+            self.log.error(message)
+            if raise_on_error:
+                raise DruncCommandException(message, domain="ProcessManager.logs")
             return None
 
         return response
