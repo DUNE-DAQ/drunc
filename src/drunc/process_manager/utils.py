@@ -281,6 +281,35 @@ def release_or_dev() -> str:
     return "rel"
 
 
+def print_logs(obj, result, grep):
+    display_name = result.name or result.uuid.uuid or ""
+    if result.name is not None:
+        obj.rule(f"[yellow]{display_name}[/yellow] logs")
+
+    for line in result.lines:
+        if not line.strip():  # keep empty lines for visual clarity
+            obj.print("")
+            continue
+
+        line = line.rstrip("\n")  # remove trailing newline
+
+        if grep is not None and grep not in line:
+            continue
+
+        if grep is not None and grep:
+            # Highlight grep term by splitting on it, escaping each part separately,
+            # then rejoining with Rich underline markup around the escaped grep term
+            escaped_grep = escape(grep)
+            parts = line.split(grep)
+            escaped_line = f"[u]{escaped_grep}[/u]".join(escape(part) for part in parts)
+        else:
+            escaped_line = escape(line)
+
+        obj.print(escaped_line, soft_wrap=True)
+    if result.name is not None:
+        obj.rule(f"[yellow]{display_name}[/yellow] end")
+
+
 def print_ps_table(query, results, obj, logger, long_format, width, fit) -> None:
     # Inject session name if exits
     ## Session name can come from either the process manager shell with --session
