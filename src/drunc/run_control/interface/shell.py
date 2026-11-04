@@ -6,7 +6,6 @@ import click
 import click_shell
 
 from drunc.run_control.interface.commands import (
-    wait,
     boot,
     connect_to_pm,
     echo,
@@ -14,7 +13,9 @@ from drunc.run_control.interface.commands import (
     print_session_config,
     ps,
     set_session_config,
+    terminate,
     validate,
+    wait,
 )
 from drunc.utils.grpc_utils import ServerUnreachable
 from drunc.utils.utils import (
@@ -85,6 +86,7 @@ def rc_shell(ctx: click.core.Context, run_control_address: str):
         validate,
         boot,
         logs,
+        terminate,
     ]
 
     # cast the command group

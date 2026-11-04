@@ -146,6 +146,16 @@ class RunControlDriver:
 
         return self.stub.boot(breq, timeout=timeout)
 
+    def terminate(
+        self,
+        timeout: int | float = 60,
+    ) -> ProcessInstanceList:
+        """terminates"""
+        req = Request(
+            token=copy_token(self.token),
+        )
+        return self.stub.terminate(req, timeout=timeout)
+
     def set_session_config(
         self,
         configuration_file: str = "",
