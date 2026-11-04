@@ -43,6 +43,9 @@ See `exclude`'s documentation [here](https://dune-daq-sw.readthedocs.io/en/lates
 ### `expert-command`
 See `expert-command`'s documentation [here](https://dune-daq-sw.readthedocs.io/en/latest/packages/drunc/Unified-shell-reference#expert-command)
 
+### `record`
+See `record`'s documentation [here](https://dune-daq-sw.readthedocs.io/en/latest/packages/drunc/Unified-shell-reference#record)
+
 ### `exit`
 Works the same way as `quit`.
 

@@ -24,6 +24,7 @@ from drunc.controller.interface.commands import (
     expert_command,
     include,
     recompute_status,
+    record,
     status,
     surrender_control,
     take_control,
@@ -398,6 +399,7 @@ def unified_shell(
         exclude,
         wait,
         expert_command,
+        record,
         to_error,
     ]
 

@@ -480,6 +480,30 @@ ps
 * [`restart`](https://dune-daq-sw.readthedocs.io/en/latest/packages/drunc/Unified-shell-reference#restart)
 * [`boot`](https://dune-daq-sw.readthedocs.io/en/latest/packages/drunc/Unified-shell-reference#boot)
 
+## record
+### Description
+**NOTE**: This command requires you to have booted the system, to be connected to a controller and the system to be in `RUNNING`.
+
+Sends a `record` command to all the applications under the target. Only the DAQ modules that registered the `record` command (the readout data link handlers) act on it and dump their raw data to file; other applications ignore it. The data link handlers must be configured with a data recorder. This is a shortcut for [`expert-command`](https://dune-daq-sw.readthedocs.io/en/latest/packages/drunc/Unified-shell-reference#expert-command) with [`record.json`](https://github.com/DUNE-DAQ/drunc/blob/develop/src/drunc/data/expert-command/record.json).
+
+The `record` command can take the following options:
+* `--duration` (optional, default `1`), the recording duration in seconds, sent to the modules as `duration`.
+* `--match` (optional, default `""`), a regex on the DAQ module names to address. If left blank, every module that registered `record` gets the command.
+* `--target` (optional), allows you to specify a target application/segment for the command. By default, the target is the top segment for the whole session.
+
+### Examples
+To record from all the readout applications:
+```bash
+record --duration 10
+```
+To record from the readout segment only:
+```bash
+record --target root-controller/ru-controller
+```
+
+### Related commands
+* [`expert-command`](https://dune-daq-sw.readthedocs.io/en/latest/packages/drunc/Unified-shell-reference#expert-command)
+
 ## recompute-status
 ### Description
 **NOTE**: This command requires you to have booted the system and to be connected to a controller.

@@ -13,6 +13,7 @@ from drunc.controller.interface.commands import (
     expert_command,
     include,
     recompute_status,
+    record,
     status,
     surrender_control,
     take_control,
@@ -99,3 +100,4 @@ def controller_shell(ctx, controller_address: str, log_level: str) -> None:
     ctx.command.add_command(exclude, "exclude")
     ctx.command.add_command(wait, "wait")
     ctx.command.add_command(expert_command, "expert-command")
+    ctx.command.add_command(record, "record")

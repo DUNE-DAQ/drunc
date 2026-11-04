@@ -465,14 +465,60 @@ def expert_command(
         execute_along_path=False,
         execute_on_all_subsequent_children_in_path=True,
     )
+    _print_expert_command_result(result)
 
-    def print_result(result, prefix=""):
-        log.info(f"{prefix}[yellow]{result.name}[/yellow] [green]{result.data}[/green]")
 
-        for child in result.children:
-            print_result(child, prefix + "    ")
+def _print_expert_command_result(result, prefix: str = "") -> None:
+    if not result:
+        return
+    log.info(f"{prefix}[yellow]{result.name}[/yellow] [green]{result.data}[/green]")
+    for child in result.children:
+        _print_expert_command_result(child, prefix + "    ")
 
-    print_result(result)
+
+@click.command("record")
+@click.option(
+    "--duration",
+    type=click.IntRange(min=1),
+    default=1,
+    show_default=True,
+    help="Recording duration in seconds, passed to the modules as 'duration'",
+)
+@click.option(
+    "--match",
+    type=str,
+    default="",
+    show_default=True,
+    help="Regex on DAQ module names to address. Empty means every module that registered the 'record' command (i.e. the readout data link handlers)",
+)
+@click.option("--target", type=str, help="The target to address", default="")
+@click.pass_obj
+def record(
+    obj: ControllerContext,
+    duration: int,
+    match: str,
+    target: str,
+) -> None:
+    """Ask the readout data link handlers to record raw data for a given duration.
+
+    The 'record' command is sent to all applications under the target. Only DAQ
+    modules that registered the 'record' command (the readout data link handlers)
+    act on it; other applications ignore it. The system must be in RUNNING.
+    """
+    data = {
+        "data": {"modules": [{"data": {"duration": duration}, "match": match}]},
+        "entry_state": "RUNNING",
+        "exit_state": "RUNNING",
+        "id": "record",
+    }
+
+    result = obj.get_driver("controller").execute_expert_command(
+        json.dumps(data),
+        target=target,
+        execute_along_path=False,
+        execute_on_all_subsequent_children_in_path=True,
+    )
+    _print_expert_command_result(result)
 
 
 @click.command("to_error")
