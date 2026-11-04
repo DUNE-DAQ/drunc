@@ -6,6 +6,7 @@ import click
 import click_shell
 
 from drunc.run_control.interface.commands import (
+    wait,
     boot,
     connect_to_pm,
     echo,
@@ -75,6 +76,7 @@ def rc_shell(ctx: click.core.Context, run_control_address: str):
     ctx.call_on_close(cleanup)
 
     exposed_run_control_commands = [
+        wait,
         echo,
         connect_to_pm,
         ps,

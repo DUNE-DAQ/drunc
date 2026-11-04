@@ -1,7 +1,7 @@
 import getpass
 from functools import update_wrapper
 from typing import cast
-
+from drunc.utils.utils import wait as shell_wait
 import click
 from click.decorators import FC
 from druncschema.common_pb2 import LoggerTarget
@@ -38,6 +38,22 @@ def session_empty(f: FC) -> FC:
 
     return cast(FC, update_wrapper(wrapper, f))
 
+
+
+@click.command("wait")
+@click.argument("sleep_time", type=int)
+@click.option(
+    "--progress-steps",
+    type=int,
+    default=None,
+    help="Number of progress updates to print when --progress is set.",
+)
+@click.pass_obj
+def wait(
+    obj: RunControlContext, sleep_time: int, progress_steps: int | None
+) -> None:
+    log = get_logger("run_control.wait")
+    shell_wait(log, sleep_time, progress_steps)
 
 @click.command("echo")
 @click.argument("text", required=True)
