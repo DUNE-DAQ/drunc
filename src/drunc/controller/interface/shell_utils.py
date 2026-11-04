@@ -28,10 +28,10 @@ from druncschema.controller_pb2 import (
 )
 from druncschema.description_pb2 import Description
 from druncschema.generic_pb2 import (
+    ResponseError,
     bool_msg,
     float_msg,
     int_msg,
-    ResponseError,
     string_msg,
 )
 from druncschema.request_response_pb2 import ResponseFlag
