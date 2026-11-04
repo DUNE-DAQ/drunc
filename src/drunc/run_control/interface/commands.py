@@ -1,3 +1,4 @@
+import getpass
 from functools import update_wrapper
 from typing import cast
 
@@ -17,6 +18,7 @@ from drunc.process_manager.interface.commands import (
 from drunc.process_manager.utils import print_ps_table
 from drunc.run_control.interface.context import RunControlContext
 from drunc.utils.shell_utils import (
+    InterruptedCommand,
     log_rc_cmd,
 )
 from drunc.utils.utils import get_logger, log_echo
@@ -223,4 +225,53 @@ def validate(obj: RunControlContext) -> None:
     obj.print("Session configuration valid flag set to True.")
 
 
-BOOT IS ADDED IN THE SERVER NOW ADD IT HERE AND TH8E SHELL AND THE DRUNSCHEMA AND THEN TEST ITTT
+@click.command("boot")
+@click.option(
+    "-o/-no",
+    "--override-logs/--no-override-logs",
+    default=None,
+    help="Manual override allows for overwriting logs or not, by appending timestamp info. Default (None) is to follow what is used in the initialisation of the unified shell.",
+)
+@click.option(
+    "-cl",
+    "--controller-log-level",
+    default=None,
+    help="Overrides the config-defined log level of the controller",
+)
+@click.option(
+    "--sleep-between-app-boot",
+    type=float,
+    default=0.1,
+    help="Sleep between app boot, in seconds. This may be useful if you have are using SSHPM, and have SSHD's maxstartups setting set to a low value.",
+)
+@click.pass_obj
+def boot(
+    obj: RunControlContext,
+    override_logs: bool | None,
+    controller_log_level: str | None,
+    sleep_between_app_boot: float = 0,
+) -> None:
+    log_rc_cmd(obj)
+    log = get_logger("run_control.shell")
+    user = getpass.getuser()
+
+    if override_logs is None:
+        override_logs_boot = obj.override_logs
+    else:
+        override_logs_boot = override_logs
+
+    # needs error handling
+    try:
+        obj.get_run_control_driver().boot(
+            log_level=controller_log_level,
+            user=user,
+            override_logs=override_logs_boot,
+            sleep_between_app_boot=sleep_between_app_boot,
+        )
+    except InterruptedCommand:
+        return
+    except Exception as e:
+        log.exception(e)
+        raise e
+
+    return

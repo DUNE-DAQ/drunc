@@ -15,6 +15,11 @@ class RunControlContext(ShellContext):
         self.log = None
         self.address_rc = None
         self.log_debug = get_logger("etestg", rich_handler=True)
+
+        self.override_logs = (
+            False  # TODO: This should be propagated to the shell initialisation..
+        )
+
         super(RunControlContext, self).__init__(*args, **kwargs)
 
     def reset(self, *args, **kwargs) -> None:
