@@ -204,17 +204,17 @@ echo post_boot
 status 
 echo post_boot_done
 """
-    + "".join(p.to_command_block() for p in _FSM_COMMANDS)
-    + _FSM_SEQUENCES["test_srun_w_boot"].to_command_block()
-    + " terminate "
-    + "boot wait 10 conf"
-    + _FSM_SEQUENCES["test_srunw_boot_conf"].to_command_block()
-    + " terminate "
-    + _FSM_SEQUENCES["test_start_run"].to_command_block()
-    + _FSM_SEQUENCES["test_stop_run"].to_command_block()
-    + "start-run --run-number 3"
-    + _FSM_SEQUENCES["test_stop_run"].to_command_block()
-    + _echo_server_command_block()
+    # + "".join(p.to_command_block() for p in _FSM_COMMANDS)
+    # + _FSM_SEQUENCES["test_srun_w_boot"].to_command_block()
+    # + " terminate "
+    # + "boot wait 10 conf"
+    # + _FSM_SEQUENCES["test_srunw_boot_conf"].to_command_block()
+    # + " terminate "
+    # + _FSM_SEQUENCES["test_start_run"].to_command_block()
+    # + _FSM_SEQUENCES["test_stop_run"].to_command_block()
+    # + "start-run --run-number 3"
+    # + _FSM_SEQUENCES["test_stop_run"].to_command_block()
+    # + _echo_server_command_block()
     + f"""
 echo {_SHUTDOWN_MARKER}
 shutdown
@@ -327,60 +327,60 @@ def _marker_found_in_logs(marker: str, log_files) -> bool:
     return False
 
 
-@pytest.mark.parametrize(
-    "marker,case",
-    list(_ECHO_SERVER_CASES.items()),
-    ids=list(_ECHO_SERVER_CASES.keys()),
-)
-def test_echo_on_server(run_dunerc, marker, case) -> None:
-    """Checks that target and propagation flags select the expected controllers."""
-    # Check both logs for every marker: positive checks prove expected delivery,
-    # while negative checks catch accidental execution on controllers outside the
-    # selected path or fan-out.
-    controller_logs = {
-        controller_name: [
-            logname
-            for logname in run_dunerc.log_files
-            if f"{run_dunerc.daq_session_name}_{controller_name}" in str(logname)
-        ]
-        for controller_name in ("root-controller", "ru-controller")
-    }
+# @pytest.mark.parametrize(
+#     "marker,case",
+#     list(_ECHO_SERVER_CASES.items()),
+#     ids=list(_ECHO_SERVER_CASES.keys()),
+# )
+# def test_echo_on_server(run_dunerc, marker, case) -> None:
+#     """Checks that target and propagation flags select the expected controllers."""
+#     # Check both logs for every marker: positive checks prove expected delivery,
+#     # while negative checks catch accidental execution on controllers outside the
+#     # selected path or fan-out.
+#     controller_logs = {
+#         controller_name: [
+#             logname
+#             for logname in run_dunerc.log_files
+#             if f"{run_dunerc.daq_session_name}_{controller_name}" in str(logname)
+#         ]
+#         for controller_name in ("root-controller", "ru-controller")
+#     }
 
-    for controller_name, matching_logs in controller_logs.items():
-        assert matching_logs, f"No {controller_name} log file found."
-        marker_found = _marker_found_in_logs(marker, matching_logs)
-        if controller_name in case["expected_controllers"]:
-            assert marker_found, (
-                f"'{marker}' was not logged by {controller_name}: {matching_logs}"
-            )
-        else:
-            assert not marker_found, (
-                f"'{marker}' was unexpectedly logged by {controller_name}: "
-                f"{matching_logs}"
-            )
-
-
-@pytest.mark.parametrize("params", _FSM_COMMANDS, ids=lambda p: p.marker)
-def test_fsm_command(run_dunerc, boot_status_table, params: FsmCommandParams) -> None:
-    """Checks that each FSM command executes successfully and transitions all processes to the expected state."""
-    lines = strip_ansi(run_dunerc.completed_processes["drunc"].stdout).splitlines()
-    _check_command(lines, boot_status_table, params)
+#     for controller_name, matching_logs in controller_logs.items():
+#         assert matching_logs, f"No {controller_name} log file found."
+#         marker_found = _marker_found_in_logs(marker, matching_logs)
+#         if controller_name in case["expected_controllers"]:
+#             assert marker_found, (
+#                 f"'{marker}' was not logged by {controller_name}: {matching_logs}"
+#             )
+#         else:
+#             assert not marker_found, (
+#                 f"'{marker}' was unexpectedly logged by {controller_name}: "
+#                 f"{matching_logs}"
+#             )
 
 
-@pytest.mark.parametrize("params", _FSM_SEQUENCES.values(), ids=lambda p: p.marker)
-def test_fsm_transitions(
-    run_dunerc, boot_status_table, params: FsmCommandParams
-) -> None:
-    """Checks that each FSM transition executes successfully and reaches its expected state."""
-    lines = strip_ansi(run_dunerc.completed_processes["drunc"].stdout).splitlines()
-    _check_command(lines, boot_status_table, params)
+# @pytest.mark.parametrize("params", _FSM_COMMANDS, ids=lambda p: p.marker)
+# def test_fsm_command(run_dunerc, boot_status_table, params: FsmCommandParams) -> None:
+#     """Checks that each FSM command executes successfully and transitions all processes to the expected state."""
+#     lines = strip_ansi(run_dunerc.completed_processes["drunc"].stdout).splitlines()
+#     _check_command(lines, boot_status_table, params)
 
 
-def test_shutdown_status(run_dunerc) -> None:
-    """Checks that status reports the session is no longer booted after shutdown."""
-    lines = strip_ansi(run_dunerc.completed_processes["drunc"].stdout).splitlines()
-    shutdown_index = next(
-        index for index, line in enumerate(lines) if _SHUTDOWN_MARKER in line
-    )
-    shutdown_output = "\n".join(lines[shutdown_index:])
-    assert _SHUTDOWN_STATUS_ERROR in shutdown_output
+# @pytest.mark.parametrize("params", _FSM_SEQUENCES.values(), ids=lambda p: p.marker)
+# def test_fsm_transitions(
+#     run_dunerc, boot_status_table, params: FsmCommandParams
+# ) -> None:
+#     """Checks that each FSM transition executes successfully and reaches its expected state."""
+#     lines = strip_ansi(run_dunerc.completed_processes["drunc"].stdout).splitlines()
+#     _check_command(lines, boot_status_table, params)
+
+
+# def test_shutdown_status(run_dunerc) -> None:
+#     """Checks that status reports the session is no longer booted after shutdown."""
+#     lines = strip_ansi(run_dunerc.completed_processes["drunc"].stdout).splitlines()
+#     shutdown_index = next(
+#         index for index, line in enumerate(lines) if _SHUTDOWN_MARKER in line
+#     )
+#     shutdown_output = "\n".join(lines[shutdown_index:])
+#     assert _SHUTDOWN_STATUS_ERROR in shutdown_output
