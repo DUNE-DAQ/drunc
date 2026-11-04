@@ -418,6 +418,36 @@ class RunControl(abc.ABC, RunControlServicer):
         result = pm_driver.logs(log_req)
         return result
 
+    @authentified_and_authorised(action=ActionType.READ, system=SystemType.RUN_CONTROL)
+    def terminate(
+        self,
+        terminate_req: Request,  # not sure what to do with this token
+        context: ServicerContext,
+    ) -> ProcessInstanceList:
+        self.log.info(f"{self.name} running terminate")
+
+        # We'll probably need to add more things here in the future
+        # but for now this is exactly what the unified shell has
+        session_query = ProcessQuery(session=self.session_config.session_name)
+        self.log.info(
+            f"Terminating session [green]{self.session_config.session_name}[/]"
+        )
+
+        try:
+            pm_driver = self.get_driver("process_manager")
+        except ValueError:
+            message = "Cannot list processes: process manager is not connected"
+            self.log.error(message)
+            context.abort(StatusCode.INVALID_ARGUMENT, message)
+
+        # Note we're using kill here!
+        result = pm_driver.kill(session_query)
+
+        ## There is a delete controller driver here which will come in handy later on
+        # obj.delete_driver("controller")
+
+        return result
+
     def get_driver(self, driver_key):
         if driver_key not in self.drivers:
             self.log.error(f"{driver_key} is not yet initialised. Please do so!")

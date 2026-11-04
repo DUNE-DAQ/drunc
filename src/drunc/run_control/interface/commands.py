@@ -1,7 +1,7 @@
 import getpass
 from functools import update_wrapper
 from typing import cast
-from drunc.utils.utils import wait as shell_wait
+
 import click
 from click.decorators import FC
 from druncschema.common_pb2 import LoggerTarget
@@ -14,13 +14,18 @@ from rich.table import Table
 
 from drunc.process_manager.interface.cli_argument import add_query_options_no_session
 from drunc.process_manager.interface.commands import logs_decorators, ps_decorators
-from drunc.process_manager.utils import print_logs, print_ps_table
+from drunc.process_manager.utils import (
+    print_logs,
+    print_ps_table,
+    tabulate_process_instance_list,
+)
 from drunc.run_control.interface.context import RunControlContext
 from drunc.utils.shell_utils import (
     InterruptedCommand,
     log_rc_cmd,
 )
-from drunc.utils.utils import get_logger, log_echo
+from drunc.utils.utils import format_table_width, get_logger, log_echo
+from drunc.utils.utils import wait as shell_wait
 
 
 def session_empty(f: FC) -> FC:
@@ -39,7 +44,6 @@ def session_empty(f: FC) -> FC:
     return cast(FC, update_wrapper(wrapper, f))
 
 
-
 @click.command("wait")
 @click.argument("sleep_time", type=int)
 @click.option(
@@ -49,11 +53,10 @@ def session_empty(f: FC) -> FC:
     help="Number of progress updates to print when --progress is set.",
 )
 @click.pass_obj
-def wait(
-    obj: RunControlContext, sleep_time: int, progress_steps: int | None
-) -> None:
+def wait(obj: RunControlContext, sleep_time: int, progress_steps: int | None) -> None:
     log = get_logger("run_control.wait")
     shell_wait(log, sleep_time, progress_steps)
+
 
 @click.command("echo")
 @click.argument("text", required=True)
@@ -314,3 +317,45 @@ def boot(
         raise e
 
     return
+
+
+@click.command("terminate")
+@click.option(
+    "-w",
+    "--width",
+    type=int,
+    default=None,
+    help="Table width. Default is automatically calculated",
+)
+@click.option(
+    "--fit",
+    is_flag=True,
+    default=False,
+    help="Restrict the table to the available terminal width.",
+)
+@click.pass_obj
+@click.pass_context
+def terminate(
+    ctx: click.core.Context, obj: RunControlContext, width: int | None, fit: bool
+) -> None:
+    """
+    Execute the process manager terminate command, but only do this for the current
+    session
+    """
+
+    log = get_logger("run_control.shell")
+    log_rc_cmd(obj)
+
+    log.info("Terminating session [green][/]")
+
+    result = obj.get_run_control_driver().terminate()
+
+    if not result:
+        return
+
+    table = tabulate_process_instance_list(
+        result, "Terminated process", False, width=width
+    )
+
+    table = format_table_width(obj._console, table, fit=fit)
+    obj.print(table, soft_wrap=not fit)
