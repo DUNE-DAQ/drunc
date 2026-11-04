@@ -985,7 +985,6 @@ class Controller(ControllerServicer):
             flag=ResponseFlag.EXECUTED_SUCCESSFULLY,
         )
         command_name = response.command_name
-        transition_started = False
         try:
             # Parse and validate target.
             try:
@@ -1065,7 +1064,6 @@ class Controller(ControllerServicer):
             # Execute FSM transition on this node.
             if request.target == self.name or request.execute_along_path:
                 fsm_args = self.stateful_node.decode_fsm_arguments(command)
-                transition_started = True
                 fsm_data = self.stateful_node.prepare_transition(
                     transition=transition,
                     transition_args=fsm_args,
@@ -1173,13 +1171,6 @@ class Controller(ControllerServicer):
             self._populate_response_error(
                 response, error, command_name, log_extra=self.handlerconf.ERS
             )
-            if transition_started:
-                try:
-                    self.stateful_node.to_error()
-                except Exception:
-                    self.log.exception("Failed to place controller in error state")
-            response.fsm_flag = FSMResponseFlag.FSM_FAILED
-            return response
 
     @authentified_and_authorised(action=ActionType.EXPERT, system=SystemType.CONTROLLER)
     @in_control
