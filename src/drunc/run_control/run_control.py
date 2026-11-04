@@ -377,6 +377,11 @@ class RunControl(abc.ABC, RunControlServicer):
     def ps(
         self, request: ProcessQuery, context: ServicerContext
     ) -> ProcessInstanceList:
+        if not self.session_config.valid:
+            context.abort(
+                StatusCode.INVALID_ARGUMENT, "session config not valid! please validate"
+            )
+
         self.log.info(f"{self.name} running ps")
 
         request.session = self.session_config.session_name
@@ -402,6 +407,11 @@ class RunControl(abc.ABC, RunControlServicer):
         log_req: LogRequest,
         context: ServicerContext,
     ) -> LogLines | None:
+        if not self.session_config.valid:
+            context.abort(
+                StatusCode.INVALID_ARGUMENT, "session config not valid! please validate"
+            )
+
         self.log.info(f"{self.name} running log")
 
         # I feel like these lines can be a decorater to grab the process manager
@@ -424,6 +434,11 @@ class RunControl(abc.ABC, RunControlServicer):
         terminate_req: Request,  # not sure what to do with this token
         context: ServicerContext,
     ) -> ProcessInstanceList:
+        if not self.session_config.valid:
+            context.abort(
+                StatusCode.INVALID_ARGUMENT, "session config not valid! please validate"
+            )
+
         self.log.info(f"{self.name} running terminate")
 
         # We'll probably need to add more things here in the future
