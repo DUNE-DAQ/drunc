@@ -181,7 +181,7 @@ def test_fsm_cmd_application_death_ps_table(run_dunerc) -> None:
     ps_table_post_conf = get_ps_table_after_echo(lines, "ps-post-conf")
     assert ps_table_post_conf, "Expected ps table after conf, but did not find it."
 
-    # Get te row for the dead application
+    # Get thse row for the dead application
     dead_app_ps_row = get_rows_by_friendly_name_from_ps_table(
         ps_table_post_conf, dead_app_name
     )
