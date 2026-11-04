@@ -6,16 +6,15 @@ import click
 from click.decorators import FC
 from druncschema.common_pb2 import LoggerTarget
 from druncschema.process_manager_pb2 import (
+    LogRequest,
     ProcessQuery,
 )
 from druncschema.request_response_pb2 import ResponseFlag
 from rich.table import Table
 
 from drunc.process_manager.interface.cli_argument import add_query_options_no_session
-from drunc.process_manager.interface.commands import (
-    ps_decorators,
-)
-from drunc.process_manager.utils import print_ps_table
+from drunc.process_manager.interface.commands import logs_decorators, ps_decorators
+from drunc.process_manager.utils import print_logs, print_ps_table
 from drunc.run_control.interface.context import RunControlContext
 from drunc.utils.shell_utils import (
     InterruptedCommand,
@@ -163,6 +162,30 @@ def ps(
     log.info("received results")
 
     print_ps_table(query, results, obj, log, long_format, width, fit)
+
+
+@click.command("logs")
+@session_empty  # injected at the run control server
+@add_query_options_no_session(at_least_one=False, all_processes_by_default=True)
+@logs_decorators
+@click.pass_obj
+def logs(
+    obj: RunControlContext,
+    how_far: int,
+    grep: str | None,
+    query: ProcessQuery,
+) -> None:
+    log_rc_cmd(obj)
+    log = get_logger("run_control.shell")
+    log.info(f"Running logs with query {query}")
+
+    log_req = LogRequest(
+        how_far=how_far,
+        query=query,
+    )
+
+    result = obj.get_run_control_driver().logs(log_req)
+    print_logs(obj, result, grep)
 
 
 @click.command("set-session-config")

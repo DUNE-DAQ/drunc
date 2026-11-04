@@ -2,6 +2,8 @@ import grpc
 from druncschema.common_pb2 import LoggerTarget, SendLogRequest, SendLogResponse
 from druncschema.description_pb2 import Description
 from druncschema.process_manager_pb2 import (
+    LogLines,
+    LogRequest,
     ProcessInstanceList,
     ProcessQuery,
 )
@@ -108,6 +110,15 @@ class RunControlDriver:
     ) -> ProcessInstanceList:
         request.token.CopyFrom(self.token)
         response = self.stub.ps(request, timeout=timeout)
+        return response
+
+    def logs(
+        self,
+        log_req: LogRequest,
+        timeout: int | float = 60,
+    ) -> LogLines | None:
+        log_req.token.CopyFrom(self.token)
+        response = self.stub.logs(log_req, timeout=timeout)
         return response
 
     def validate(self, timeout: int | float = 60) -> Response:

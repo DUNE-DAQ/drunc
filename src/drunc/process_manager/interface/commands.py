@@ -5,7 +5,6 @@ import click
 from click.decorators import FC
 from druncschema.common_pb2 import LoggerTarget
 from druncschema.process_manager_pb2 import LogRequest, ProcessQuery
-from rich.markup import escape
 from rich.panel import Panel
 
 from drunc.process_manager.interface.cli_argument import (
@@ -14,7 +13,11 @@ from drunc.process_manager.interface.cli_argument import (
 )
 from drunc.process_manager.interface.context import ProcessManagerContext
 from drunc.process_manager.process_manager_driver import ProcessManagerDriver
-from drunc.process_manager.utils import print_ps_table, tabulate_process_instance_list
+from drunc.process_manager.utils import (
+    print_logs,
+    print_ps_table,
+    tabulate_process_instance_list,
+)
 from drunc.unified_shell.context import UnifiedShellContext
 from drunc.utils.shell_utils import InterruptedCommand, log_pm_cmd
 from drunc.utils.utils import (
@@ -571,32 +574,7 @@ def logs_impl(
     if result is None:
         return
 
-    display_name = result.name or result.uuid.uuid or ""
-    if result.name is not None:
-        obj.rule(f"[yellow]{display_name}[/yellow] logs")
-
-    for line in result.lines:
-        if not line.strip():  # keep empty lines for visual clarity
-            obj.print("")
-            continue
-
-        line = line.rstrip("\n")  # remove trailing newline
-
-        if grep is not None and grep not in line:
-            continue
-
-        if grep is not None and grep:
-            # Highlight grep term by splitting on it, escaping each part separately,
-            # then rejoining with Rich underline markup around the escaped grep term
-            escaped_grep = escape(grep)
-            parts = line.split(grep)
-            escaped_line = f"[u]{escaped_grep}[/u]".join(escape(part) for part in parts)
-        else:
-            escaped_line = escape(line)
-
-        obj.print(escaped_line, soft_wrap=True)
-    if result.name is not None:
-        obj.rule(f"[yellow]{display_name}[/yellow] end")
+    print_logs(obj, result, grep)
 
 
 @click.command("restart")

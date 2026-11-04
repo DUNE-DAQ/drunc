@@ -9,6 +9,8 @@ from druncschema.authoriser_pb2 import ActionType, SystemType
 from druncschema.common_pb2 import LoggerTarget, SendLogRequest, SendLogResponse
 from druncschema.description_pb2 import CommandDescription, Description
 from druncschema.process_manager_pb2 import (
+    LogLines,
+    LogRequest,
     ProcessInstanceList,
     ProcessQuery,
 )
@@ -231,6 +233,7 @@ class RunControl(abc.ABC, RunControlServicer):
 
         return response
 
+    # Almost certianly not a read actiontype..
     @authentified_and_authorised(action=ActionType.READ, system=SystemType.RUN_CONTROL)
     def boot(
         self, breq: RCBootRequest, context: ServicerContext
@@ -392,6 +395,28 @@ class RunControl(abc.ABC, RunControlServicer):
 
         results = pm_driver.ps(request)
         return results
+
+    @authentified_and_authorised(action=ActionType.READ, system=SystemType.RUN_CONTROL)
+    def logs(
+        self,
+        log_req: LogRequest,
+        context: ServicerContext,
+    ) -> LogLines | None:
+        self.log.info(f"{self.name} running log")
+
+        # I feel like these lines can be a decorater to grab the process manager
+        # maybe @with_process_manager ?
+
+        log_req.query.session = self.session_config.session_name
+        try:
+            pm_driver = self.get_driver("process_manager")
+        except ValueError:
+            message = "Cannot list processes: process manager is not connected"
+            self.log.error(message)
+            context.abort(StatusCode.INVALID_ARGUMENT, message)
+
+        result = pm_driver.logs(log_req)
+        return result
 
     def get_driver(self, driver_key):
         if driver_key not in self.drivers:
