@@ -582,10 +582,19 @@ class Controller(ControllerServicer):
         """
 
         def safe_call(child: ChildNode, target: str) -> T:
-            """Wrapper for child_callable that handles exceptions and failure responses."""
+            """Wrapper for each child operation which handles exceptions and failure responses.
+            
+            It handles three outcomes:
+            - success
+            - expected failure (grpc.RpcError or DruncException) = Return a response containing
+                wrapped errror details (ChildCommandException)
+            - unexpected failures = Log the traceback and attach error details to response
+            """
             try:
                 return child_callable(child, target) # preserve the child's response
             except Exception as error:
+
+                # Unexpected failures
                 if not isinstance(error, (grpc.RpcError, DruncException)):
                     if failure_response is None: 
                         raise
@@ -611,9 +620,13 @@ class Controller(ControllerServicer):
                     )
                     return response
 
+                # reraise ServerTimeout only if no failure response is provided
+                # if raised by default, then if one child is in timeout we lose sibling's responses
                 if isinstance(error, ServerTimeout) and failure_response is None:
                     raise # should this propagate the server timeout as is or return a normal response?
                 rpc_error: BaseException | None = error
+
+                # Expected failures    
                 if isinstance(error, ServerUnreachable):
                     # ServerUnreachable may wrap the original gRPC error
                     while rpc_error is not None and not isinstance(
@@ -1105,29 +1118,50 @@ class Controller(ControllerServicer):
                 child_command = FSMCommand()
                 child_command.CopyFrom(command)
                 child_command.data = fsm_data
-                try:
-                    child_responses = self.propagate_concurrently(
-                        lambda child, target: child.execute_fsm_command(
-                            child_command,
-                            target,
-                            request.execute_along_path,
-                            request.execute_on_all_subsequent_children_in_path,
-                        ),
-                        child_list,
-                        indices=connected_indices,
-                        failure_response=lambda child: ExecuteFSMCommandResponse(
-                            name=child.name,
-                            command_name=command_name,
-                            fsm_flag=FSMResponseFlag.FSM_FAILED,
-                        ),
-                    )
-                    response.children.extend(child_responses)
-                except ServerTimeout as e:
+                child_responses = self.propagate_concurrently(
+                    lambda child, target: child.execute_fsm_command(
+                        child_command,
+                        target,
+                        request.execute_along_path,
+                        request.execute_on_all_subsequent_children_in_path,
+                    ),
+                    child_list,
+                    indices=connected_indices,
+                    failure_response=lambda child: ExecuteFSMCommandResponse(
+                        name=child.name,
+                        command_name=command_name,
+                        fsm_flag=FSMResponseFlag.FSM_FAILED,
+                    ),
+                )
+                response.children.extend(child_responses)
+
+                # Chek if any children response is ServerTimeout
+                timeout_children = []
+                for child_response in child_responses:
+                    for packed_detail in child_response.error.details:
+                        detail = error_details_pb2.ErrorInfo()
+                        if (
+                            packed_detail.Unpack(detail)
+                            and detail.domain == "drunc"
+                            and (
+                                detail.reason == "ServerTimeout"
+                                or detail.metadata.get("child_code") == "DEADLINE_EXCEEDED"
+                            )
+                        ):
+                            timeout_children.append(child_response.name)
+                            break
+
+                # if any children is in timeout then place the parent in error           
+                if timeout_children:
                     response.fsm_flag = FSMResponseFlag.FSM_FAILED
                     self.stateful_node.to_error()
-                    self.log.error(
-                        f"FSM command '{command_name}' failed: {e}",
-                        extra=self.handlerconf.ERS,
+                    self._populate_response_error(
+                        response,
+                        ServerTimeout(
+                            f"Timed out on child node(s): {', '.join(timeout_children)}"
+                        ),
+                        command_name,
+                        log_extra=self.handlerconf.ERS,
                     )
                     return response
 
@@ -1171,6 +1205,8 @@ class Controller(ControllerServicer):
             self._populate_response_error(
                 response, error, command_name, log_extra=self.handlerconf.ERS
             )
+            response.fsm_flag = FSMResponseFlag.FSM_FAILED
+            return response
 
     @authentified_and_authorised(action=ActionType.EXPERT, system=SystemType.CONTROLLER)
     @in_control
