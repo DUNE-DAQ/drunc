@@ -920,12 +920,12 @@ def run_one_fsm_command(
                         time.sleep(0.005)
 
                     updater.update_table()
-                result = future.result(timeout=1)
+                result = future.result()
             else:
                 log.info(
                     f"Waiting for [yellow]{transition_name}[/yellow] to complete... (non-interactive)"
                 )
-                result = future.result(timeout=timeout)
+                result = future.result()
 
     except ArgumentException as ae:
         log.exception(
