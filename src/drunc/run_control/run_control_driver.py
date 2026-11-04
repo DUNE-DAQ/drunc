@@ -6,7 +6,11 @@ from druncschema.process_manager_pb2 import (
     ProcessQuery,
 )
 from druncschema.request_response_pb2 import Request, Response
-from druncschema.run_control_pb2 import ConnectToPMRequest, SessionConfiguration
+from druncschema.run_control_pb2 import (
+    ConnectToPMRequest,
+    RCBootRequest,
+    SessionConfiguration,
+)
 from druncschema.run_control_pb2_grpc import RunControlStub
 from druncschema.token_pb2 import Token
 
@@ -110,6 +114,26 @@ class RunControlDriver:
         """Set the server's session configuration valid flag to true."""
         request = Request(token=copy_token(self.token))
         return self.stub.validate(request, timeout=timeout)
+
+    def boot(
+        self,
+        log_level,
+        user,
+        override_logs,
+        sleep_between_app_boot,
+        timeout: int | float = 60,
+    ) -> Response:
+        """boots.."""
+
+        breq = RCBootRequest(
+            token=copy_token(self.token),
+            user=user,
+            log_level=log_level,
+            override_logs=override_logs,
+            sleep_between_app_boot=sleep_between_app_boot,
+        )
+
+        return self.stub.boot(breq, timeout=timeout)
 
     def set_session_config(
         self,

@@ -6,6 +6,7 @@ import click
 import click_shell
 
 from drunc.run_control.interface.commands import (
+    boot,
     connect_to_pm,
     echo,
     print_session_config,
@@ -79,6 +80,7 @@ def rc_shell(ctx: click.core.Context, run_control_address: str):
         set_session_config,
         print_session_config,
         validate,
+        boot,
     ]
 
     # cast the command group

@@ -3,6 +3,7 @@ import json
 import os
 import signal
 import tempfile
+import threading
 import time
 from collections.abc import Iterator
 from time import sleep
@@ -780,8 +781,17 @@ To debug it, close drunc and run the following command:
             self.log.warning("Interrupted")
             raise KeyboardInterrupt
 
-        original_sigint_handler = signal.getsignal(signal.SIGINT)
-        signal.signal(signal.SIGINT, keyboard_interrupt_on_sigint)
+        # SIGINT handlers require the main thread; skip them in gRPC workers.
+        # This preserves shell Ctrl+C handling but adds no remote cancellation.
+        # TODO: propagate RPC cancellation/deadlines through discovery retries.
+        # Align boot/discovery time budgets and report lookup failures explicitly.
+        # Timeout/cancellation must warn that launched apps may still be running.
+        is_main_thread = threading.current_thread() is threading.main_thread()
+        original_sigint_handler = None
+
+        if is_main_thread:
+            original_sigint_handler = signal.getsignal(signal.SIGINT)
+            signal.signal(signal.SIGINT, keyboard_interrupt_on_sigint)
         try:
             self.controller_address = get_controller_address(session_dal, session_name)
         except KeyboardInterrupt:
@@ -796,7 +806,8 @@ To debug it, close drunc and run the following command:
                     f"This shell didn't connect to the {top_controller_name}. You can use the connect command to connect to the controller."
                 )
         finally:
-            signal.signal(signal.SIGINT, original_sigint_handler)
+            if is_main_thread:
+                signal.signal(signal.SIGINT, original_sigint_handler)
 
     # ----- Dummy boot workflow -----
     def dummy_boot(

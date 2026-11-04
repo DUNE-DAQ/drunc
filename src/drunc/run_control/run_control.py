@@ -1,6 +1,6 @@
 import abc
 import getpass
-from collections.abc import MutableMapping
+from collections.abc import Iterator, MutableMapping
 from dataclasses import asdict, dataclass, fields
 from urllib.parse import ParseResult, urlparse
 
@@ -13,17 +13,22 @@ from druncschema.process_manager_pb2 import (
     ProcessQuery,
 )
 from druncschema.request_response_pb2 import Request, Response, ResponseFlag
-from druncschema.run_control_pb2 import ConnectToPMRequest, SessionConfiguration, RCBootRequest
+from druncschema.run_control_pb2 import (
+    ConnectToPMRequest,
+    RCBootRequest,
+    SessionConfiguration,
+)
 from druncschema.run_control_pb2_grpc import RunControlServicer
 from grpc import ServicerContext, StatusCode
 
 from drunc.authoriser.configuration import DummyAuthoriserConfHandler
 from drunc.authoriser.decorators import authentified_and_authorised
 from drunc.authoriser.dummy_authoriser import DummyAuthoriser
+from drunc.exceptions import DruncSetupException
+from drunc.utils.shell_utils import InterruptedCommand
 from drunc.utils.utils import get_logger, log_echo, resolve_localhost_to_hostname
 
-from drunc.utils.shell_utils import InterruptedCommand
-from drunc.exceptions import DruncSetupException
+
 @dataclass
 class SessionConfig:
     configuration_file: str = ""
@@ -226,7 +231,10 @@ class RunControl(abc.ABC, RunControlServicer):
 
         return response
 
-    def boot(self, breq: RCBootRequest, context: ServicerContext) -> Response:
+    @authentified_and_authorised(action=ActionType.READ, system=SystemType.RUN_CONTROL)
+    def boot(
+        self, breq: RCBootRequest, context: ServicerContext
+    ) -> Iterator[ProcessInstanceList]:
         # workflow:
         """
         1. add a 'valid' in the dataclass
@@ -235,7 +243,9 @@ class RunControl(abc.ABC, RunControlServicer):
         """
 
         if not self.session_config.valid:
-            context.abort(StatusCode.INVALID_ARGUMENT, "session config not valid! please validate")
+            context.abort(
+                StatusCode.INVALID_ARGUMENT, "session config not valid! please validate"
+            )
 
         try:
             pm_driver = self.get_driver("process_manager")
@@ -244,14 +254,28 @@ class RunControl(abc.ABC, RunControlServicer):
             self.log.error(message)
             context.abort(StatusCode.INVALID_ARGUMENT, message)
 
+        expected_booted_processes = 0
+
+        # check if we can boot first by diong a ps
+        processes = pm_driver.ps(
+            ProcessQuery(user=breq.user, session=self.session_config.session_name)
+        )
+
+        if len(processes.values) > 0:
+            self.log.error(
+                f"Cannot boot: session {self.session_config.session_name} already has {len(processes.values)} processes running. "
+                "Please terminate the existing session first."
+            )
+            return
+
         try:
             results = pm_driver.boot(
                 conf_file=self.session_config.configuration_file,
                 conf_id=self.session_config.configuration_id,
                 user=breq.user,
                 session_name=self.session_config.session_name,
-                log_level=breq.controller_log_level,
-                override_logs=breq.override_logs_boot,
+                log_level=breq.log_level,
+                override_logs=breq.override_logs,
                 sleep_between_app_boot=breq.sleep_between_app_boot,
             )
 
@@ -276,9 +300,13 @@ class RunControl(abc.ABC, RunControlServicer):
             self.log.error(e)
             return
 
-        processes = pm_driver.ps(ProcessQuery(user=breq.user, session=self.session_config.session_name))
+        processes = pm_driver.ps(
+            ProcessQuery(user=breq.user, session=self.session_config.session_name)
+        )
         if not processes.values:
-            self.log.debug("No processes found after boot - stopping due to previous errors")
+            self.log.debug(
+                "No processes found after boot - stopping due to previous errors"
+            )
             return
 
         # TODO Skeleton: Will obviously need filling up as features pop in
@@ -288,7 +316,6 @@ class RunControl(abc.ABC, RunControlServicer):
             token=None,
         )
         return response
-        
 
         ## To be dealt with later!
         # controller_address = pm_driver.controller_address
@@ -301,12 +328,7 @@ class RunControl(abc.ABC, RunControlServicer):
         #     log.error("Could not understand where the controller is!")
         #     return
 
-
         ## Add a bunch of error handling herer
-            
-
-
-
 
     @authentified_and_authorised(action=ActionType.READ, system=SystemType.RUN_CONTROL)
     def connect_to_pm(
@@ -362,7 +384,7 @@ class RunControl(abc.ABC, RunControlServicer):
             message = "Cannot list processes: process manager is not connected"
             self.log.error(message)
             context.abort(StatusCode.INVALID_ARGUMENT, message)
-            
+
         # Will need cleaning later
         args = f" with request {request}" if request else ""
         msg = f"{getpass.getuser()} sent ps{args} via {self.rc_type}"
@@ -376,5 +398,3 @@ class RunControl(abc.ABC, RunControlServicer):
             self.log.error(f"{driver_key} is not yet initialised. Please do so!")
             raise ValueError("bad key")
         return self.drivers[driver_key]
-
-
