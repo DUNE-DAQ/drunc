@@ -186,8 +186,8 @@ dunerc_commands = (
     + " terminate "
     + _FSM_SEQUENCES["test_start_run"].to_command_block()
     + _FSM_SEQUENCES["test_stop_run"].to_command_block()
-    + "start-run --run-number 3"
-    + _FSM_SEQUENCES["test_stop_run"].to_command_block()
+    # + "start-run --run-number 3"
+    # + _FSM_SEQUENCES["test_stop_run"].to_command_block()
     + f"""
     echo {_SHUTDOWN_MARKER}
     shutdown
