@@ -22,13 +22,13 @@ from druncschema.controller_pb2 import (
     FSMCommand,
     FSMCommandDescription,
     FSMResponseFlag,
+    ScalarArgument,
     Status,
     StatusResponse,
 )
 from druncschema.description_pb2 import Description
 from druncschema.generic_pb2 import bool_msg, float_msg, int_msg, string_msg
 from druncschema.request_response_pb2 import ResponseFlag
-from google.protobuf import any_pb2
 from rich.console import Console, ConsoleOptions, Group, RenderResult
 from rich.measure import Measurement
 from rich.progress import (
@@ -49,13 +49,13 @@ from drunc.unified_shell.context import UnifiedShellContext, UnifiedShellMode
 from drunc.utils.grpc_utils import (
     ServerTimeout,
     ServerUnreachable,
-    pack_to_any,
     unpack_any,
 )
 from drunc.utils.shell_utils import format_table_width
 from drunc.utils.utils import format_name_for_cli, get_logger, get_shared_rich_console
 
 log = get_logger("controller.iface.shell_utils")
+is_interactive = sys.stdout.isatty() and os.environ.get("TERM") != "dumb"
 
 
 @dataclass(slots=True)
@@ -118,6 +118,21 @@ def get_status_table(
         describe_response: DescribeResponse,
         prefix: str,
     ) -> None:
+        """
+        Adds the status of a single process to the table.
+
+        Args:
+            table: The table to add the status to
+            status_response: The status response for the process
+            describe_response: The describe response for the process
+            prefix: A prefix to add to the process name in the table
+
+        Returns:
+            None
+
+        Raises:
+            None
+        """
         status = status_response.status
         description = describe_response.description
         if status is None or description is None:
@@ -675,10 +690,33 @@ def tree_prefix(i: int, n: int) -> str:
         return next
 
 
+def parse_bool(value: bool | str) -> bool:
+    """Convert a boolean string to a bool.
+
+    Args:
+        value: A boolean as a string.
+
+    Returns:
+        The corresponding boolean value.
+
+    Raises:
+        ValueError: If the string is not a recognized boolean value.
+    """
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, str):
+        bool_value = value.strip().lower()
+        if bool_value in {"true", "1", "yes", "on"}:
+            return True
+        if bool_value in {"false", "0", "no", "off"}:
+            return False
+    raise ValueError(f"Invalid boolean value: {value}")
+
+
 def validate_and_format_fsm_arguments(
     arguments: dict[str, int | bool | str | float | None] | None,
     command_arguments: list[Argument],
-) -> dict[str, any_pb2.Any]:
+) -> dict[str, ScalarArgument]:
     """
     Validates and formats the arguments passed to an FSM command based on the command's
     argument descriptions.
@@ -693,76 +731,51 @@ def validate_and_format_fsm_arguments(
     Raises:
         ArgumentException: If there is an issue with the arguments (missing, duplicate, invalid type, or unhandled type)
     """
-    # If the argument dict is empty, don't bother trying to read it
-    if not arguments:
-        return {}
 
     # Define the output dict that will be sent to the controller, with argument names
     # and their formatted values
-    out_dict: dict[str, any_pb2.Any] = {}
+    out_dict: dict[str, ScalarArgument] = {}
+
+    argument_types = {
+        Argument.Type.INT: (int_msg, "int_val", int),
+        Argument.Type.FLOAT: (float_msg, "float_val", float),
+        Argument.Type.STRING: (string_msg, "string_val", str),
+        Argument.Type.BOOL: (bool_msg, "bool_val", parse_bool),
+    }
 
     # Strip out any arguments that are None, as they are considered not passed, and will
     # be set to default values if they exist, or raise an error if they are mandatory
     # without default value
-    arguments: dict[str, int | bool | str | float] = {
-        k: v for k, v in arguments.items() if v is not None
-    }
+    arguments = {k: v for k, v in (arguments or {}).items() if v is not None}
 
     # Iterate over the command's argument descriptions, validate the passed arguments,
     # and format them to be sent to the controller
     for argument_desc in command_arguments:  #  type: Argument
         aname: str = argument_desc.name
-        atype: str = Argument.Type.Name(argument_desc.type)
+        atype_name: str = Argument.Type.Name(argument_desc.type)
 
         # Check for duplicate arguments
         if aname in out_dict:
-            raise DuplicateArgument(aname)
-
-        # Check for missing mandatory arguments
-        if (
-            argument_desc.presence == Argument.Presence.MANDATORY
-            and aname not in arguments
-        ):
-            raise MissingArgument(aname, atype)
+            raise DuplicateArgument(argument_desc.type)
 
         # If the argument is not passed, and it has a default value, use the default value
         value: str | int | float | bool | None = arguments.get(aname)
+
+        message_type, field_name, convert = argument_types[argument_desc.type]
+
+        if value is None and argument_desc.HasField("default_value"):
+            value = unpack_any(argument_desc.default_value, message_type).value
+
+        # Check for missing mandatory arguments
         if value is None:
-            if argument_desc.HasField("default_value"):
-                out_dict[aname] = argument_desc.default_value
+            if argument_desc.presence == Argument.Presence.MANDATORY:
+                raise MissingArgument(aname, atype_name)
             continue
 
-        # Convert the argument value to the appropriate type based on the argument
-        # description, and format it to be sent to the controller
-        match argument_desc.type:
-            case Argument.Type.INT:
-                try:
-                    value = int(value)
-                except Exception as e:
-                    raise InvalidArgumentType(aname, value, atype) from e
-                value = int_msg(value=value)
-            case Argument.Type.FLOAT:
-                try:
-                    value = float(value)
-                except Exception as e:
-                    raise InvalidArgumentType(aname, value, atype) from e
-                value = float_msg(value=value)
-            case Argument.Type.STRING:
-                value = string_msg(value=value)
-            case Argument.Type.BOOL:
-                bvalue = value  # .lower() in ['true', '1', 't', 'y', 'yes', 'yeah', 'yup', 'certainly']
-                try:
-                    value = bool_msg(value=bvalue)
-                except Exception as e:
-                    raise InvalidArgumentType(aname, value, atype) from e
-            case _:
-                try:
-                    pretty_type = Argument.Type.Name(argument_desc.type)
-                except:
-                    pretty_type = argument_desc.type
-                raise UnhandledArgumentType(argument_desc.name, pretty_type)
-        out_dict[aname] = pack_to_any(value)
-
+        try:
+            out_dict[aname] = ScalarArgument(**{field_name: convert(value)})
+        except (TypeError, ValueError) as error:
+            raise InvalidArgumentType(aname, value, atype_name) from error
     return out_dict
 
 
@@ -895,20 +908,24 @@ def run_one_fsm_command(
                 execute_on_all_subsequent_children_in_path=execute_on_all_subsequent_children_in_path,
                 timeout=timeout,
             )
+            if is_interactive:
+                with StatusTableUpdater(obj) as updater:
+                    task = updater.add_task(
+                        f"Waiting for [yellow]{transition_name}[/yellow] to complete...",
+                        total=timeout,
+                    )
+                    while time.time() - time_start < timeout and not future.done():
+                        updater.update(task, completed=time.time() - time_start)
+                        updater.update_table()
+                        time.sleep(0.005)
 
-            with StatusTableUpdater(obj) as updater:
-                task = updater.add_task(
-                    f"Waiting for [yellow]{transition_name}[/yellow] to complete...",
-                    total=timeout,
-                )
-                while time.time() - time_start < timeout and not future.done():
-                    updater.update(task, completed=time.time() - time_start)
                     updater.update_table()
-                    time.sleep(0.5)
-
-                updater.update_table()
-
-            result = future.result(timeout=1)
+                result = future.result()
+            else:
+                log.info(
+                    f"Waiting for [yellow]{transition_name}[/yellow] to complete... (non-interactive)"
+                )
+                result = future.result()
 
     except ArgumentException as ae:
         log.exception(

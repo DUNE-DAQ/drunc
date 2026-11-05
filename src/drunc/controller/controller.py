@@ -960,7 +960,10 @@ class Controller(ControllerServicer):
             except ServerTimeout as e:
                 response.fsm_flag = FSMResponseFlag.FSM_FAILED
                 self.stateful_node.to_error()
-                self.log.error(f"FSM command '{command_name}' failed: {e}")
+                self.log.error(
+                    f"FSM command '{command_name}' failed: {e}",
+                    extra=self.handlerconf.ERS,
+                )
                 return response
 
             # Finish propagating FSM transition to children.
@@ -1620,9 +1623,7 @@ class Controller(ControllerServicer):
             response.flag = ResponseFlag.NOT_EXECUTED_BAD_REQUEST_FORMAT
             return response
 
-        # This node.
-        if request.target == self.name or request.execute_along_path:
-            request.target = ""
+        execute_on_this_node = request.target == self.name or request.execute_along_path
 
         # Children nodes (ignore exclusion).
         child_list = self.address_target_path(
@@ -1632,14 +1633,14 @@ class Controller(ControllerServicer):
         )
         connected_indices, disconnected_indices = self._partition_connected_children(
             child_list,
-            operation_name="who_is_in_charge",
+            operation_name="send_log",
         )
         child_responses = self.propagate_concurrently(
             lambda child, target: child.send_log(
                 request.text,
                 request.severity,
                 request.logger,
-                request.target,
+                target,
                 request.execute_along_path,
                 request.execute_on_all_subsequent_children_in_path,
             ),
@@ -1659,7 +1660,7 @@ class Controller(ControllerServicer):
         response.children.extend(child_responses)
 
         # This node.
-        if request.target in [self.name, ""] or request.execute_along_path:
+        if execute_on_this_node:
             if request.logger == LoggerTarget.ECHO:
                 self.log.critical("Echo logging is not implemented")
                 return SendLogResponse(

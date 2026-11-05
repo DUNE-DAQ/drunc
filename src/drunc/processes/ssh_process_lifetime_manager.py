@@ -8,12 +8,13 @@ including process startup, monitoring, termination, and output capture.
 import logging
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from typing import Dict, List, Optional
+from typing import Callable, Dict, List, Optional
 
 from druncschema.process_manager_pb2 import BootRequest
 
 from drunc.processes.connection_utils import wait_for
 from drunc.processes.exit_status import ExitStatus
+from drunc.utils.utils import get_logger
 
 
 @dataclass
@@ -48,6 +49,29 @@ class ProcessLifetimeManager(ABC):
     KILLING_PROCESS_POLL_INTERVAL = 0.1  # seconds
     # Interval to wait before concluding metadata file writing failed on remote host.
     DEFAULT_TIMEOUT_FOR_READING_METADATA = 5.0  # seconds
+
+    def __init__(
+        self,
+        disable_host_key_check: bool = False,
+        disable_localhost_host_key_check: bool = False,
+        logger: Optional[logging.Logger] = None,
+        on_process_exit: Optional[
+            Callable[[str, Optional[ExitStatus], Optional[Exception]], None]
+        ] = None,
+    ) -> None:
+        """
+        Common constructor signature for all lifetime managers.
+
+        Args:
+            disable_host_key_check: Disable SSH host key verification for all hosts
+            disable_localhost_host_key_check: Disable SSH host key verification for localhost
+            logger: Logger instance for real-time output logging
+            on_process_exit: Optional callback function(uuid, exit_status, exception) invoked when process exits
+        """
+        self.disable_host_key_check = disable_host_key_check
+        self.disable_localhost_host_key_check = disable_localhost_host_key_check
+        self.log = logger if logger else get_logger(type(self).__name__)
+        self._on_process_exit = on_process_exit
 
     def wait_for_process_to_die(
         self,
