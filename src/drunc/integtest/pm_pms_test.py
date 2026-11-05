@@ -3,6 +3,7 @@
 
 import functools
 import getpass
+import os
 import re
 from datetime import datetime
 
@@ -27,13 +28,16 @@ from integ_test_utils import (
     require_pattern_match_index,
     strip_ansi,
 )
-from pm_test_common import ignored_logfile_problems, make_conf_dict
+from pm_test_common import ignored_logfile_problems
 
 print = functools.partial(print, flush=True)  # always flush print() output
 
 pytest_plugins = "integrationtest.integrationtest_drunc"
 
-conf_dict = make_conf_dict("pm_pms")
+conf_dict = idc.integtest_params_for_predefined_dunedaq_config()
+conf_dict.predefined_config_db = (
+    os.environ.get("DAQSYSTEMTEST_SHARE") + "/config/daqsystemtest/example-configs.data.xml"
+)
 
 confgen_arguments = {"SmallFootprint": conf_dict}
 
@@ -46,7 +50,7 @@ dunerc_commands = f"""
     echo pre_boot
     echo --server  pre_boot
     ps
-    boot config/daqsystemtest/example-configs.data.xml local-1x1-config {daq_session_name}
+    boot <config_data_file> local-1x1-config {daq_session_name}
     wait 15
     echo post_boot
     echo --server  post_boot
