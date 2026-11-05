@@ -109,9 +109,11 @@ class K8sPodWatcherThread(threading.Thread):
                     if not proc_uuid:
                         continue
 
-                    # Restart reuses the drunc uuid, so ignore events from an
-                    # older pod (e.g. a late DELETED event) that has since been
-                    # replaced. Repeat events are deduplicated in notify_termination.
+                    # Each event is one ADDED/MODIFIED/DELETED update for a pod.
+                    # Restart keeps the process UUID but creates a new pod, so
+                    # ignore events from an older pod of this process (e.g. a
+                    # late DELETED event) by comparing Kubernetes pod UIDs.
+                    # Repeat events are deduplicated in notify_termination.
                     if not self.pm._is_current_pod(proc_uuid, metadata.uid):
                         continue
 
@@ -151,7 +153,7 @@ class K8sPodWatcherThread(threading.Thread):
                         )
 
                         self.pm.notify_termination(
-                            proc_uuid, exit_code, reason, session
+                            proc_uuid, metadata.uid, exit_code, reason, session
                         )
 
             except ApiException as e:
@@ -225,12 +227,13 @@ class K8sProcessManager(ProcessManager):
         # keeps concurrent kills (e.g. different sessions) from sharing state.
         self._pending_deletion_batches: dict[str, tuple[set[str], threading.Event]] = {}
         self._pending_deletion_lock = threading.Lock()
-        # uuids whose termination was already logged/recorded for the current
-        # boot; cleared in _reset_process_state when the uuid is (re)booted
-        self._notified_uuids: set[str] = set()
+        # Kubernetes pod UIDs whose termination was already logged/recorded.
+        # Every pod has its own UID, so a restarted process starts clean.
+        self._notified_pod_uids: set[str] = set()
         self.final_exit_codes = {}
-        # proc_uuid -> k8s UID of the pod currently running it. None while a
-        # (re)boot is in progress. Lets the watcher drop events from old pods.
+        # Process UUID -> Kubernetes pod UID (metadata.uid) of the process's
+        # current pod. None while a (re)boot is in progress. Lets the watcher
+        # drop events from the process's old pods.
         self._pod_uid_by_uuid: dict[str, str | None] = {}
         # Guards inserts/deletes on boot_request against concurrent iteration
         self.boot_request_lock = threading.Lock()
@@ -367,7 +370,12 @@ class K8sProcessManager(ProcessManager):
             )
 
     def notify_termination(
-        self, proc_uuid: str, exit_code: int, reason: str, session: str
+        self,
+        proc_uuid: str,
+        pod_uid: str | None,
+        exit_code: int,
+        reason: str,
+        session: str,
     ) -> None:
         """
         Callback for when a pod terminates.
@@ -376,19 +384,24 @@ class K8sProcessManager(ProcessManager):
         batch (if any) once every uuid in it is confirmed.
 
         Args:
-            proc_uuid: The UUID string of the terminated process.
+            proc_uuid: The process UUID of the terminated process.
+            pod_uid: The Kubernetes pod UID (metadata.uid) of the terminated
+                pod, or None if no pod was ever created for this boot.
             exit_code: The integer exit code of the terminated pod.
             reason: A string describing the termination reason (e.g. 'GracefulShutdown', 'PodDeleted').
             session: The Kubernetes namespace (session) the pod belonged to.
         """
         self.log.debug(f"notify_termination called for '{proc_uuid}'.")
 
-        # Only record/publish each uuid's termination once per boot. The batch
+        # Only record/publish each pod's termination once. The batch
         # confirmation below must still run: a pod that already exited (and was
         # reported) can later be deleted by kill, which waits on that batch.
         with self._pending_deletion_lock:
-            first_notification = proc_uuid not in self._notified_uuids
-            self._notified_uuids.add(proc_uuid)
+            first_notification = (
+                pod_uid is None or pod_uid not in self._notified_pod_uids
+            )
+            if pod_uid is not None:
+                self._notified_pod_uids.add(pod_uid)
 
         # Publish a log message and to kafka for each process that is terminated
         if first_notification and proc_uuid in self.boot_request:
@@ -433,14 +446,16 @@ class K8sProcessManager(ProcessManager):
 
     def _is_current_pod(self, proc_uuid: str, pod_uid: str | None) -> bool:
         """
-        Checks whether a watch event belongs to the pod currently running proc_uuid.
+        Checks whether a watch event comes from the current pod of a process.
 
-        Restart reuses the drunc uuid for the new pod, so the k8s pod UID is
+        The current pod is the one created by the latest boot or restart of
+        the process with this process UUID. Restart keeps the process UUID but
+        creates a new pod with a new Kubernetes pod UID, so the pod UID is
         used to tell the old pod's events apart from the new one's.
 
         Args:
-            proc_uuid: The drunc UUID label on the pod.
-            pod_uid: The k8s metadata.uid of the pod in the event.
+            proc_uuid: The process UUID, read from the pod's uuid label.
+            pod_uid: The Kubernetes pod UID (metadata.uid) of the pod in the event.
 
         Returns:
             True if the event should be handled, False if it is from a replaced pod.
@@ -448,21 +463,6 @@ class K8sProcessManager(ProcessManager):
         if proc_uuid not in self._pod_uid_by_uuid:
             return True
         return self._pod_uid_by_uuid[proc_uuid] == pod_uid
-
-    def _reset_process_state(self, proc_uuid: str) -> None:
-        """
-        Clears per-uuid termination state before (re)booting a process.
-
-        Mirrors the SSH process manager, which drops a uuid's exit status and
-        watchers before rebooting it under the same uuid on restart.
-
-        Args:
-            proc_uuid: The UUID about to be booted.
-        """
-        with self._pending_deletion_lock:
-            self._notified_uuids.discard(proc_uuid)
-        # Ignore all watch events for this uuid until the new pod UID is known.
-        self._pod_uid_by_uuid[proc_uuid] = None
 
     def is_alive(self, podname: str, session: str) -> bool:
         """
@@ -2243,8 +2243,9 @@ class K8sProcessManager(ProcessManager):
         # Pre-checks (Session validation, NodePort collision)
         self._run_pre_boot_checks(session, podname, boot_request)
 
-        # Restart reuses the uuid, so start from clean termination state
-        self._reset_process_state(uuid)
+        # Ignore watch events for this process until its new pod exists, so a
+        # late event from the pod being replaced on restart is not counted.
+        self._pod_uid_by_uuid[uuid] = None
 
         # Resource Creation (Namespace, Pod, Labels)
         self._prepare_namespace(session)
@@ -2357,8 +2358,8 @@ class K8sProcessManager(ProcessManager):
         """
         Handles the 'restart' command.
 
-        Kills each matched process and re-boots it under the same uuid using the
-        original boot request. If the old pod object is not fully gone yet, pod
+        Kills each matched process and re-boots it under the same process UUID
+        using the original boot request. If the old pod object is not fully gone yet, pod
         creation retries on 409 Conflict (see _execute_pod_creation_api).
         Failed restarts are included in the result with DEAD status.
 
@@ -2579,7 +2580,11 @@ class K8sProcessManager(ProcessManager):
                         f'{pd.metadata.name}" (UUID {proc_uuid}); confirming directly.'
                     )
                     self.notify_termination(
-                        proc_uuid, -1, "PodDeleted", pd.metadata.session
+                        proc_uuid,
+                        self._pod_uid_by_uuid.get(proc_uuid),
+                        -1,
+                        "PodDeleted",
+                        pd.metadata.session,
                     )
 
             with self._pending_deletion_lock:
@@ -2675,7 +2680,9 @@ class K8sProcessManager(ProcessManager):
                     )
                     final_ret.append(pi)
                     del self.boot_request[proc_uuid]
-                    self._pod_uid_by_uuid.pop(proc_uuid, None)
+                    pod_uid = self._pod_uid_by_uuid.pop(proc_uuid, None)
+                    with self._pending_deletion_lock:
+                        self._notified_pod_uids.discard(pod_uid)
 
         # drop process once it's gone
         for pi in final_ret:
