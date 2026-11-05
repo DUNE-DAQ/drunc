@@ -178,14 +178,14 @@ dunerc_commands = (
 
 
     """
-    # + "".join(p.to_command_block() for p in _FSM_COMMANDS)
-    # + _FSM_SEQUENCES["test_srun_w_boot"].to_command_block()
-    # + " terminate "
-    # + "boot wait 10 conf"
-    # + _FSM_SEQUENCES["test_srunw_boot_conf"].to_command_block()
-    # + " terminate "
-    # + _FSM_SEQUENCES["test_start_run"].to_command_block()
-    # + _FSM_SEQUENCES["test_stop_run"].to_command_block()
+    + "".join(p.to_command_block() for p in _FSM_COMMANDS)
+    + _FSM_SEQUENCES["test_srun_w_boot"].to_command_block()
+    + " terminate "
+    + "boot wait 10 conf"
+    + _FSM_SEQUENCES["test_srunw_boot_conf"].to_command_block()
+    + " terminate "
+    + _FSM_SEQUENCES["test_start_run"].to_command_block()
+    + _FSM_SEQUENCES["test_stop_run"].to_command_block()
     # + "start-run --run-number 3"
     # + _FSM_SEQUENCES["test_stop_run"].to_command_block()
     + f"""
@@ -715,77 +715,77 @@ def test_terminate(run_dunerc) -> None:
 # ── FSM command/sequence tests (mirrors controller_test.py) ────────────────────
 
 
-# def _check_fsm_command(
-#     lines: list[str],
-#     boot_status_table: list[dict[str, str]],
-#     params: FsmCommandParams,
-# ) -> None:
-#     """Shared assertion logic for a drunc FSM command.
+def _check_fsm_command(
+    lines: list[str],
+    boot_status_table: list[dict[str, str]],
+    params: FsmCommandParams,
+) -> None:
+    """Shared assertion logic for a drunc FSM command.
 
-#     Checks:
-#     - Execution report names match boot table, all rows successful.
-#     - Post-command status table has expected state/substates.
-#     - Run number if specified.
-#     """
-#     exec_report = get_execution_report_after_echo(lines, params.marker)
-#     assert exec_report, f"No execution report found after '{params.marker}' marker."
+    Checks:
+    - Execution report names match boot table, all rows successful.
+    - Post-command status table has expected state/substates.
+    - Run number if specified.
+    """
+    exec_report = get_execution_report_after_echo(lines, params.marker)
+    assert exec_report, f"No execution report found after '{params.marker}' marker."
 
-#     boot_names = {row["name"] for row in boot_status_table}
-#     report_names = {row["name"] for row in exec_report}
-#     assert report_names == boot_names, (
-#         f"Execution report names do not match boot status table names.\n"
-#         f"  Only in report:     {report_names - boot_names}\n"
-#         f"  Only in boot table: {boot_names - report_names}"
-#     )
-#     check_execution_report_success(exec_report)
+    boot_names = {row["name"] for row in boot_status_table}
+    report_names = {row["name"] for row in exec_report}
+    assert report_names == boot_names, (
+        f"Execution report names do not match boot status table names.\n"
+        f"  Only in report:     {report_names - boot_names}\n"
+        f"  Only in boot table: {boot_names - report_names}"
+    )
+    check_execution_report_success(exec_report)
 
-#     status_table = get_status_table_after_echo(lines, params.done_marker)
-#     assert status_table, f"No status table found after '{params.done_marker}' marker."
-#     check_status_table_states(status_table, expected_state=params.expected_state)
-#     check_status_table_substates(
-#         status_table,
-#         controller_substate=params.expected_state,
-#         non_controller_substate=params.non_controller_substate,
-#     )
+    status_table = get_status_table_after_echo(lines, params.done_marker)
+    assert status_table, f"No status table found after '{params.done_marker}' marker."
+    check_status_table_states(status_table, expected_state=params.expected_state)
+    check_status_table_substates(
+        status_table,
+        controller_substate=params.expected_state,
+        non_controller_substate=params.non_controller_substate,
+    )
 
-#     if params.run_number is not None:
-#         run_info = get_run_info_after_echo(lines, params.done_marker)
-#         assert run_info, f"No Run Info table found after '{params.done_marker}' marker."
-#         assert run_info["Run number"] == str(params.run_number), (
-#             f"Expected run number '{params.run_number}', got '{run_info['Run number']}'."
-#         )
-
-
-# @pytest.fixture(scope="module")
-# def boot_status_table(run_dunerc):
-#     """Parse and cache the status table produced right before the FSM command
-#     sequence starts, once the process-manager tests have restored a clean
-#     process set (post restart/kill/recovery)."""
-#     lines = strip_ansi(run_dunerc.completed_processes["us"].stdout).splitlines()
-#     return get_status_table_after_echo(lines, "pre_fsm_status")
+    if params.run_number is not None:
+        run_info = get_run_info_after_echo(lines, params.done_marker)
+        assert run_info, f"No Run Info table found after '{params.done_marker}' marker."
+        assert run_info["Run number"] == str(params.run_number), (
+            f"Expected run number '{params.run_number}', got '{run_info['Run number']}'."
+        )
 
 
-# @pytest.mark.parametrize("params", _FSM_COMMANDS, ids=lambda p: p.marker)
-# def test_fsm_command(run_dunerc, boot_status_table, params: FsmCommandParams) -> None:
-#     """Checks that each FSM command executes successfully and transitions all processes to the expected state."""
-#     lines = strip_ansi(run_dunerc.completed_processes["us"].stdout).splitlines()
-#     _check_fsm_command(lines, boot_status_table, params)
+@pytest.fixture(scope="module")
+def boot_status_table(run_dunerc):
+    """Parse and cache the status table produced right before the FSM command
+    sequence starts, once the process-manager tests have restored a clean
+    process set (post restart/kill/recovery)."""
+    lines = strip_ansi(run_dunerc.completed_processes["us"].stdout).splitlines()
+    return get_status_table_after_echo(lines, "pre_fsm_status")
 
 
-# @pytest.mark.parametrize("params", _FSM_SEQUENCES.values(), ids=lambda p: p.marker)
-# def test_fsm_transitions(
-#     run_dunerc, boot_status_table, params: FsmCommandParams
-# ) -> None:
-#     """Checks that each FSM transition executes successfully and reaches its expected state."""
-#     lines = strip_ansi(run_dunerc.completed_processes["us"].stdout).splitlines()
-#     _check_fsm_command(lines, boot_status_table, params)
+@pytest.mark.parametrize("params", _FSM_COMMANDS, ids=lambda p: p.marker)
+def test_fsm_command(run_dunerc, boot_status_table, params: FsmCommandParams) -> None:
+    """Checks that each FSM command executes successfully and transitions all processes to the expected state."""
+    lines = strip_ansi(run_dunerc.completed_processes["us"].stdout).splitlines()
+    _check_fsm_command(lines, boot_status_table, params)
 
 
-# def test_shutdown_status(run_dunerc) -> None:
-#     """Checks that status reports the session is no longer booted after shutdown."""
-#     lines = strip_ansi(run_dunerc.completed_processes["us"].stdout).splitlines()
-#     shutdown_index = next(
-#         index for index, line in enumerate(lines) if _SHUTDOWN_MARKER in line
-#     )
-#     shutdown_output = "\n".join(lines[shutdown_index:])
-#     assert _SHUTDOWN_STATUS_ERROR in shutdown_output
+@pytest.mark.parametrize("params", _FSM_SEQUENCES.values(), ids=lambda p: p.marker)
+def test_fsm_transitions(
+    run_dunerc, boot_status_table, params: FsmCommandParams
+) -> None:
+    """Checks that each FSM transition executes successfully and reaches its expected state."""
+    lines = strip_ansi(run_dunerc.completed_processes["us"].stdout).splitlines()
+    _check_fsm_command(lines, boot_status_table, params)
+
+
+def test_shutdown_status(run_dunerc) -> None:
+    """Checks that status reports the session is no longer booted after shutdown."""
+    lines = strip_ansi(run_dunerc.completed_processes["us"].stdout).splitlines()
+    shutdown_index = next(
+        index for index, line in enumerate(lines) if _SHUTDOWN_MARKER in line
+    )
+    shutdown_output = "\n".join(lines[shutdown_index:])
+    assert _SHUTDOWN_STATUS_ERROR in shutdown_output
