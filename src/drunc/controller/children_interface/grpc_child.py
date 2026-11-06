@@ -1,6 +1,7 @@
 import threading
 import time
-from typing import NoReturn, cast
+from collections.abc import Callable
+from typing import NoReturn, TypeVar, cast
 
 import grpc
 from druncschema.common_pb2 import LoggerTarget, SendLogRequest, SendLogResponse
@@ -39,6 +40,10 @@ from grpc_status import rpc_status
 from drunc.connectivity_service.exceptions import (
     ApplicationLookupUnsuccessful,
 )
+from drunc.controller.children_interface._protocols import (
+    _ControllerConfiguration,
+    _RawControllerConfiguration,
+)
 from drunc.controller.children_interface.child_node import ChildNode
 from drunc.exceptions import DruncSetupException
 from drunc.grpc_settings import CONTROLLER_CLIENT_GRPC_CONFIG
@@ -50,17 +55,22 @@ from drunc.utils.grpc_utils import (
 )
 from drunc.utils.utils import (
     ControlType,
+    _ConnectivityService,
     get_control_type_and_uri_from_connectivity_service,
 )
+
+_T = TypeVar("_T")
 
 
 class gRCPChildConfHandler(ConfHandler):
     """Handler for gRPC child node configuration."""
 
-    def _post_process_oks(self) -> None:
-        self.controller = self._raw_data.controller
+    controller: _ControllerConfiguration
 
-    def get_uri(self):
+    def _post_process_oks(self) -> None:
+        self.controller = cast(_RawControllerConfiguration, self._raw_data).controller
+
+    def get_uri(self) -> str:
         for service in self.controller.exposes_service:
             if self.controller.id + "_control" in service.id:
                 return f"{service.protocol}://{self.controller.runs_on.runs_on.id}:{service.port}"
@@ -75,7 +85,7 @@ class gRPCChildNode(ChildNode):
         name: str,
         configuration: gRCPChildConfHandler,
         uri: str,
-        connectivity_service,
+        connectivity_service: _ConnectivityService | None,
         init_token: Token | None = None,
     ):
         super().__init__(name, ControlType.gRPC)
@@ -84,9 +94,10 @@ class gRPCChildNode(ChildNode):
         self.connectivity_service = connectivity_service
         self._lock = threading.Lock()
         self.init_token = init_token
+        self.channel: grpc.Channel | None = None
 
-        host, port = uri.split(":")
-        port = int(port)
+        host, port_string = uri.split(":")
+        port = int(port_string)
 
         if port == 0:
             raise DruncSetupException(
@@ -96,7 +107,7 @@ class gRPCChildNode(ChildNode):
         self.uri = f"{host}:{port}"
         self._setup_connection()
 
-    def _setup_connection(self):
+    def _setup_connection(self) -> None:
         """Setup the gRPC connection to the child controller"""
         with self._lock:
             if hasattr(self, "channel") and self.channel:
@@ -139,7 +150,7 @@ class gRPCChildNode(ChildNode):
                 )
                 break
 
-    def _attempt_reconnection(self, retry_call):
+    def _attempt_reconnection(self, retry_call: Callable[[], _T]) -> _T:
         """Handle ServerUnreachable errors with automatic reconnection and retry.
 
         Args:
@@ -605,8 +616,8 @@ class gRPCChildNode(ChildNode):
                         text += l + "\n"
                     self.log.error(text)
                 elif detail.Is(PlainText.DESCRIPTOR):
-                    text = unpack_any(detail, PlainText)
-                    self.log.error(text)
+                    plain_text = unpack_any(detail, PlainText)
+                    self.log.error(plain_text)
 
         raise error
 
@@ -614,7 +625,7 @@ class gRPCChildNode(ChildNode):
         self,
         text: str,
         severity: str = "INFO",
-        logger: "LoggerTarget" = LoggerTarget.MAIN,
+        logger: "LoggerTarget.ValueType" = LoggerTarget.MAIN,
         target: str = "",
         execute_along_path: bool = False,
         execute_on_all_subsequent_children_in_path: bool = True,
