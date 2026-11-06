@@ -1,14 +1,22 @@
 import grpc
 from druncschema.common_pb2 import LoggerTarget, SendLogRequest, SendLogResponse
 from druncschema.description_pb2 import Description
-from druncschema.request_response_pb2 import Request
+from druncschema.process_manager_pb2 import (
+    LogLines,
+    LogRequest,
+    ProcessInstanceList,
+    ProcessQuery,
+)
+from druncschema.request_response_pb2 import Request, Response
+from druncschema.run_control_pb2 import (
+    ConnectToPMRequest,
+    RCBootRequest,
+    SessionConfiguration,
+)
 from druncschema.run_control_pb2_grpc import RunControlStub
 from druncschema.token_pb2 import Token
 
-from drunc.utils.grpc_utils import (
-    RichErrorClientInterceptor,
-    copy_token,
-)
+from drunc.utils.grpc_utils import RichErrorClientInterceptor, copy_token
 from drunc.utils.utils import (
     get_logger,
 )
@@ -17,11 +25,11 @@ from drunc.utils.utils import (
 class RunControlDriver:
     def __init__(self, address: str, token: Token):
         self.log = get_logger("run_control_driver", rich_handler=True)
-        self.address = address
+        self.address_rc = address
         options = [
             ("grpc.keepalive_time_ms", 60000)  # pings the server every 60 seconds
         ]
-        raw_channel = grpc.insecure_channel(self.address, options=options)
+        raw_channel = grpc.insecure_channel(self.address_rc, options=options)
         rich_interceptor = RichErrorClientInterceptor(logger=self.log)
         self.channel = grpc.intercept_channel(raw_channel, rich_interceptor)
         self.stub = RunControlStub(self.channel)
@@ -82,3 +90,90 @@ class RunControlDriver:
         request.token.CopyFrom(self.token)
         response: SendLogResponse = self.stub.send_log(request, timeout=timeout)
         return response
+
+    def connect_to_pm(
+        self,
+        address: str,
+        timeout: int | float = 60,
+    ):
+        request = ConnectToPMRequest(
+            token=copy_token(self.token),
+            address=address,
+        )
+        response: Response = self.stub.connect_to_pm(request, timeout=timeout)
+        return response
+
+    def ps(
+        self,
+        request: ProcessQuery,
+        timeout: int | float = 60,
+    ) -> ProcessInstanceList:
+        request.token.CopyFrom(self.token)
+        response = self.stub.ps(request, timeout=timeout)
+        return response
+
+    def logs(
+        self,
+        log_req: LogRequest,
+        timeout: int | float = 60,
+    ) -> LogLines | None:
+        log_req.token.CopyFrom(self.token)
+        response = self.stub.logs(log_req, timeout=timeout)
+        return response
+
+    def validate(self, timeout: int | float = 60) -> Response:
+        """Set the server's session configuration valid flag to true."""
+        request = Request(token=copy_token(self.token))
+        return self.stub.validate(request, timeout=timeout)
+
+    def boot(
+        self,
+        log_level,
+        user,
+        override_logs,
+        sleep_between_app_boot,
+        timeout: int | float = 60,
+    ) -> Response:
+        """boots.."""
+
+        breq = RCBootRequest(
+            token=copy_token(self.token),
+            user=user,
+            log_level=log_level,
+            override_logs=override_logs,
+            sleep_between_app_boot=sleep_between_app_boot,
+        )
+
+        return self.stub.boot(breq, timeout=timeout)
+
+    def terminate(
+        self,
+        timeout: int | float = 60,
+    ) -> ProcessInstanceList:
+        """terminates"""
+        req = Request(
+            token=copy_token(self.token),
+        )
+        return self.stub.terminate(req, timeout=timeout)
+
+    def set_session_config(
+        self,
+        configuration_file: str = "",
+        configuration_id: str = "",
+        session_name: str = "",
+        timeout: int | float = 60,
+    ) -> Response:
+        request = SessionConfiguration(
+            token=copy_token(self.token),
+            configuration_file=configuration_file,
+            configuration_id=configuration_id,
+            session_name=session_name,
+        )
+        return self.stub.set_session_config(request, timeout=timeout)
+
+    def print_session_config(
+        self,
+        timeout: int | float = 60,
+    ) -> SessionConfiguration:
+        request = Request(token=copy_token(self.token))
+        return self.stub.print_session_config(request, timeout=timeout)

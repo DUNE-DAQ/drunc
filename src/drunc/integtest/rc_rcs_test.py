@@ -1,5 +1,5 @@
-# The goal of this test is to test all functions in the process manager shell, when
-# connected via a standalone process manager.
+# Basic lifecycle checks for the run-control shell connected to standalone
+# run-control and process-manager servers.
 
 import functools
 import getpass
@@ -7,8 +7,16 @@ import os
 import re
 
 import integrationtest.data_classes as idc
+import pytest
 from daqconf.utils import find_free_port
 from integ_test_utils import (
+    _parse_table_from_index,
+    assert_process_presence,
+    assert_rows_have_valid_uuids,
+    get_ps_table_after_echo,
+    get_text_between_echo_markers,
+    require_echo_marker_index,
+    require_line_containing,
     strip_ansi,
 )
 from pm_test_common import make_conf_dict
@@ -24,19 +32,61 @@ confgen_arguments = {"SmallFootprint": conf_dict}
 
 daq_session_name = "rc-rcs-test"
 
-# The commands to run in dunerc and the process manager shell
-dunerc_commands = """
-    echo test_local_echo
-    echo --server  test_server_echo
-    """.split()
 
 # Find a free network port to use for the process manager
 rc_port = find_free_port(50020, 52000)
+pm_port = find_free_port(50020, 52000)
+
+
+# The commands to run in dunerc and the process manager shell
+dunerc_commands = f"""
+    echo test_local_echo
+    echo --server  test_server_echo
+
+    set-session-config --configuration-id local-1x1-config --configuration-file config/daqsystemtest/example-configs.data.xml --session-name rc-test
+
+    connect-to-pm grpc://localhost:{pm_port}
+
+    validate
+
+    echo pre_boot
+    ps
+    boot
+    wait 15
+    echo post_boot
+    ps
+    echo post_boot_done
+
+    echo test_logs
+    logs --name unknown
+    logs --name root-controller --how-far 5
+    logs --name mlt --how-far 5
+    echo test_logs_done
+
+
+    echo test_terminate
+    terminate
+    echo test_terminate_done
+    ps
+    echo test_terminate_ps_done
+    """.split()
+
 
 # The command lines that should be used to start the applications
-procmsg_startup_commands = ["drunc-run-control", str(rc_port)]
+rc_startup_commands = ["drunc-run-control", str(rc_port)]
 rcapp = idc.DAQControlApplication(
     "rc",
+    rc_startup_commands,
+    idc.KeyPhraseWaitParameters(
+        search_phrase="communicating through",
+        timeout_waiting_for_first_msg=5,
+        wait_time_after_last_msg=5,
+    ),
+)
+
+procmsg_startup_commands = ["drunc-process-manager", "<proc_mgr_choice>", str(pm_port)]
+pmapp = idc.DAQControlApplication(
+    "pm",
     procmsg_startup_commands,
     idc.KeyPhraseWaitParameters(
         search_phrase="communicating through",
@@ -63,7 +113,7 @@ cmd_set = idc.DAQCommandSet(
 )
 
 # Putting everything together into a DAQSessionIngredients object
-app_list = [rcapp, rcshellapp]
+app_list = [pmapp, rcapp, rcshellapp]
 cmd_set_list = [cmd_set]
 dsi = idc.DAQSessionIngredients(app_list, cmd_set_list)
 
@@ -72,10 +122,6 @@ daq_session_ingredients = {"MultiRCAppSession": dsi}
 
 
 # The tests themselves
-
-UUID_RE = re.compile(
-    r"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
-)
 
 
 def test_dunerc_success(run_dunerc) -> None:
@@ -92,6 +138,105 @@ def test_dunerc_success(run_dunerc) -> None:
 
     # Check that dunerc completed correctly
     assert run_dunerc.completed_processes["rcshell"].returncode == 0
+
+
+def test_boot(run_dunerc) -> None:
+    """Check that boot starts live managed processes with valid UUIDs."""
+    lines = strip_ansi(run_dunerc.completed_processes["rcshell"].stdout).splitlines()
+    before_boot = get_text_between_echo_markers(lines, "pre_boot", "post_boot")
+    assert "No processes running" in before_boot, (
+        f"Expected an empty session before boot.\n{before_boot}"
+    )
+
+    boot_end = require_echo_marker_index(lines, "post_boot_done")
+    rows = get_ps_table_after_echo(lines[:boot_end], "post_boot")
+    assert rows, "Expected managed processes after boot."
+    assert_rows_have_valid_uuids(rows)
+    assert_process_presence(rows, "root-controller", context="after boot")
+    assert_process_presence(rows, "mlt", context="after boot")
+    for row in rows:
+        assert row["status"] == "Alive", (
+            f"Expected '{row['friendly_name']}' to be alive after boot: {row}"
+        )
+
+
+def test_unknown_log_command(run_dunerc) -> None:
+    """Check that an unknown process produces the expected logs error."""
+    lines = strip_ansi(run_dunerc.completed_processes["rcshell"].stdout).splitlines()
+    output = get_text_between_echo_markers(lines, "test_logs", "test_logs_done")
+    assert (
+        "Bad query for logs: The process corresponding to the query doesn't exist"
+        in output
+    ), f"Expected an error for the unknown process log query.\n{output}"
+    assert "Failed to serialize response!" not in output, (
+        f"Expected a useful logs error rather than a serialisation failure.\n{output}"
+    )
+
+
+@pytest.mark.parametrize("process_name", ["root-controller", "mlt"])
+def test_process_logs(run_dunerc, process_name: str) -> None:
+    """Check that logs returns five lines, including controller readiness."""
+    lines = strip_ansi(run_dunerc.completed_processes["rcshell"].stdout).splitlines()
+    output = get_text_between_echo_markers(
+        lines, "test_logs", "test_logs_done"
+    ).splitlines()
+    header = require_line_containing(
+        output,
+        f"{process_name} logs",
+        error_message=f"Did not find the '{process_name} logs' header.",
+    )
+    footer = require_line_containing(
+        output,
+        f"{process_name} end",
+        start_idx=header + 1,
+        error_message=f"Did not find the '{process_name} end' footer.",
+    )
+    log_lines = [line for line in output[header + 1 : footer] if line.strip()]
+    assert len(log_lines) == 5, (
+        f"Expected five log lines for '{process_name}', got {len(log_lines)}.\n"
+        + "\n".join(log_lines)
+    )
+    if process_name == "root-controller":
+        assert any(
+            re.search(
+                r"drunc\.controller\.core\.init_controller.*Controller ready\s*$",
+                line,
+            )
+            for line in log_lines
+        ), "Did not find 'Controller ready' in the root-controller logs."
+
+
+def test_terminate(run_dunerc) -> None:
+    """Check that terminate stops every booted process and empties the session."""
+    lines = strip_ansi(run_dunerc.completed_processes["rcshell"].stdout).splitlines()
+    output = get_text_between_echo_markers(
+        lines, "test_terminate", "test_terminate_done"
+    ).splitlines()
+    header = require_line_containing(
+        output,
+        "Terminated process",
+        error_message="Did not find the terminated-process table.",
+    )
+    terminated_rows = _parse_table_from_index(output, header, "ps")
+    assert terminated_rows, "Expected terminate to report stopped processes."
+    assert_rows_have_valid_uuids(terminated_rows)
+    boot_end = require_echo_marker_index(lines, "post_boot_done")
+    booted_rows = get_ps_table_after_echo(lines[:boot_end], "post_boot")
+    assert booted_rows, "Expected a non-empty post-boot process table."
+    assert {row["uuid"] for row in terminated_rows} == {
+        row["uuid"] for row in booted_rows
+    }, "Terminated processes do not match the booted processes."
+    for row in terminated_rows:
+        assert row["status"] == "Dead", (
+            f"Expected '{row['friendly_name']}' to be dead after terminate: {row}"
+        )
+
+    after_terminate = get_text_between_echo_markers(
+        lines, "test_terminate_done", "test_terminate_ps_done"
+    )
+    assert "No processes running" in after_terminate, (
+        f"Expected an empty session after terminate.\n{after_terminate}"
+    )
 
 
 #! We should have log files soon

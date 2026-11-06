@@ -4,7 +4,7 @@ from druncschema.token_pb2 import Token
 
 from drunc.run_control.run_control_driver import RunControlDriver
 from drunc.utils.shell_utils import ShellContext, create_dummy_token_from_uname
-from drunc.utils.utils import resolve_localhost_to_hostname
+from drunc.utils.utils import get_logger, resolve_localhost_to_hostname
 
 
 class RunControlContext(ShellContext):
@@ -12,14 +12,24 @@ class RunControlContext(ShellContext):
 
     def __init__(self, *args, **kwargs) -> None:
         self.status_receiver = None
+        self.log = None
+        self.address_rc = None
+        self.log_debug = get_logger("etestg", rich_handler=True)
+
+        self.override_logs = (
+            False  # TODO: This should be propagated to the shell initialisation..
+        )
+
         super(RunControlContext, self).__init__(*args, **kwargs)
 
     def reset(self, *args, **kwargs) -> None:
-        address_raw = kwargs.get("address")
-        if address_raw is None and args:
-            address_raw = args[0]
-        address = str(address_raw) if address_raw is not None else ""
-        self.address = resolve_localhost_to_hostname(address)
+        if "address_rc" in kwargs:
+            address = kwargs["address_rc"]
+            self.address_rc = (
+                resolve_localhost_to_hostname(str(address))
+                if address is not None
+                else None
+            )
         super(RunControlContext, self)._reset(
             name="run_control_context", token_args={}, driver_args={}
         )
@@ -28,14 +38,13 @@ class RunControlContext(ShellContext):
         return create_dummy_token_from_uname()
 
     def create_drivers(self, **kwargs: object) -> MutableMapping[str, object]:
-        if not self.address:
-            return {}
-        return {
-            "run_control": RunControlDriver(
-                self.address,
+        ret: MutableMapping[str, object] = {}
+        if self.address_rc:
+            ret["run_control"] = RunControlDriver(
+                self.address_rc,
                 self._token,
             )
-        }
+        return ret
 
     def terminate(self) -> None:
         if self.status_receiver:

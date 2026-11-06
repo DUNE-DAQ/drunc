@@ -13,6 +13,7 @@ from druncschema.process_manager_pb2 import (
     ProcessQuery,
     ProcessUUID,
 )
+from rich.markup import escape
 from rich.table import Table
 
 from drunc.exceptions import DruncCommandException, DruncException, DruncSetupException
@@ -23,7 +24,7 @@ from drunc.process_manager.configuration import (
 )
 from drunc.processes.process_metadata import ProcessMetadata
 from drunc.utils.configuration import ConfTypes, parse_conf_url
-from drunc.utils.utils import now_str
+from drunc.utils.utils import format_table_width, now_str
 
 
 def compute_role_from_boot_request(boot_request: BootRequest) -> str:
@@ -278,6 +279,65 @@ def release_or_dev() -> str:
     if is_devenv:
         return "dev"
     return "rel"
+
+
+def print_logs(obj, result, grep):
+    display_name = result.name or result.uuid.uuid or ""
+    if result.name is not None:
+        obj.rule(f"[yellow]{display_name}[/yellow] logs")
+
+    for line in result.lines:
+        if not line.strip():  # keep empty lines for visual clarity
+            obj.print("")
+            continue
+
+        line = line.rstrip("\n")  # remove trailing newline
+
+        if grep is not None and grep not in line:
+            continue
+
+        if grep is not None and grep:
+            # Highlight grep term by splitting on it, escaping each part separately,
+            # then rejoining with Rich underline markup around the escaped grep term
+            escaped_grep = escape(grep)
+            parts = line.split(grep)
+            escaped_line = f"[u]{escaped_grep}[/u]".join(escape(part) for part in parts)
+        else:
+            escaped_line = escape(line)
+
+        obj.print(escaped_line, soft_wrap=True)
+    if result.name is not None:
+        obj.rule(f"[yellow]{display_name}[/yellow] end")
+
+
+def print_ps_table(query, results, obj, logger, long_format, width, fit) -> None:
+    # Inject session name if exits
+    ## Session name can come from either the process manager shell with --session
+    ## Or in the unified shell, where the session name is injected automatically
+
+    session_name = (
+        getattr(query, "session", None) or getattr(obj, "session_name", None) or ""
+    )
+    title = f"Processes running{f' in session {session_name}' if session_name else ''}"
+    # If there are processes running, tabulate them, otherwise log that there are no
+    # processes running.
+    if results.values:
+        table = tabulate_process_instance_list(
+            results,
+            title=title,
+            long=long_format,
+            width=width,
+        )
+
+        table = format_table_width(obj._console, table, fit)
+        obj.print(table, soft_wrap=not fit)
+    else:
+        if session_name:
+            logger.info(
+                f"No processes running in session [green]{escape(session_name)}[/green]"
+            )
+        else:
+            logger.info("No processes running")
 
 
 def get_rte_script() -> str:

@@ -1,25 +1,55 @@
 import abc
+import getpass
+from collections.abc import Iterator, MutableMapping
+from dataclasses import asdict, dataclass, fields
+from urllib.parse import ParseResult, urlparse
 
+import conffwk
 from druncschema.authoriser_pb2 import ActionType, SystemType
 from druncschema.common_pb2 import LoggerTarget, SendLogRequest, SendLogResponse
 from druncschema.description_pb2 import CommandDescription, Description
-from druncschema.request_response_pb2 import Request, ResponseFlag
+from druncschema.process_manager_pb2 import (
+    LogLines,
+    LogRequest,
+    ProcessInstanceList,
+    ProcessQuery,
+)
+from druncschema.request_response_pb2 import Request, Response, ResponseFlag
+from druncschema.run_control_pb2 import (
+    ConnectToPMRequest,
+    RCBootRequest,
+    SessionConfiguration,
+)
 from druncschema.run_control_pb2_grpc import RunControlServicer
-from grpc import ServicerContext
+from grpc import ServicerContext, StatusCode
 
 from drunc.authoriser.configuration import DummyAuthoriserConfHandler
 from drunc.authoriser.decorators import authentified_and_authorised
 from drunc.authoriser.dummy_authoriser import DummyAuthoriser
-from drunc.utils.utils import get_logger, log_echo
+from drunc.exceptions import DruncSetupException
+from drunc.utils.shell_utils import InterruptedCommand
+from drunc.utils.utils import get_logger, log_echo, resolve_localhost_to_hostname
+
+
+@dataclass
+class SessionConfig:
+    configuration_file: str = ""
+    configuration_id: str = ""
+    session_name: str = ""
+    valid: bool = False
 
 
 class RunControl(abc.ABC, RunControlServicer):
-    rc_type = "Hehehehe"
+    rc_type = "run_control"
 
     def __init__(self):
         # TODO: This needs to contain the configuration name
         self.log = get_logger("run_control.CONFIGURATION_NAME_run_control")
         self.name = "run_control"  # TODO Skeleton: needs to update
+        self.address_pm = None
+        self.session_config = SessionConfig()
+        self.override_logs = True
+        self.drivers: MutableMapping[str, object] = {}
 
         dach = DummyAuthoriserConfHandler.from_pyobject(
             data=None  # TODO Skeleton: CONFIGURATION NEEDS UPDATING HERE
@@ -30,11 +60,134 @@ class RunControl(abc.ABC, RunControlServicer):
         self.commands = [
             CommandDescription(
                 name="describe",
-                data_type=["None"],
-                help="Describe self (return a list of commands, the type of endpoint, the name and session).",
+                data_type=["request_response_pb2.Request"],
+                help="Describe the server and its supported commands.",
                 return_type="description_pb2.Description",
             ),
+            CommandDescription(
+                name="send_log",
+                data_type=["common_pb2.SendLogRequest"],
+                help="Log a message on the server.",
+                return_type="common_pb2.SendLogResponse",
+            ),
+            CommandDescription(
+                name="connect_to_pm",
+                data_type=["run_control_pb2.ConnectToPMRequest"],
+                help="Connect Run Control to a process manager.",
+                return_type="request_response_pb2.Response",
+            ),
+            CommandDescription(
+                name="ps",
+                data_type=["process_manager_pb2.ProcessQuery"],
+                help="List processes matching the query within the configured session.",
+                return_type="process_manager_pb2.ProcessInstanceList",
+            ),
+            CommandDescription(
+                name="set_session_config",
+                data_type=["run_control_pb2.SessionConfiguration"],
+                help="Update non-empty session settings and reset the valid flag.",
+                return_type="request_response_pb2.Response",
+            ),
+            CommandDescription(
+                name="print_session_config",
+                data_type=["request_response_pb2.Request"],
+                help="Return the current session configuration and valid flag.",
+                return_type="run_control_pb2.SessionConfiguration",
+            ),
+            CommandDescription(
+                name="valid",
+                data_type=["request_response_pb2.Request"],
+                help="Set the session configuration valid flag to true without validation.",
+                return_type="request_response_pb2.Response",
+            ),
         ]
+
+    def set_session_config(
+        self,
+        config: SessionConfiguration,
+        context: ServicerContext,
+    ) -> Response:
+        self.session_config.valid = False
+
+        for field in fields(self.session_config):
+            if field.name == "valid":
+                continue
+            value = getattr(config, field.name)
+            if value:
+                setattr(self.session_config, field.name, value)
+
+            # Cant believe we have to do this
+            if field.name == "configuration_file":
+                self.session_config.configuration_file = (
+                    lambda path: (
+                        path
+                        if path.startswith("oksconflibs:")
+                        else f"oksconflibs:{path}"
+                    )
+                )(self.session_config.configuration_file)
+
+        return Response(
+            name=self.name,
+            token=config.token,
+            flag=ResponseFlag.EXECUTED_SUCCESSFULLY,
+        )
+
+    @authentified_and_authorised(
+        action=ActionType.READ,
+        system=SystemType.RUN_CONTROL,
+    )
+    def print_session_config(
+        self,
+        request: Request,
+        context: ServicerContext,
+    ) -> SessionConfiguration:
+        """Return the current session configuration."""
+        return SessionConfiguration(
+            token=request.token,
+            **asdict(self.session_config),
+        )
+
+    @authentified_and_authorised(
+        action=ActionType.UPDATE,
+        system=SystemType.RUN_CONTROL,
+    )
+    def validate(self, request: Request, context: ServicerContext) -> Response:
+        """Set the session configuration valid flag to true."""
+
+        self.session_config.valid = False
+
+        required_fields = ("configuration_file", "configuration_id", "session_name")
+        missing = [
+            name
+            for name in required_fields
+            if not getattr(self.session_config, name).strip()
+        ]
+
+        if missing:
+            message = f"Missing session configuration fields: {', '.join(missing)}"
+            self.log.error(message)
+            context.abort(StatusCode.INVALID_ARGUMENT, message)
+
+        try:
+            db = conffwk.Configuration(self.session_config.configuration_file)
+        except Exception as e:
+            message = f"Invalid file: {e}"
+            self.log.error(message)
+            context.abort(StatusCode.INVALID_ARGUMENT, message)
+
+        try:
+            db.get_dal(class_name="Session", uid=self.session_config.configuration_id)
+        except Exception as e:
+            message = f"Some invaild id: {e}"
+            self.log.error(message)
+            context.abort(StatusCode.INVALID_ARGUMENT, message)
+
+        self.session_config.valid = True
+        return Response(
+            name=self.name,
+            token=request.token,
+            flag=ResponseFlag.EXECUTED_SUCCESSFULLY,
+        )
 
     def send_log(
         self,
@@ -79,3 +232,239 @@ class RunControl(abc.ABC, RunControlServicer):
         )
 
         return response
+
+    # Almost certianly not a read actiontype..
+    @authentified_and_authorised(action=ActionType.READ, system=SystemType.RUN_CONTROL)
+    def boot(
+        self, breq: RCBootRequest, context: ServicerContext
+    ) -> Iterator[ProcessInstanceList]:
+        # workflow:
+        """
+        1. add a 'valid' in the dataclass
+        2. in boot, check if valid is valid. if not, exit and say 'make sure u validate!'
+        3. if valid, boot as usual
+        """
+
+        if not self.session_config.valid:
+            context.abort(
+                StatusCode.INVALID_ARGUMENT, "session config not valid! please validate"
+            )
+
+        try:
+            pm_driver = self.get_driver("process_manager")
+        except ValueError:
+            message = "Cannot boot: process manager is not connected"
+            self.log.error(message)
+            context.abort(StatusCode.INVALID_ARGUMENT, message)
+
+        expected_booted_processes = 0
+
+        # check if we can boot first by diong a ps
+        processes = pm_driver.ps(
+            ProcessQuery(user=breq.user, session=self.session_config.session_name)
+        )
+
+        if len(processes.values) > 0:
+            self.log.error(
+                f"Cannot boot: session {self.session_config.session_name} already has {len(processes.values)} processes running. "
+                "Please terminate the existing session first."
+            )
+            return
+
+        try:
+            results = pm_driver.boot(
+                conf_file=self.session_config.configuration_file,
+                conf_id=self.session_config.configuration_id,
+                user=breq.user,
+                session_name=self.session_config.session_name,
+                log_level=breq.log_level,
+                override_logs=breq.override_logs,
+                sleep_between_app_boot=breq.sleep_between_app_boot,
+            )
+
+            if results is None:
+                self.log.error("Boot request did not return any results.")
+                return
+            for result in results:
+                expected_booted_processes += 1
+                self.log.debug(
+                    f"Booting process: {result.values[0].process_description.metadata.name}"
+                )
+                if not result:
+                    break
+                self.log.debug(
+                    f"'{result.values[0].process_description.metadata.name}' ({result.values[0].uuid.uuid}) started"
+                )
+
+        except InterruptedCommand:
+            self.log.warning("Booting interrupted")
+            return
+        except DruncSetupException as e:
+            self.log.error(e)
+            return
+
+        processes = pm_driver.ps(
+            ProcessQuery(user=breq.user, session=self.session_config.session_name)
+        )
+        if not processes.values:
+            self.log.debug(
+                "No processes found after boot - stopping due to previous errors"
+            )
+            return
+
+        # TODO Skeleton: Will obviously need filling up as features pop in
+        response = Response(
+            name="unnamed",
+            flag=ResponseFlag.EXECUTED_SUCCESSFULLY,
+            token=None,
+        )
+        return response
+
+        ## To be dealt with later!
+        # controller_address = pm_driver.controller_address
+        # if controller_address:
+        #     self.log.debug(f"Controller endpoint is '{controller_address}'")
+        #     self.log.debug("Connecting the unified_shell to the controller endpoint")
+        #     obj.set_controller_driver(controller_address)
+        #     controller_setup(obj, controller_address)
+        # else:
+        #     log.error("Could not understand where the controller is!")
+        #     return
+
+        ## Add a bunch of error handling herer
+
+    @authentified_and_authorised(action=ActionType.READ, system=SystemType.RUN_CONTROL)
+    def connect_to_pm(
+        self, request: ConnectToPMRequest, context: ServicerContext
+    ) -> Response:
+        address_raw = request.address
+        self.log.info("PM address received: %s", address_raw)
+
+        address_raw: ParseResult = urlparse(address_raw)
+        address_raw = str(address_raw.netloc) if address_raw.netloc is not None else ""
+        address_raw = resolve_localhost_to_hostname(address_raw)
+
+        self.address_pm = address_raw
+
+        from drunc.process_manager.process_manager_driver import (
+            ProcessManagerDriver,
+        )
+
+        self.drivers["process_manager"] = ProcessManagerDriver(
+            self.address_pm,
+            request.token,
+        )
+
+        self.log.debug("made process manager driver")
+
+        # check if describe works
+        pm_type = self.drivers["process_manager"].describe().type
+        self.log.info(f"PM connected, type: {pm_type}")
+
+        self.drivers["process_manager"].send_log(
+            f"{getpass.getuser()} connected from run control (!!)"
+        )
+
+        # TODO Skeleton: Will obviously need filling up as features pop in
+        response = Response(
+            name="unnamed",
+            flag=ResponseFlag.EXECUTED_SUCCESSFULLY,
+            token=None,
+        )
+        return response
+
+    @authentified_and_authorised(action=ActionType.READ, system=SystemType.RUN_CONTROL)
+    def ps(
+        self, request: ProcessQuery, context: ServicerContext
+    ) -> ProcessInstanceList:
+        if not self.session_config.valid:
+            context.abort(
+                StatusCode.INVALID_ARGUMENT, "session config not valid! please validate"
+            )
+
+        self.log.info(f"{self.name} running ps")
+
+        request.session = self.session_config.session_name
+
+        try:
+            pm_driver = self.get_driver("process_manager")
+        except ValueError:
+            message = "Cannot list processes: process manager is not connected"
+            self.log.error(message)
+            context.abort(StatusCode.INVALID_ARGUMENT, message)
+
+        # Will need cleaning later
+        args = f" with request {request}" if request else ""
+        msg = f"{getpass.getuser()} sent ps{args} via {self.rc_type}"
+        pm_driver.send_log(msg)
+
+        results = pm_driver.ps(request)
+        return results
+
+    @authentified_and_authorised(action=ActionType.READ, system=SystemType.RUN_CONTROL)
+    def logs(
+        self,
+        log_req: LogRequest,
+        context: ServicerContext,
+    ) -> LogLines | None:
+        if not self.session_config.valid:
+            context.abort(
+                StatusCode.INVALID_ARGUMENT, "session config not valid! please validate"
+            )
+
+        self.log.info(f"{self.name} running log")
+
+        # I feel like these lines can be a decorater to grab the process manager
+        # maybe @with_process_manager ?
+
+        log_req.query.session = self.session_config.session_name
+        try:
+            pm_driver = self.get_driver("process_manager")
+        except ValueError:
+            message = "Cannot list processes: process manager is not connected"
+            self.log.error(message)
+            context.abort(StatusCode.INVALID_ARGUMENT, message)
+
+        result = pm_driver.logs(log_req, raise_on_error=True)
+        return result
+
+    @authentified_and_authorised(action=ActionType.READ, system=SystemType.RUN_CONTROL)
+    def terminate(
+        self,
+        terminate_req: Request,  # not sure what to do with this token
+        context: ServicerContext,
+    ) -> ProcessInstanceList:
+        if not self.session_config.valid:
+            context.abort(
+                StatusCode.INVALID_ARGUMENT, "session config not valid! please validate"
+            )
+
+        self.log.info(f"{self.name} running terminate")
+
+        # We'll probably need to add more things here in the future
+        # but for now this is exactly what the unified shell has
+        session_query = ProcessQuery(session=self.session_config.session_name)
+        self.log.info(
+            f"Terminating session [green]{self.session_config.session_name}[/]"
+        )
+
+        try:
+            pm_driver = self.get_driver("process_manager")
+        except ValueError:
+            message = "Cannot list processes: process manager is not connected"
+            self.log.error(message)
+            context.abort(StatusCode.INVALID_ARGUMENT, message)
+
+        # Note we're using kill here!
+        result = pm_driver.kill(session_query)
+
+        ## There is a delete controller driver here which will come in handy later on
+        # obj.delete_driver("controller")
+
+        return result
+
+    def get_driver(self, driver_key):
+        if driver_key not in self.drivers:
+            self.log.error(f"{driver_key} is not yet initialised. Please do so!")
+            raise ValueError("bad key")
+        return self.drivers[driver_key]

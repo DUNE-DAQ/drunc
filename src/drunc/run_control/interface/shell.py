@@ -5,7 +5,18 @@ from typing import cast
 import click
 import click_shell
 
-from drunc.run_control.interface.commands import echo
+from drunc.run_control.interface.commands import (
+    boot,
+    connect_to_pm,
+    echo,
+    logs,
+    print_session_config,
+    ps,
+    set_session_config,
+    terminate,
+    validate,
+    wait,
+)
 from drunc.utils.grpc_utils import ServerUnreachable
 from drunc.utils.utils import (
     CONTEXT_SETTINGS,
@@ -33,7 +44,7 @@ def rc_shell(ctx: click.core.Context, run_control_address: str):
 
     rc_shell_log = get_logger("run_control.shell")
 
-    ctx.obj.reset(address=run_control_address)
+    ctx.obj.reset(address_rc=run_control_address)
 
     try:
         rc_log.info("running a logger instance")
@@ -65,7 +76,18 @@ def rc_shell(ctx: click.core.Context, run_control_address: str):
 
     ctx.call_on_close(cleanup)
 
-    exposed_run_control_commands = [echo]
+    exposed_run_control_commands = [
+        wait,
+        echo,
+        connect_to_pm,
+        ps,
+        set_session_config,
+        print_session_config,
+        validate,
+        boot,
+        logs,
+        terminate,
+    ]
 
     # cast the command group
     command_group = cast(click.core.Group, ctx.command)

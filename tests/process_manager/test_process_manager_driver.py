@@ -18,15 +18,21 @@ import grpc
 import pytest
 from druncschema.process_manager_pb2 import (
     BootRequest,
+    LogLines,
     ProcessDescription,
     ProcessMetadata,
     ProcessRestriction,
 )
 from druncschema.request_response_pb2 import ResponseFlag
 from druncschema.token_pb2 import Token
+from google.rpc import code_pb2
 
 from drunc.connectivity_service.exceptions import ApplicationLookupUnsuccessful
-from drunc.exceptions import DruncSetupException, DruncShellException
+from drunc.exceptions import (
+    DruncCommandException,
+    DruncSetupException,
+    DruncShellException,
+)
 from drunc.process_manager.process_manager_driver import ProcessManagerDriver
 
 
@@ -839,13 +845,14 @@ def test_kill_grpc_error(mock_driver, process_query_request):
     )
 
 
-def test_logs_success(mock_driver, log_request, logs_response):
+@pytest.mark.parametrize("raise_on_error", [False, True])
+def test_logs_success(mock_driver, log_request, logs_response, raise_on_error):
     """
     Test that logs method correctly calls stub.logs and returns response.
     """
     mock_driver._mock_stub.logs.return_value = logs_response
 
-    response = mock_driver.logs(log_request, timeout=20)
+    response = mock_driver.logs(log_request, timeout=20, raise_on_error=raise_on_error)
 
     mock_driver._mock_stub.logs.assert_called_once()
     call_args = mock_driver._mock_stub.logs.call_args
@@ -899,6 +906,36 @@ def test_logs_bad_query_generic_message(mock_driver, mock_logger, log_request):
     mock_logger.warning.assert_called_once_with(
         "Bad query for logs: There are more than 1 processes corresponding to the query"
     )
+
+
+@pytest.mark.parametrize(
+    "flag, message, expected_code",
+    [
+        (
+            ResponseFlag.NOT_EXECUTED_BAD_REQUEST_FORMAT,
+            "Bad query for logs: Missing process",
+            code_pb2.INVALID_ARGUMENT,
+        ),
+        (
+            ResponseFlag.DRUNC_EXCEPTION_THROWN,
+            "Exception occurred on server:",
+            code_pb2.INTERNAL,
+        ),
+    ],
+)
+def test_logs_raises_errors_for_rpc_forwarding(
+    mock_driver, log_request, flag, message, expected_code
+):
+    """Preserve error details when the driver is used by an RPC service."""
+    mock_driver._mock_stub.logs.return_value = LogLines(
+        flag=flag, lines=["Missing process"]
+    )
+
+    with pytest.raises(DruncCommandException, match=message) as exc_info:
+        mock_driver.logs(log_request, raise_on_error=True)
+
+    assert exc_info.value.grpc_error_code == expected_code
+    mock_driver._mock_stub.logs.assert_called_once_with(log_request, timeout=60)
 
 
 def test_ps_success(mock_driver, process_query_request, ps_response):
