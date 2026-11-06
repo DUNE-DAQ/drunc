@@ -154,3 +154,4 @@ def test_drunc_exception_rich_error(controller_rich_error_test_suite, status_req
 
     mock_extract_grpc_rich_error.assert_called_once()
     controller_rich_error_test_suite.mock_client_logger.error.assert_called_once()
+
