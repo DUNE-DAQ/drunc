@@ -34,15 +34,17 @@ print = functools.partial(print, flush=True)  # always flush print() output
 
 pytest_plugins = "integrationtest.integrationtest_drunc"
 
+daq_session_name = "pms-test"
+
 conf_dict = idc.integtest_params_for_predefined_dunedaq_config()
 conf_dict.predefined_config_db = (
-    os.environ.get("DAQSYSTEMTEST_SHARE") + "/config/daqsystemtest/example-configs.data.xml"
+    os.environ.get("DAQSYSTEMTEST_SHARE")
+    + "/config/daqsystemtest/example-configs.data.xml"
 )
+conf_dict.daq_session_name = daq_session_name
 
 confgen_arguments = {"SmallFootprint": conf_dict}
 
-
-daq_session_name = "pms-test"
 
 # The commands to run in dunerc and the process manager shell
 dunerc_commands = f"""
