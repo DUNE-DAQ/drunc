@@ -17,7 +17,6 @@ import re
 import integrationtest.data_classes as idc
 import integrationtest.log_file_checks as log_file_checks
 import integrationtest.utility_functions as utility_functions
-import pytest
 from daqconf.utils import find_free_port
 from integ_test_utils import (
     _parse_table_from_index,
@@ -30,16 +29,14 @@ from integ_test_utils import (
 )
 from pm_test_common import ignored_logfile_problems
 
-from drunc.process_manager.oks_parser import get_full_db_path
-from drunc.utils.utils import file_is_read_only
-
 print = functools.partial(print, flush=True)  # always flush print() output
 
 pytest_plugins = "integrationtest.integrationtest_drunc"
 
 conf_dict = idc.integtest_params_for_predefined_dunedaq_config()
 conf_dict.predefined_config_db = (
-    os.environ.get("DAQSYSTEMTEST_SHARE") + "/config/daqsystemtest/example-configs.data.xml"
+    os.environ.get("DAQSYSTEMTEST_SHARE")
+    + "/config/daqsystemtest/example-configs.data.xml"
 )
 
 confgen_arguments = {"SmallFootprint": conf_dict}
