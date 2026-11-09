@@ -2,9 +2,7 @@
 
 from dataclasses import dataclass, field
 
-import integrationtest.data_classes as idc
 import integrationtest.resource_validation as resource_validation
-import integrationtest.utility_functions as utility_functions
 from integrationtest.get_pytest_tmpdir import get_pytest_tmpdir
 
 number_of_data_producers = 2
