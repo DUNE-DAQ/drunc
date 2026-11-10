@@ -205,11 +205,12 @@ status
 echo post_boot_done
 """
     + "".join(p.to_command_block() for p in _FSM_COMMANDS)
+    + " terminate boot "
     + _FSM_SEQUENCES["test_srun_w_boot"].to_command_block()
     + " terminate "
     + "boot wait 10 conf"
     + _FSM_SEQUENCES["test_srunw_boot_conf"].to_command_block()
-    + " terminate "
+    + " terminate boot "
     + _FSM_SEQUENCES["test_start_run"].to_command_block()
     + _FSM_SEQUENCES["test_stop_run"].to_command_block()
     # + "start-run --run-number 3"
