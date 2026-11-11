@@ -39,13 +39,18 @@ from integ_test_utils import (
     require_pattern_match_index,
     strip_ansi,
 )
-from pm_test_common import FsmCommandParams, ignored_logfile_problems, make_conf_dict
+from pm_test_common import FsmCommandParams, ignored_logfile_problems
 
 print = functools.partial(print, flush=True)  # always flush print() output
 
 pytest_plugins = "integrationtest.integrationtest_drunc"
 
-conf_dict = make_conf_dict("pm-us")
+conf_dict = idc.integtest_params_for_predefined_dunedaq_config()
+conf_dict.predefined_config_db = (
+    os.environ.get("DAQSYSTEMTEST_SHARE")
+    + "/config/daqsystemtest/example-configs.data.xml"
+)
+conf_dict.daq_session_name = "pm-us"
 
 confgen_arguments = {"SmallFootprint": conf_dict}
 
