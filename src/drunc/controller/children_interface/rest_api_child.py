@@ -279,8 +279,8 @@ class AppCommander:
         self,
         cmd_id: str,
         module_data: Mapping[str, object],
-        entry_state: str = "ANY",
-        exit_state: str = "ANY",
+        entry_state: str,
+        exit_state: str,
     ) -> None:
         # here we go again...
         # module_data = {"modules": [{"data": cmd_data, "match": ""}]}
@@ -396,10 +396,6 @@ class RESTAPIChildNodeConfHandler(ConfHandler):
     def get_host_port(self) -> tuple[str, int]:
         for service in self.exposes_service:
             if self.id is not None and self.id + "_control" in getattr(service, "id"):
-                if self.runs_on is None:
-                    raise DruncSetupException(
-                        f"REST API child node {self.id} has no runs_on configuration"
-                    )
                 host: str = getattr(getattr(self.runs_on, "runs_on"), "id")
                 port: int = getattr(service, "port")
                 return host, port
@@ -599,8 +595,8 @@ class RESTAPIChildNode(ChildNode):
                     controller, "application_name", None
                 )
                 controller_id = getattr(controller, "id", None)
-                if isinstance(controller_application_name, str) and isinstance(
-                    controller_id, str
+                if isinstance(controller_application_name, str) and (isinstance(
+                    controller_id, str)
                 ):
                     description.type = controller_application_name
                     description.name = controller_id
@@ -667,12 +663,13 @@ class RESTAPIChildNode(ChildNode):
         elif (
             destination_state_result.destination_type
             == FSMDestinationType.DESTINATION_IS_SOURCE
+            and destination_state_result.destination_state is not None
         ):
             self.log.debug(
                 f"Transition {transition} is a self-loop or has no destination,"
                 f"treating it as a source -> source transition"
             )
-            exit_state = entry_state
+            exit_state = destination_state_result.destination_state
         else:
             self.log.info(
                 f"The transition {transition} corresponding to the command {command_name}"
