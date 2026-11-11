@@ -1,9 +1,8 @@
 from __future__ import annotations
 
-from curses import raw
-from typing import List, cast
+from typing import cast
 
-from conffwk.dal import FSMData, FSMxTransition
+from conffwk.dal import FSMData
 from druncschema.controller_pb2 import FSMSequence
 
 from drunc.fsm._protocols import FSMActionProtocol
@@ -11,7 +10,6 @@ from drunc.fsm.action_factory import FSMActionFactory
 from drunc.fsm.core import PreOrPostTransitionSequence
 from drunc.fsm.transition import Transition
 from drunc.utils.configuration import ConfHandler
-from drunc.utils.utils import get_logger
 
 
 class FSMConfHandler(ConfHandler):
@@ -36,7 +34,7 @@ class FSMConfHandler(ConfHandler):
             None
 
         Raises:
-            ValuesError: If there are duplicate transition or sequence names, or if a sequence references a non-existent transition. 
+            ValueError: If there are duplicate transition or sequence names, or if a sequence references a non-existent transition.
         """
         raw = cast(FSMData, self._raw_data)
 
@@ -52,17 +50,17 @@ class FSMConfHandler(ConfHandler):
         self.states: list[str] = raw.states
         self.initial_state: str = raw.initial_state
 
-        ## fill the transistions 
+        ## fill the transistions
         for transition in raw.transitions:
 
             ## check if the transition name is unique
-            if transition.cmd in [t.name for t in self.transitions]:
+            if transition.id in [t.name for t in self.transitions]:
                 raise ValueError(
-                    f"Duplicate transition name '{transition.cmd}' from transition object '{transition.id}'"
+                    f"Duplicate transition name '{transition.id}'"
                 )
 
             tr = Transition(
-                name=transition.cmd,
+                name=transition.id,
                 source=transition.source,
                 destination=transition.dest,
                 arguments=[],  # list(google.protobuf.any_pb2.Any)
@@ -114,7 +112,7 @@ class FSMConfHandler(ConfHandler):
         tr_ids = [t.id for t in raw.transitions]
 
         for sequence in raw.command_sequences:
-            seq_id = sequence.name 
+            seq_id = sequence.id
             if seq_id in [t.name for t in self.transitions]:
                 raise ValueError(
                     f"Duplicate transition name '{seq_id}' from sequence object'{sequence.id}'"
@@ -133,7 +131,7 @@ class FSMConfHandler(ConfHandler):
                     raise ValueError(
                         f"Transition id '{tr.id}' from sequence object '{sequence.id}' does not match any transitions in this FSM configuration"
                     )
-                cmd_names.append(tr.cmd)
+                cmd_names.append(tr.id)
             
             self.sequences.append(FSMSequence(id=seq_id, command_ids=cmd_names))
         
