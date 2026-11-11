@@ -1,6 +1,6 @@
 import threading
 import time
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from typing import NoReturn, TypeVar, cast
 
 import grpc
@@ -40,10 +40,6 @@ from grpc_status import rpc_status
 from drunc.connectivity_service.exceptions import (
     ApplicationLookupUnsuccessful,
 )
-from drunc.controller.children_interface._protocols import (
-    _ControllerConfiguration,
-    _RawControllerConfiguration,
-)
 from drunc.controller.children_interface.child_node import ChildNode
 from drunc.exceptions import DruncSetupException
 from drunc.grpc_settings import CONTROLLER_CLIENT_GRPC_CONFIG
@@ -65,17 +61,25 @@ _T = TypeVar("_T")
 class gRCPChildConfHandler(ConfHandler):
     """Handler for gRPC child node configuration."""
 
-    controller: _ControllerConfiguration
+    controller: object
 
     def _post_process_oks(self) -> None:
-        self.controller = cast(_RawControllerConfiguration, self._raw_data).controller
+        self.controller = getattr(self._raw_data, "controller")
 
     def get_uri(self) -> str:
-        for service in self.controller.exposes_service:
-            if self.controller.id + "_control" in service.id:
-                return f"{service.protocol}://{self.controller.runs_on.runs_on.id}:{service.port}"
+        controller_id: str = getattr(self.controller, "id")
+        services: Sequence[object] = getattr(self.controller, "exposes_service")
+        for service in services:
+            service_id: str = getattr(service, "id")
+            if controller_id + "_control" in service_id:
+                protocol: str = getattr(service, "protocol")
+                host: str = getattr(
+                    getattr(getattr(self.controller, "runs_on"), "runs_on"), "id"
+                )
+                port: int = getattr(service, "port")
+                return f"{protocol}://{host}:{port}"
         raise DruncSetupException(
-            f"gRPC API child node {self.controller.id} does not expose a control service"
+            f"gRPC API child node {controller_id} does not expose a control service"
         )
 
 

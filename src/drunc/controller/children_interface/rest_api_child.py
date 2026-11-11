@@ -1,6 +1,7 @@
 import json
 import logging
 import multiprocessing
+import multiprocessing.queues
 import os
 import queue
 import socket
@@ -8,7 +9,7 @@ import threading
 import time
 from collections.abc import Mapping, Sequence
 from json import JSONDecodeError
-from typing import ClassVar, cast
+from typing import ClassVar
 
 import requests
 import socks  # type: ignore[import-untyped]
@@ -35,17 +36,8 @@ from druncschema.request_response_pb2 import ResponseFlag
 from flask import Flask, request
 from flask_restful import Api  # type: ignore[import-untyped]
 
+from drunc.connectivity_service.client import ConnectivityServiceClient
 from drunc.connectivity_service.exceptions import ApplicationLookupUnsuccessful
-from drunc.controller.children_interface._protocols import (
-    _ConnectionSocket,
-    _NotificationHandler,
-    _ProxySocket,
-    _ResponseQueue,
-    _RestConfigurationData,
-    _RestConnectivityService,
-    _RestServiceConfiguration,
-    _RunsOnConfiguration,
-)
 from drunc.controller.children_interface.child_node import ChildNode
 from drunc.controller.children_interface.client_side_state import ClientSideState
 from drunc.controller.exceptions import ChildError, ExpertCommandException
@@ -112,8 +104,8 @@ class ResponseListener:
     app: ClassVar[Flask]
     api: ClassVar[object]
     port: ClassVar[int]
-    queue: ClassVar[_ResponseQueue]
-    handlers: ClassVar[dict[str, _NotificationHandler]]
+    queue: ClassVar[multiprocessing.queues.Queue[object]]
+    handlers: ClassVar[dict[str, "AppCommander"]]
     dispatcher: ClassVar[ResponseDispatcher]
     log: ClassVar[logging.Logger]
     _lock: ClassVar[threading.Lock] = threading.Lock()
@@ -175,11 +167,11 @@ class ResponseListener:
     def terminate(cls) -> None:
         cls.queue.close()
         cls.queue.join_thread()
-        if cls.manager is not None:
+        if cls.manager:
             cls.manager.stop()
 
     @classmethod
-    def register(cls, app: str, handler: _NotificationHandler) -> None:
+    def register(cls, app: str, handler: "AppCommander") -> None:
         """Register a new notification handler
 
         :param      app:           The application
@@ -258,16 +250,15 @@ class AppCommander:
             self.log.debug(f"Proxy: '{self.proxy_host}:{self.proxy_port}'")
         self.log.debug(f"App: '{self.app_host}:{self.app_port}'")
 
-        s: _ConnectionSocket
+        s: socket.socket
         if not self.proxy_host and not self.proxy_port:
             self.log.debug("NO proxy setup")
             s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         else:
             self.log.debug("Proxy setup")
-            s = cast(
-                _ProxySocket, socks.socksocket(socket.AF_INET, socket.SOCK_STREAM)
-            )
-            s.set_proxy(socks.SOCKS5, self.proxy_host, self.proxy_port)
+            proxy_socket = socks.socksocket(socket.AF_INET, socket.SOCK_STREAM)
+            proxy_socket.set_proxy(socks.SOCKS5, self.proxy_host, self.proxy_port)
+            s = proxy_socket
             s.settimeout(1)
         n_tries = 2
 
@@ -387,13 +378,13 @@ class RESTAPIChildNodeConfHandler(ConfHandler):
     """Handler for REST API child node configuration."""
 
     id: str | None
-    exposes_service: Sequence[_RestServiceConfiguration]
-    runs_on: _RunsOnConfiguration | None
+    exposes_service: Sequence[object]
+    runs_on: object | None
     proxy: tuple[str | None, str | int | None]
     _raw: object
 
     def _post_process_oks(self) -> None:
-        raw = cast(_RestConfigurationData, self._raw_data)
+        raw = self._raw_data
         # Flatten attributes that are always accessed from outside
         self.id = getattr(raw, "id", None)
         self.exposes_service = getattr(raw, "exposes_service", [])
@@ -404,12 +395,14 @@ class RESTAPIChildNodeConfHandler(ConfHandler):
 
     def get_host_port(self) -> tuple[str, int]:
         for service in self.exposes_service:
-            if self.id is not None and self.id + "_control" in service.id:
+            if self.id is not None and self.id + "_control" in getattr(service, "id"):
                 if self.runs_on is None:
                     raise DruncSetupException(
                         f"REST API child node {self.id} has no runs_on configuration"
                     )
-                return self.runs_on.runs_on.id, service.port
+                host: str = getattr(getattr(self.runs_on, "runs_on"), "id")
+                port: int = getattr(service, "port")
+                return host, port
         raise DruncSetupException(
             f"REST API child node {self.id} does not expose a control service"
         )
@@ -422,7 +415,7 @@ class RESTAPIChildNode(ChildNode):
         configuration: RESTAPIChildNodeConfHandler,
         uri: str,
         fsm_configuration: FSMConfHandler,
-        connectivity_service: object | None = None,
+        connectivity_service: ConnectivityServiceClient | None = None,
     ):
         super().__init__(name, ControlType.REST_API)
         self._state = ClientSideState()
@@ -476,11 +469,8 @@ class RESTAPIChildNode(ChildNode):
         if not self.connectivity_service:
             return None
 
-        connectivity_service = cast(
-            _RestConnectivityService, self.connectivity_service
-        )
         try:
-            uris = connectivity_service.resolve(
+            uris = self.connectivity_service.resolve(
                 self.name + "_control",
                 "RunControlMessage",
                 ntries=1,
