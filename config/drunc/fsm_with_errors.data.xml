@@ -97,7 +97,7 @@
  <attr name="initial_state" type="string" val="initial"/>
  <rel name="transitions">
   <ref class="FSMtransition" id="conf_1"/>
-  <ref class="FSMtransition" id="conf_1"/>
+  <ref class="FSMtransition" id="conf_2"/>
  </rel>
 </obj>
 

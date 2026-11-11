@@ -1,10 +1,12 @@
+from grpc import RpcError
+
+from drunc.fsm.exceptions import DotDruncJsonNotFound
+import drunc.fsm.configuration as config
+import drunc.utils.configuration as utils
+
 from collections import Counter
 
 import pytest
-
-import drunc.fsm.configuration as config
-import drunc.utils.configuration as utils
-from drunc.fsm.exceptions import DotDruncJsonNotFound
 
 ## I should come up with some wrong configurations to test the exceptions
 
@@ -48,7 +50,7 @@ def test_prod_fsm() :
     conf_path = "config/drunc/one-controller-config.data.xml"
 
     with pytest.raises(DotDruncJsonNotFound):
-        config.FSMConfHandler.from_oks(
+        configuration = config.FSMConfHandler.from_oks(
             url="oksconflibs:" + conf_path,
             oks_key=utils.OKSKey(
                 schema_file="schema/confmodel/dunedaq.schema.xml",
@@ -65,7 +67,7 @@ def test_reduntant_commands_fsm() :
     conf_path = "config/drunc/fsm_with_errors.data.xml"
 
     with pytest.raises(ValueError):
-        config.FSMConfHandler.from_oks(
+        configuration = config.FSMConfHandler.from_oks(
             url="oksconflibs:" + conf_path,
             oks_key=utils.OKSKey(
                 schema_file="schema/confmodel/dunedaq.schema.xml",
@@ -77,7 +79,7 @@ def test_reduntant_commands_fsm() :
         )
 
     with pytest.raises(ValueError):
-        config.FSMConfHandler.from_oks(
+        configuration = config.FSMConfHandler.from_oks(
             url="oksconflibs:" + conf_path,
             oks_key=utils.OKSKey(
                 schema_file="schema/confmodel/dunedaq.schema.xml",
@@ -89,7 +91,7 @@ def test_reduntant_commands_fsm() :
         )
 
     with pytest.raises(ValueError):
-        config.FSMConfHandler.from_oks(
+        configuration = config.FSMConfHandler.from_oks(
             url="oksconflibs:" + conf_path,
             oks_key=utils.OKSKey(
                 schema_file="schema/confmodel/dunedaq.schema.xml",
