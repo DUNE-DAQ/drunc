@@ -12,7 +12,6 @@ class SessionManagerContext(ShellContext):
     shell_id = "session_manager_shell"
 
     def __init__(self, *args, **kwargs):
-        self.status_receiver = None
         super().__init__(*args, **kwargs)
 
     def reset(self, address: str = "", **kwargs):
@@ -35,7 +34,3 @@ class SessionManagerContext(ShellContext):
 
     def create_token(self, **kwargs) -> Token:
         return create_dummy_token_from_uname()
-
-    def terminate(self):
-        if self.status_receiver:
-            self.status_receiver.stop()

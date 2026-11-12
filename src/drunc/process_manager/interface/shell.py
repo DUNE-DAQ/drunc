@@ -110,7 +110,6 @@ def process_manager_shell(
         ctx.obj.get_driver("process_manager").send_log(
             f"{getpass.getuser()} disconnecting from {ctx.obj.shell_id}"
         )
-        ctx.obj.terminate()
         process_manager_log.info(
             f"[green]{getpass.getuser()}[/green] disconnected from the process manager through a [green]drunc-process-manager-shell[/green]"
         )

@@ -22,8 +22,6 @@ class UnifiedShellContext(ShellContext):  # boilerplatefest
 
     def __init__(self) -> None:
         self.log = None
-        self.status_receiver_pm = None
-        self.status_receiver_controller = None
         self.took_control = False
         self.pm_process: Process | None = None
         self.address_pm = ""
@@ -128,9 +126,3 @@ class UnifiedShellContext(ShellContext):  # boilerplatefest
             overrides[proc_name] = host_name
 
         return overrides
-
-    def terminate(self) -> None:
-        if self.status_receiver_pm:
-            self.status_receiver_pm.stop()
-        if self.status_receiver_controller:
-            self.status_receiver_controller.stop()

@@ -11,7 +11,6 @@ class RunControlContext(ShellContext):
     shell_id = "run_control_shell"
 
     def __init__(self, *args, **kwargs) -> None:
-        self.status_receiver = None
         super(RunControlContext, self).__init__(*args, **kwargs)
 
     def reset(self, *args, **kwargs) -> None:
@@ -36,7 +35,3 @@ class RunControlContext(ShellContext):
                 self._token,
             )
         }
-
-    def terminate(self) -> None:
-        if self.status_receiver:
-            self.status_receiver.stop()

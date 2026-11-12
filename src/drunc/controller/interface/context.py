@@ -14,7 +14,6 @@ class ControllerContext(ShellContext):  # boilerplatefest
     shell_id = "controller_shell"
 
     def __init__(self) -> None:
-        self.status_receiver = None
         self.took_control = False
         super(ControllerContext, self).__init__()
 
@@ -31,7 +30,3 @@ class ControllerContext(ShellContext):  # boilerplatefest
 
     def create_token(self, **kwargs) -> Token:
         return create_dummy_token_from_uname()
-
-    def terminate(self) -> None:
-        if self.status_receiver:
-            self.status_receiver.stop()

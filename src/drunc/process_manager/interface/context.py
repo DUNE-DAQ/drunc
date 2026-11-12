@@ -14,7 +14,6 @@ class ProcessManagerContext(ShellContext):  # boilerplatefest
     shell_id = "process_manager_shell"
 
     def __init__(self, *args: object, **kwargs: object) -> None:
-        self.status_receiver = None
         super(ProcessManagerContext, self).__init__(*args, **kwargs)
 
     def reset(self, *args: object, **kwargs: object) -> None:
@@ -47,19 +46,3 @@ class ProcessManagerContext(ShellContext):  # boilerplatefest
         creation logic as needed.
         """
         return create_dummy_token_from_uname()
-
-    def terminate(self) -> None:
-        """
-        Run the cleanup procedures for the process manager context.
-
-        This method stops the status receiver if it is running, ensuring that any
-        resources associated with the process manager context are properly released.
-
-        Args:
-            None
-
-        Returns:
-            None
-        """
-        if self.status_receiver:
-            self.status_receiver.stop()

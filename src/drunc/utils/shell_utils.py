@@ -121,11 +121,6 @@ class ShellContext:
         """
         pass
 
-    @abc.abstractmethod
-    def terminate(self) -> None:
-        """Terminate the shell context."""
-        pass
-
     def set_driver(self, name: str, driver: object) -> None:
         """Set a driver in the context.
 
