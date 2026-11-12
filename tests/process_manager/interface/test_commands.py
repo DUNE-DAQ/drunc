@@ -413,13 +413,14 @@ def test_logs_command_with_grep_and_lines():
     """
 
     mock_driver = MockDriver()
+    mock_driver.logs = MagicMock(return_value=MagicMock())
     mock_context = MockContext(driver=mock_driver)
     mock_context.rule = MagicMock()
     mock_context.print = MagicMock()
 
     with patch(
-        "drunc.process_manager.interface.commands.escape", side_effect=lambda x: x
-    ):
+        "drunc.process_manager.interface.commands.print_logs"
+    ) as mock_print_logs:
         result = CliRunner().invoke(
             logs,
             ["--name", "process1", "--how-far", "50", "--grep", "keyword"],
@@ -428,6 +429,11 @@ def test_logs_command_with_grep_and_lines():
 
         assert result.output == ""
         assert result.exit_code == 0
+        mock_driver.logs.assert_called_once()
+        assert mock_driver.logs.call_args.args[0].how_far == 50
+        mock_print_logs.assert_called_once_with(
+            mock_context, mock_driver.logs.return_value, "keyword"
+        )
 
 
 def test_restart():

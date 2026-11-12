@@ -5,9 +5,8 @@ from druncschema.common_pb2 import LoggerTarget
 
 from drunc.controller.interface.context import ControllerContext
 from drunc.controller.interface.shell_utils import controller_setup, render_status_table
-from drunc.utils.shell_utils import format_table_width
-from drunc.utils.shell_utils import wait as shell_wait
-from drunc.utils.utils import get_logger, log_echo
+from drunc.utils.utils import format_table_width, get_logger, log_echo
+from drunc.utils.utils import wait as shell_wait
 
 log = get_logger("controller.iface", rich_handler=True)
 
@@ -136,7 +135,7 @@ def status(
         show_ip_address=extended,
         width=width,
     )
-    table = format_table_width(obj, table, fit)
+    table = format_table_width(obj._console, table, fit)
     obj.print(table, soft_wrap=not fit)
     obj.print_status_summary()
 

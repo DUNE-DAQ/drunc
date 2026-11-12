@@ -106,6 +106,10 @@ def run_rc(
 
 @click.command()
 @click.argument("rc-port", type=int)
-def rc_cli(rc_port: int):
+@click.pass_context
+def rc_cli(
+    ctx: click.core.Context,
+    rc_port: int,
+):
     get_root_logger("info")
     run_rc(rc_address=f"0.0.0.0:{rc_port}")
