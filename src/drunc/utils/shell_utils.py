@@ -62,15 +62,10 @@ class ShellContext:
         """
         return self.shell_id
 
-    def _reset(
-        self,
-        name: str,
-        token_args: dict[str, object] = {},
-        driver_args: dict[str, object] = {},
-    ) -> None:
+    def _reset(self) -> None:
         self._console = Console()
-        self._token = self.create_token(**token_args)
-        self._drivers: MutableMapping[str, object] = self.create_drivers(**driver_args)
+        self._token = self.create_token()
+        self._drivers: MutableMapping[str, object] = self.create_drivers()
 
     def __init__(self, *args: object, **kwargs: object) -> None:
         """Initialize the shell context.

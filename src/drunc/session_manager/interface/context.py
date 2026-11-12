@@ -16,11 +16,7 @@ class SessionManagerContext(ShellContext):
 
     def reset(self, address: str = "", **kwargs):
         self.address = resolve_localhost_to_hostname(address)
-        super()._reset(
-            name="session_manager_context",
-            token_args={},
-            driver_args={},
-        )
+        super()._reset()
 
     def create_drivers(self, **kwargs) -> dict[str, object]:
         if not self.address:

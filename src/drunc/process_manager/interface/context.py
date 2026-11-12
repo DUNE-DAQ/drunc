@@ -10,7 +10,7 @@ from drunc.utils.shell_utils import (
 from drunc.utils.utils import resolve_localhost_to_hostname
 
 
-class ProcessManagerContext(ShellContext):  # boilerplatefest
+class ProcessManagerContext(ShellContext):
     shell_id = "process_manager_shell"
 
     def __init__(self, *args: object, **kwargs: object) -> None:
@@ -22,11 +22,7 @@ class ProcessManagerContext(ShellContext):  # boilerplatefest
             address_raw = args[0]
         address = str(address_raw) if address_raw is not None else ""
         self.address = resolve_localhost_to_hostname(address)
-        super(ProcessManagerContext, self)._reset(
-            name="process_manager_context",
-            token_args={},
-            driver_args={},
-        )
+        super()._reset()
 
     def create_drivers(self, **kwargs: object) -> MutableMapping[str, object]:
         if not self.address:

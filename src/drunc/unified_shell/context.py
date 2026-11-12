@@ -17,7 +17,7 @@ class UnifiedShellMode(Enum):
     SEMIBATCH = "semibatch"
 
 
-class UnifiedShellContext(ShellContext):  # boilerplatefest
+class UnifiedShellContext(ShellContext):
     shell_id = "unified_shell"
 
     def __init__(self) -> None:
@@ -42,7 +42,7 @@ class UnifiedShellContext(ShellContext):  # boilerplatefest
             address_pm_raw = args[0]
         address_pm = str(address_pm_raw) if address_pm_raw is not None else ""
         self.address_pm = resolve_localhost_to_hostname(address_pm)
-        super(UnifiedShellContext, self)._reset(name="unified_shell")
+        super()._reset()
 
     def create_drivers(self, **kwargs: object) -> MutableMapping[str, object]:
         ret: MutableMapping[str, object] = {}

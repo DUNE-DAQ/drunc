@@ -10,7 +10,7 @@ from drunc.utils.shell_utils import (
 from drunc.utils.utils import resolve_localhost_to_hostname
 
 
-class ControllerContext(ShellContext):  # boilerplatefest
+class ControllerContext(ShellContext):
     shell_id = "controller_shell"
 
     def __init__(self) -> None:
@@ -19,9 +19,7 @@ class ControllerContext(ShellContext):  # boilerplatefest
 
     def reset(self, address: str = None):
         self.address = resolve_localhost_to_hostname(address)
-        super(ControllerContext, self)._reset(
-            name="controller_context", token_args={}, driver_args={}
-        )
+        super()._reset()
 
     def create_drivers(self, **kwargs: object) -> MutableMapping[str, object]:
         if not self.address:

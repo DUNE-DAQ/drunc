@@ -19,9 +19,7 @@ class RunControlContext(ShellContext):
             address_raw = args[0]
         address = str(address_raw) if address_raw is not None else ""
         self.address = resolve_localhost_to_hostname(address)
-        super(RunControlContext, self)._reset(
-            name="run_control_context", token_args={}, driver_args={}
-        )
+        super()._reset()
 
     def create_token(self, **kwargs) -> Token:
         return create_dummy_token_from_uname()
