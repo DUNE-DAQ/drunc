@@ -1,12 +1,7 @@
 from collections.abc import MutableMapping
 
-from druncschema.token_pb2 import Token
-
 from drunc.controller.controller_driver import ControllerDriver
-from drunc.utils.shell_utils import (
-    ShellContext,
-    create_dummy_token_from_uname,
-)
+from drunc.utils.shell_utils import ShellContext
 
 
 class ControllerContext(ShellContext):
@@ -20,6 +15,3 @@ class ControllerContext(ShellContext):
         if not self.address:
             return {}
         return {"controller": ControllerDriver(self.address, self._token)}
-
-    def create_token(self, **kwargs) -> Token:
-        return create_dummy_token_from_uname()

@@ -4,7 +4,6 @@ from multiprocessing.context import Process
 
 import grpc
 from druncschema.process_manager_pb2 import ProcessQuery
-from druncschema.token_pb2 import Token
 
 from drunc.utils.grpc_utils import ServerTimeout, ServerUnreachable
 from drunc.utils.shell_utils import ShellContext
@@ -70,12 +69,6 @@ class UnifiedShellContext(ShellContext):
             self.address_controller,
             self._token,
         )
-
-    def create_token(self, **kwargs: object) -> Token:
-        from drunc.utils.shell_utils import create_dummy_token_from_uname
-
-        token = create_dummy_token_from_uname()
-        return token
 
     def get_endpoint_display_host_overrides(self) -> dict[str, str]:
         """

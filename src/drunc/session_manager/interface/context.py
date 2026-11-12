@@ -1,10 +1,5 @@
-from druncschema.token_pb2 import Token
-
 from drunc.session_manager.session_manager_driver import SessionManagerDriver
-from drunc.utils.shell_utils import (
-    ShellContext,
-    create_dummy_token_from_uname,
-)
+from drunc.utils.shell_utils import ShellContext
 
 
 class SessionManagerContext(ShellContext):
@@ -22,6 +17,3 @@ class SessionManagerContext(ShellContext):
                 self._token,
             )
         }
-
-    def create_token(self, **kwargs) -> Token:
-        return create_dummy_token_from_uname()

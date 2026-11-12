@@ -101,8 +101,7 @@ class ShellContext:
         """
         pass
 
-    @abc.abstractmethod
-    def create_token(self, **kwargs: object) -> Token:
+    def create_token(self) -> Token:
         """Create a token for the context.
 
         Args:
@@ -111,7 +110,7 @@ class ShellContext:
         Returns:
             Token: A token object.
         """
-        pass
+        return create_dummy_token_from_uname()
 
     def set_driver(self, name: str, driver: object) -> None:
         """Set a driver in the context.
