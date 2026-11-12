@@ -86,7 +86,7 @@ class ShellContext:
         """
         self.address = resolve_localhost_to_hostname(address)
         self._console = Console()
-        self._token = self.create_token()
+        self._token = create_dummy_token_from_uname()
         self._drivers: MutableMapping[str, object] = self.create_drivers()
 
     @abc.abstractmethod
@@ -100,17 +100,6 @@ class ShellContext:
             MutableMapping[str, object]: A mapping of driver names to driver objects.
         """
         pass
-
-    def create_token(self) -> Token:
-        """Create a token for the context.
-
-        Args:
-            **kwargs: Additional keyword arguments.
-
-        Returns:
-            Token: A token object.
-        """
-        return create_dummy_token_from_uname()
 
     def set_driver(self, name: str, driver: object) -> None:
         """Set a driver in the context.
