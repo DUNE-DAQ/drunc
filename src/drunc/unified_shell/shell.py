@@ -182,7 +182,7 @@ def unified_shell(
         )
         internal_pm = False
         running_mode = ProcessManagerRunningMode.Subprocess
-        ctx.obj.reset(address_pm=process_manager_url.netloc)
+        ctx.obj.reset(process_manager_url.netloc)
         pm_type = ProcessManagerTypes[
             ctx.obj.get_driver("process_manager").describe().type
         ]
@@ -302,7 +302,7 @@ def unified_shell(
         process_manager_address = resolve_localhost_and_127_ip_to_network_ip(
             f"localhost:{port.value}"
         )
-        ctx.obj.reset(address_pm=process_manager_address)
+        ctx.obj.reset(process_manager_address)
         ctx.obj.log.debug(
             f"[green]process_manager[/green] started at address [green]"
             f"{process_manager_address}[/green]"
