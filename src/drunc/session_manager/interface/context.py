@@ -5,7 +5,6 @@ from drunc.utils.shell_utils import (
     ShellContext,
     create_dummy_token_from_uname,
 )
-from drunc.utils.utils import resolve_localhost_to_hostname
 
 
 class SessionManagerContext(ShellContext):
@@ -13,10 +12,6 @@ class SessionManagerContext(ShellContext):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-
-    def reset(self, address: str = "", **kwargs):
-        self.address = resolve_localhost_to_hostname(address)
-        super()._reset()
 
     def create_drivers(self, **kwargs) -> dict[str, object]:
         if not self.address:

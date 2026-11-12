@@ -8,7 +8,6 @@ from druncschema.token_pb2 import Token
 
 from drunc.utils.grpc_utils import ServerTimeout, ServerUnreachable
 from drunc.utils.shell_utils import ShellContext
-from drunc.utils.utils import resolve_localhost_to_hostname
 
 
 class UnifiedShellMode(Enum):
@@ -24,7 +23,7 @@ class UnifiedShellContext(ShellContext):
         self.log = None
         self.took_control = False
         self.pm_process: Process | None = None
-        self.address_pm = ""
+        self.address = ""
         self.address_controller = ""
         self.configuration_file = ""
         self.configuration_id = ""
@@ -36,23 +35,15 @@ class UnifiedShellContext(ShellContext):
         self.session_uses_local_connectivity_service: bool | None = None
         super(UnifiedShellContext, self).__init__()
 
-    def reset(self, *args: object, **kwargs: object) -> None:
-        address_pm_raw = kwargs.get("address_pm")
-        if address_pm_raw is None and args:
-            address_pm_raw = args[0]
-        address_pm = str(address_pm_raw) if address_pm_raw is not None else ""
-        self.address_pm = resolve_localhost_to_hostname(address_pm)
-        super()._reset()
-
     def create_drivers(self, **kwargs: object) -> MutableMapping[str, object]:
         ret: MutableMapping[str, object] = {}
-        if self.address_pm != "":
+        if self.address != "":
             from drunc.process_manager.process_manager_driver import (
                 ProcessManagerDriver,
             )
 
             ret["process_manager"] = ProcessManagerDriver(
-                self.address_pm,
+                self.address,
                 self._token,
             )
         if self.address_controller != "":

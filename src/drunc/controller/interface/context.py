@@ -7,7 +7,6 @@ from drunc.utils.shell_utils import (
     ShellContext,
     create_dummy_token_from_uname,
 )
-from drunc.utils.utils import resolve_localhost_to_hostname
 
 
 class ControllerContext(ShellContext):
@@ -16,10 +15,6 @@ class ControllerContext(ShellContext):
     def __init__(self) -> None:
         self.took_control = False
         super(ControllerContext, self).__init__()
-
-    def reset(self, address: str = None):
-        self.address = resolve_localhost_to_hostname(address)
-        super()._reset()
 
     def create_drivers(self, **kwargs: object) -> MutableMapping[str, object]:
         if not self.address:

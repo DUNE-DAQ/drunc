@@ -14,7 +14,7 @@ from rich.table import Table
 from drunc.controller.controller_driver import ControllerDriver
 from drunc.exceptions import DruncShellException
 from drunc.process_manager.process_manager_driver import ProcessManagerDriver
-from drunc.utils.utils import get_logger
+from drunc.utils.utils import get_logger, resolve_localhost_to_hostname
 
 
 class InterruptedCommand(DruncShellException):
@@ -62,11 +62,6 @@ class ShellContext:
         """
         return self.shell_id
 
-    def _reset(self) -> None:
-        self._console = Console()
-        self._token = self.create_token()
-        self._drivers: MutableMapping[str, object] = self.create_drivers()
-
     def __init__(self, *args: object, **kwargs: object) -> None:
         """Initialize the shell context.
 
@@ -82,15 +77,17 @@ class ShellContext:
             log.exception(e)
             exit(1)
 
-    @abc.abstractmethod
-    def reset(self, *args: object, **kwargs: object) -> None:
+    def reset(self, address: str) -> None:
         """Reset the shell context.
 
         Args:
             *args: Additional positional arguments.
             **kwargs: Additional keyword arguments.
         """
-        pass
+        self.address = resolve_localhost_to_hostname(address)
+        self._console = Console()
+        self._token = self.create_token()
+        self._drivers: MutableMapping[str, object] = self.create_drivers()
 
     @abc.abstractmethod
     def create_drivers(self, **kwargs: object) -> MutableMapping[str, object]:
