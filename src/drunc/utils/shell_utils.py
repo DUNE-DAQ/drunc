@@ -77,7 +77,7 @@ class ShellContext:
             log.exception(e)
             exit(1)
 
-    def reset(self, address: str) -> None:
+    def reset(self, address: str = "") -> None:
         """Reset the shell context.
 
         Args:
