@@ -15,6 +15,7 @@ from drunc.grpc_settings import (
     CONTROLLER_SERVER_GRPC_MAX_WORKERS,
 )
 from drunc.utils.configuration import OKSKey
+from drunc.utils.grpc_utils import RichErrorServerInterceptor
 from drunc.utils.utils import (
     get_logger,
     get_root_logger,
@@ -112,6 +113,7 @@ def controller_cli(
                 max_workers=CONTROLLER_SERVER_GRPC_MAX_WORKERS
             ),
             options=CONTROLLER_SERVER_GRPC_CONFIG,
+            interceptors=[RichErrorServerInterceptor()],
         )
         add_ControllerServicer_to_server(ctrlr, server)
         port = server.add_insecure_port(listen_addr)

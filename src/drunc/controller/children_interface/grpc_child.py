@@ -44,6 +44,7 @@ from drunc.exceptions import DruncSetupException
 from drunc.grpc_settings import CONTROLLER_CLIENT_GRPC_CONFIG
 from drunc.utils.configuration import ConfHandler
 from drunc.utils.grpc_utils import (
+    RichErrorClientInterceptor,
     ServerUnreachable,
     rethrow_if_unreachable_server,
     unpack_any,
@@ -102,9 +103,9 @@ class gRPCChildNode(ChildNode):
             if hasattr(self, "channel") and self.channel:
                 self.channel.close()
 
-            self.channel = grpc.insecure_channel(
-                self.uri, options=CONTROLLER_CLIENT_GRPC_CONFIG
-            )
+            raw_channel = grpc.insecure_channel(self.uri, options=CONTROLLER_CLIENT_GRPC_CONFIG)
+            rich_interceptor = RichErrorClientInterceptor(logger=self.log)
+            self.channel = grpc.intercept_channel(raw_channel, rich_interceptor)
             self.log.info(f"Created new gRPC channel to {self.uri}")
             self.stub = ControllerStub(self.channel)
 
@@ -121,8 +122,7 @@ class gRPCChildNode(ChildNode):
 
             try:
                 self.stub.describe(request)
-
-            except grpc.RpcError as error:
+            except (grpc.RpcError, ServerUnreachable) as error:
                 if tries_remaining == 0:
                     raise error
                 self.log.info(
@@ -213,7 +213,7 @@ class gRPCChildNode(ChildNode):
         try:
             self.stub.describe(request)
             return True
-        except grpc.RpcError as error:
+        except (grpc.RpcError, ServerUnreachable) as error:
             try:
                 self.handle_child_grpc_error(error)
             except ServerUnreachable:
@@ -251,7 +251,7 @@ class gRPCChildNode(ChildNode):
 
         try:
             response = self.stub.status(request)
-        except grpc.RpcError as error:
+        except (grpc.RpcError, ServerUnreachable) as error:
             try:
                 self.handle_child_grpc_error(error)
             except ServerUnreachable:
@@ -277,7 +277,7 @@ class gRPCChildNode(ChildNode):
 
         try:
             response = self.stub.describe(request)
-        except grpc.RpcError as error:
+        except (grpc.RpcError, ServerUnreachable) as error:
             try:
                 self.handle_child_grpc_error(error)
             except ServerUnreachable:
@@ -307,7 +307,7 @@ class gRPCChildNode(ChildNode):
 
         try:
             response = self.stub.describe_fsm(request)
-        except grpc.RpcError as error:
+        except (grpc.RpcError, ServerUnreachable) as error:
             try:
                 self.handle_child_grpc_error(error)
             except ServerUnreachable:
@@ -337,7 +337,7 @@ class gRPCChildNode(ChildNode):
 
         try:
             response = self.stub.execute_fsm_command(request)
-        except grpc.RpcError as error:
+        except (grpc.RpcError, ServerUnreachable) as error:
             try:
                 self.handle_child_grpc_error(error)
             except ServerUnreachable:
@@ -367,7 +367,7 @@ class gRPCChildNode(ChildNode):
 
         try:
             response = self.stub.execute_expert_command(request)
-        except grpc.RpcError as error:
+        except (grpc.RpcError, ServerUnreachable) as error:
             try:
                 self.handle_child_grpc_error(error)
             except ServerUnreachable:
@@ -396,7 +396,7 @@ class gRPCChildNode(ChildNode):
 
         try:
             response = self.stub.include(request)
-        except grpc.RpcError as e:
+        except (grpc.RpcError, ServerUnreachable) as e:
             try:
                 self.handle_child_grpc_error(e)
             except ServerUnreachable:
@@ -425,7 +425,7 @@ class gRPCChildNode(ChildNode):
 
         try:
             response = self.stub.exclude(request)
-        except grpc.RpcError as e:
+        except (grpc.RpcError, ServerUnreachable) as e:
             try:
                 self.handle_child_grpc_error(e)
             except ServerUnreachable:
@@ -453,7 +453,7 @@ class gRPCChildNode(ChildNode):
 
         try:
             response = self.stub.recompute_status(request)
-        except grpc.RpcError as e:
+        except (grpc.RpcError, ServerUnreachable) as e:
             try:
                 self.handle_child_grpc_error(e)
             except ServerUnreachable:
@@ -481,7 +481,7 @@ class gRPCChildNode(ChildNode):
 
         try:
             response = self.stub.take_control(request)
-        except grpc.RpcError as e:
+        except (grpc.RpcError, ServerUnreachable) as e:
             try:
                 self.handle_child_grpc_error(e)
             except ServerUnreachable:
@@ -509,7 +509,7 @@ class gRPCChildNode(ChildNode):
 
         try:
             response = self.stub.surrender_control(request)
-        except grpc.RpcError as e:
+        except (grpc.RpcError, ServerUnreachable) as e:
             try:
                 self.handle_child_grpc_error(e)
             except ServerUnreachable:
@@ -537,7 +537,7 @@ class gRPCChildNode(ChildNode):
 
         try:
             response = self.stub.who_is_in_charge(request)
-        except grpc.RpcError as e:
+        except (grpc.RpcError, ServerUnreachable) as e:
             try:
                 self.handle_child_grpc_error(e)
             except ServerUnreachable:
@@ -565,7 +565,7 @@ class gRPCChildNode(ChildNode):
 
         try:
             response = self.stub.to_error(request)
-        except grpc.RpcError as e:
+        except (grpc.RpcError, ServerUnreachable) as e:
             try:
                 self.handle_child_grpc_error(e)
             except ServerUnreachable:
@@ -578,12 +578,15 @@ class gRPCChildNode(ChildNode):
 
         return response
 
-    def handle_child_grpc_error(self, error: grpc.RpcError) -> NoReturn:
+    def handle_child_grpc_error(self, error: grpc.RpcError | ServerUnreachable) -> NoReturn:
         """Handle gRPC errors from sending commands to the child controller.
 
         Args:
             error: The gRPC error to handle.
         """
+        if isinstance(error, ServerUnreachable): # If the server is unreachable, re-raise the error immediately.
+            raise error
+        
         rethrow_if_unreachable_server(error)
 
         # RpcError is also a subclass of Call, and can be used in from_call.
