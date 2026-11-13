@@ -1,0 +1,11 @@
+# Identity of the account that posts bot comments; only its comments are trusted.
+bot_login: github-actions[bot]
+
+# Hidden markers the scripts use to find and parse their own comments.
+# Changing one orphans existing comments on open PRs, so bump the version suffix deliberately.
+markers:
+  approval: "<!-- approval-comment:v1 -->"
+  tracker: "<!-- review-tracker:v1 -->"
+  tracker_state_prefix: "<!-- review-tracker-state:"
+  checklist_start: "<!-- reviewer-checklist:start:v1 -->"
+  checklist_end: "<!-- reviewer-checklist:end:v1 -->"

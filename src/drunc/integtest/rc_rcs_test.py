@@ -11,18 +11,20 @@ from daqconf.utils import find_free_port
 from integ_test_utils import (
     strip_ansi,
 )
-from pm_test_common import make_conf_dict
 
 print = functools.partial(print, flush=True)  # always flush print() output
 
 pytest_plugins = "integrationtest.integrationtest_drunc"
 
-conf_dict = make_conf_dict("rc_rcs")
+conf_dict = idc.integtest_params_for_predefined_dunedaq_config()
+conf_dict.predefined_config_db = (
+    os.environ.get("DAQSYSTEMTEST_SHARE")
+    + "/config/daqsystemtest/example-configs.data.xml"
+)
+conf_dict.daq_session_name = "rc-rcs-test"
 
 confgen_arguments = {"SmallFootprint": conf_dict}
 
-
-daq_session_name = "rc-rcs-test"
 
 # The commands to run in dunerc and the process manager shell
 dunerc_commands = """
@@ -101,10 +103,10 @@ def test_dunerc_success(run_dunerc) -> None:
 #     logfile_types = ("df-01", "dfo", "mlt", "ru")
 #     log_names = tuple(map(str, run_dunerc.log_files))
 #     missing_logfiles = [
-#         f"{daq_session_name}_{logfile_type}"
+#         f"{run_dunerc.daq_session_name}_{logfile_type}"
 #         for logfile_type in logfile_types
 #         if not any(
-#             f"{daq_session_name}_{logfile_type}" in str(logname)
+#             f"{run_dunerc.daq_session_name}_{logfile_type}" in str(logname)
 #             for logname in log_names
 #         )
 #     ]

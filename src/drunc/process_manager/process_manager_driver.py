@@ -322,6 +322,10 @@ class ProcessManagerDriver:
         env.pop("DISPLAY", None)
         tree_id = app["tree_id"]
 
+        # Pass through the KUBECONFIG environment variable if it exists
+        if "KUBECONFIG" in os.environ:
+            env["KUBECONFIG"] = os.environ["KUBECONFIG"]
+
         # The following line is required to provide an independent method of injecting
         # the hostname into the environment for applications that need it. This is the
         # case for containerized applications, for which the hostname is not
