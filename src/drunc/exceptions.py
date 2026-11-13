@@ -3,6 +3,7 @@ from google.rpc import code_pb2, error_details_pb2
 
 
 class DruncException(Exception):
+    """Base class for all Drunc exceptions."""
     def __init__(
         self,
         message: str | None = "An error occurred in Drunc.",
@@ -61,11 +62,19 @@ class DruncException(Exception):
         return details_list
 
 
+class DruncTerminalException(DruncException):
+    """The RPC must be aborted with a rich gRPC status."""
+
+
+class DruncNonTerminalException(DruncException):
+    """The command can return a normal response containing the error."""
+
+
 class DruncShellException(DruncException):
     pass
 
 
-class DruncSetupException(DruncException):
+class DruncSetupException(DruncTerminalException):
     grpc_error_code: int = code_pb2.FAILED_PRECONDITION
 
     @property
@@ -82,34 +91,17 @@ class DruncSetupException(DruncException):
         return [precond]
 
 
-class DruncCommandException(DruncException):
+class DruncCommandException(DruncTerminalException):
     grpc_error_code: int = code_pb2.INTERNAL
     reason: str = "COMMAND_ERROR"
 
-
-class DruncServerSideError(DruncException):
-    def __init__(
-        self,
-        error_txt: str,
-        stack_txt: str,
-        server_response: str,
-        *args: object,
-        **kwargs: object,
-    ) -> None:
-        self.error_txt: str = error_txt
-        self.stack_txt: str = stack_txt
-        self.server_response: str = server_response
-
-        super().__init__(
-            message=error_txt,
-            details=server_response,
-            **kwargs,  # type: ignore[arg-type]
-        )
-
-    def __str__(self) -> str:
-        return f"{self.stack_txt}\n{self.error_txt}\n{self.server_response}"
+class DruncNotImplementedException(DruncTerminalException):
+    grpc_error_code: int = code_pb2.UNIMPLEMENTED
+    reason: str = "NOT_IMPLEMENTED"
 
 
+######################### Shell Exceptions #########################
+# Inherit from DruncException so they can still carry rich error information without being aborted by the rich error interceptor
 class DruncBatchShellError(DruncException):
     def __init__(self, msg: str) -> None:
         err_msg = f"Batch shell error: {msg}"
@@ -134,6 +126,26 @@ class DruncBatchShellMissingArg(DruncException):
         super().__init__(message=err_msg)
 
 
-class DruncNotImplementedException(DruncException):
-    grpc_error_code: int = code_pb2.UNIMPLEMENTED
-    reason: str = "NOT_IMPLEMENTED"
+# Currently not being used
+class DruncServerSideError(DruncException):
+    def __init__(
+        self,
+        error_txt: str,
+        stack_txt: str,
+        server_response: str,
+        *args: object,
+        **kwargs: object,
+    ) -> None:
+        self.error_txt: str = error_txt
+        self.stack_txt: str = stack_txt
+        self.server_response: str = server_response
+
+        super().__init__(
+            message=error_txt,
+            details=server_response,
+            **kwargs,  # type: ignore[arg-type]
+        )
+
+    def __str__(self) -> str:
+        return f"{self.stack_txt}\n{self.error_txt}\n{self.server_response}"
+

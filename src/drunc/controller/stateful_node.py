@@ -5,8 +5,9 @@ from typing import Any, Callable, Optional
 
 from druncschema.controller_pb2 import FSMCommand
 from druncschema.opmon.FSM_pb2 import FSMStatus
+from google.rpc import code_pb2
 
-from drunc.exceptions import DruncCommandException
+from drunc.exceptions import DruncNonTerminalException
 from drunc.fsm.core import FSM
 from drunc.fsm.exceptions import InvalidTransition
 from drunc.fsm.utils import decode_fsm_arguments
@@ -48,34 +49,58 @@ class InclusionState(Observed):
         super(InclusionState, self).__init__(name="inclusion_state", **kwargs)
 
 
-class StatefulNodeException(DruncCommandException):
+class StatefulNodeException(DruncNonTerminalException):
+    """Non terminal exceptions"""
     pass
 
 
 class CannotInclude(StatefulNodeException):
+    """Raised when a node cannot be included"""
+    grpc_error_code = code_pb2.FAILED_PRECONDITION
+    reason = "CANNOT_INCLUDE_NODE"
+
     def __init__(self):
-        super().__init__("Cannot include node (most likely, it is already included)")
+        message = "Cannot include node (most likely, it is already included)"
+        super().__init__(message)
 
 
 class CannotExclude(StatefulNodeException):
+    """Raised when a node cannot be excluded"""
+    grpc_error_code = code_pb2.FAILED_PRECONDITION
+    reason = "CANNOT_EXCLUDE_NODE"
+
     def __init__(self):
-        super().__init__("Cannot exclude node (most likely, it is already excluded)")
+        message = "Cannot exclude node (most likely, it is already excluded)"
+        super().__init__(message)
 
 
 class InvalidSubTransition(StatefulNodeException):
-    def __init__(self, current_state, expected_state, action):
+    """Raised when a sub-transition is invalid"""
+    grpc_error_code = code_pb2.FAILED_PRECONDITION
+    reason = "INVALID_SUB_TRANSITION"
+
+    def __init__(self, current_state, expected_state, action, **kwargs):
         message = f'SubTransition "{action}" cannot be executed, state needs to be "{expected_state}", it is now "{current_state}"'
-        super(InvalidSubTransition, self).__init__(message)
+        super(InvalidSubTransition, self).__init__(message, current_state=current_state, expected_state=expected_state, action=action, **kwargs)
 
 
 class TransitionNotTerminated(StatefulNodeException):
+    """Raised when a transition is not terminated"""
+    grpc_error_code = code_pb2.FAILED_PRECONDITION
+    reason = "TRANSITION_NOT_TERMINATED"
+    
     def __init__(self):
-        super().__init__("The transition did not finished successfully")
+        super().__init__("The transition did not finish successfully")
 
 
 class TransitionExecuting(StatefulNodeException):
+    """Raised when a transition is already executing"""
+    grpc_error_code = code_pb2.FAILED_PRECONDITION
+    reason = "TRANSITION_EXECUTING"
+
     def __init__(self):
-        super().__init__("A transition is already executing")
+        message = "A transition is already executing"
+        super().__init__(message)
 
 
 class StatefulNode(abc.ABC):
