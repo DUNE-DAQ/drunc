@@ -310,7 +310,7 @@ class ControllerDriver:
         self,
         text: str,
         severity: str = "INFO",
-        logger: int = LoggerTarget.MAIN,
+        logger: LoggerTarget.ValueType = LoggerTarget.MAIN,
         target: str = "",
         execute_along_path: bool = False,
         execute_on_all_subsequent_children_in_path: bool = True,
