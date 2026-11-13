@@ -1,0 +1,113 @@
+name: Sprint rollover
+
+on:
+  schedule:
+    - cron: '0 1 * * *' # Daily, shortly after sprints change at midnight UTC
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  group: sprint-rollover
+  cancel-in-progress: false
+
+jobs:
+  rollover:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      GH_TOKEN: ${{ secrets.BOT_CI_ISSUES }}
+      ORG: DUNE-DAQ
+      PROJECT_NUMBER: 8
+      SPRINT_FIELD: Sprint
+    steps:
+      - name: Move unfinished items from the previous sprint to the current sprint
+        shell: bash
+        run: |
+          set -euo pipefail
+          today="$(date -u +%F)"
+
+          # Project and sprint field metadata.
+          meta="$(gh api graphql -f org="${ORG}" -F num="${PROJECT_NUMBER}" -f name="${SPRINT_FIELD}" -f query='
+            query($org: String!, $num: Int!, $name: String!) {
+              organization(login: $org) {
+                projectV2(number: $num) {
+                  id
+                  field(name: $name) {
+                    ... on ProjectV2IterationField {
+                      id
+                      configuration {
+                        iterations { id startDate duration }
+                        completedIterations { id startDate duration }
+                      }
+                    }
+                  }
+                }
+              }
+            }')"
+          project_id="$(jq -r '.data.organization.projectV2.id' <<<"${meta}")"
+          field_id="$(jq -r '.data.organization.projectV2.field.id' <<<"${meta}")"
+
+          # Sprints with their end date (exclusive: start + duration), sorted by start.
+          sprints="$(jq -c '
+            .data.organization.projectV2.field.configuration
+            | [.completedIterations[], .iterations[]]
+            | map(. + {end: (((.startDate + "T00:00:00Z" | fromdateiso8601)
+                              + .duration * 86400) | strftime("%F"))})
+            | sort_by(.startDate)' <<<"${meta}")"
+
+          # Current sprint: start <= today < end.
+          current="$(jq -r --arg today "${today}" '
+            map(select(.startDate <= $today and .end > $today)) | first | .id // empty' <<<"${sprints}")"
+          if [[ -z "${current}" ]]; then
+            echo "::warning::No sprint covers ${today}; nothing changed."
+            exit 0
+          fi
+
+          # Previous sprint: the most recent one that has already ended.
+          previous="$(jq -r --arg today "${today}" '
+            map(select(.end <= $today)) | last | .id // empty' <<<"${sprints}")"
+          if [[ -z "${previous}" ]]; then
+            echo "No previous sprint; nothing changed."
+            exit 0
+          fi
+
+          # Only items assigned to the previous sprint are touched. Items with no sprint,
+          # in older sprints or in future sprints are left alone.
+          # Unfinished = Status does not contain "Done" (ignores the emoji; unset counts as unfinished).
+          gh api graphql --paginate -f project="${project_id}" -f name="${SPRINT_FIELD}" -f query='
+            query($project: ID!, $name: String!, $endCursor: String) {
+              node(id: $project) {
+                ... on ProjectV2 {
+                  items(first: 100, after: $endCursor) {
+                    nodes {
+                      id
+                      isArchived
+                      status: fieldValueByName(name: "Status") {
+                        ... on ProjectV2ItemFieldSingleSelectValue { name }
+                      }
+                      sprint: fieldValueByName(name: $name) {
+                        ... on ProjectV2ItemFieldIterationValue { iterationId }
+                      }
+                    }
+                    pageInfo { hasNextPage endCursor }
+                  }
+                }
+              }
+            }' --jq '.data.node.items.nodes[]' \
+          | jq -r --arg previous "${previous}" '
+              select(.isArchived | not)
+              | select(.sprint.iterationId == $previous)
+              | select((.status.name // "") | contains("Done") | not)
+              | .id' \
+          | while read -r item; do
+              gh api graphql -f project="${project_id}" -f item="${item}" \
+                -f field="${field_id}" -f iteration="${current}" -f query='
+                mutation($project: ID!, $item: ID!, $field: ID!, $iteration: String!) {
+                  updateProjectV2ItemFieldValue(input: {
+                    projectId: $project, itemId: $item, fieldId: $field,
+                    value: { iterationId: $iteration }
+                  }) { projectV2Item { id } }
+                }' >/dev/null
+              echo "Moved ${item}"
+            done
