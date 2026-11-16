@@ -13,7 +13,7 @@ from drunc.controller.controller_driver import ControllerDriver
 from drunc.exceptions import DruncShellException
 from drunc.process_manager.process_manager_driver import ProcessManagerDriver
 from drunc.run_control.run_control_driver import RunControlDriver
-from drunc.utils.utils import get_logger
+from drunc.utils.utils import get_logger, resolve_localhost_to_hostname
 
 
 class LoggableDriver(Protocol):
@@ -65,16 +65,6 @@ class ShellContext:
         """
         return self.shell_id
 
-    def _reset(
-        self,
-        name: str,
-        token_args: dict[str, object] = {},
-        driver_args: dict[str, object] = {},
-    ) -> None:
-        self._console = Console()
-        self._token = self.create_token(**token_args)
-        self._drivers: MutableMapping[str, object] = self.create_drivers(**driver_args)
-
     def __init__(self, *args: object, **kwargs: object) -> None:
         """Initialize the shell context.
 
@@ -90,15 +80,17 @@ class ShellContext:
             log.exception(e)
             exit(1)
 
-    @abc.abstractmethod
-    def reset(self, *args: object, **kwargs: object) -> None:
+    def reset(self, address: str = "") -> None:
         """Reset the shell context.
 
         Args:
             *args: Additional positional arguments.
             **kwargs: Additional keyword arguments.
         """
-        pass
+        self.address = resolve_localhost_to_hostname(address)
+        self._console = Console()
+        self._token = create_dummy_token_from_uname()
+        self._drivers: MutableMapping[str, object] = self.create_drivers()
 
     @abc.abstractmethod
     def create_drivers(self, **kwargs: object) -> MutableMapping[str, object]:
@@ -110,23 +102,6 @@ class ShellContext:
         Returns:
             MutableMapping[str, object]: A mapping of driver names to driver objects.
         """
-        pass
-
-    @abc.abstractmethod
-    def create_token(self, **kwargs: object) -> Token:
-        """Create a token for the context.
-
-        Args:
-            **kwargs: Additional keyword arguments.
-
-        Returns:
-            Token: A token object.
-        """
-        pass
-
-    @abc.abstractmethod
-    def terminate(self) -> None:
-        """Terminate the shell context."""
         pass
 
     def set_driver(self, name: str, driver: object) -> None:

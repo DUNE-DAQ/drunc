@@ -1,5 +1,5 @@
 import getpass
-from typing import Callable
+from typing import Callable, get_args
 
 import click
 from click.decorators import FC
@@ -14,6 +14,7 @@ from drunc.process_manager.interface.cli_argument import (
 from drunc.process_manager.interface.context import ProcessManagerContext
 from drunc.process_manager.process_manager_driver import ProcessManagerDriver
 from drunc.process_manager.utils import (
+    ControllerLogLevel,
     print_logs,
     print_ps_table,
     tabulate_process_instance_list,
@@ -56,6 +57,7 @@ def _pm_driver(
 @click.option(
     "-cl",
     "--controller-log-level",
+    type=click.Choice(get_args(ControllerLogLevel), case_sensitive=False),
     default=None,
     help="Overrides the config-defined log level of the controller",
 )
@@ -70,7 +72,7 @@ def boot(
     configuration_file: str,
     configuration_id: str,
     override_logs: bool,
-    controller_log_level: str | None,
+    controller_log_level: ControllerLogLevel | None,
 ) -> None:
     """
     Boot a session with the given configuration file and configuration ID.
@@ -136,8 +138,8 @@ def boot(
         raise e
 
     controller_address = pm_driver.controller_address
-    controller_address = resolve_context_peer(controller_address)
     if controller_address:
+        controller_address = resolve_context_peer(controller_address)
         obj.print(
             Panel(
                 f"Controller endpoint: '{controller_address}', point your 'drunc-controller-shell' to it.",

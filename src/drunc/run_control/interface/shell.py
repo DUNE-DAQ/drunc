@@ -44,7 +44,7 @@ def rc_shell(ctx: click.core.Context, run_control_address: str):
 
     rc_shell_log = get_logger("run_control.shell")
 
-    ctx.obj.reset(address_rc=run_control_address)
+    ctx.obj.reset(address=run_control_address)
 
     try:
         rc_log.info("running a logger instance")
@@ -71,7 +71,6 @@ def rc_shell(ctx: click.core.Context, run_control_address: str):
         ctx.obj.get_driver("run_control").send_log(
             f"disconnecting from {ctx.obj.shell_id}"
         )
-        ctx.obj.terminate()
         rc_log.info("disconnected from process manager thingy")
 
     ctx.call_on_close(cleanup)
