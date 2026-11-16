@@ -23,6 +23,7 @@ from integ_test_utils import (
     get_ps_table_after_echo,
     get_text_between_echo_markers,
     require_echo_marker_index,
+    require_graceful_termination_logs,
     require_line_containing,
     require_pattern_match,
     require_pattern_match_index,
@@ -53,7 +54,7 @@ dunerc_commands = f"""
     echo --server  pre_boot
     ps
     boot <config_data_file> local-1x1-config {daq_session_name}
-    wait 15
+    wait 20
     echo post_boot
     echo --server  post_boot
     ps
@@ -400,30 +401,14 @@ def test_wait_command_duration_from_logs(run_dunerc) -> None:
     )
 
 
-def test_restart_mlt_logs_pm(run_dunerc) -> None:
+def test_restart_mlt_logs_pm(run_dunerc, process_manager_type) -> None:
     """Checks that restarting mlt produces the expected restart, exit, and boot logs."""
     lines = strip_ansi(run_dunerc.completed_processes["pm"].stdout).splitlines()
     restart_text = get_text_between_echo_markers(
         lines, "pre_restart_mlt", "post_restart_mlt"
     )
 
-    require_pattern_match(
-        restart_text,
-        re.compile(
-            r"Remote process .*?terminated gracefully following SIGQUIT signal\.",
-            re.DOTALL,
-        ),
-        error_message="Did not find the graceful termination log line for mlt after restart request.",
-    )
-
-    require_pattern_match(
-        restart_text,
-        re.compile(
-            r"Process 'mlt' \(.*?\) was terminated by the process manager through the remote pid\. Reported exit code: 0\.",
-            re.DOTALL,
-        ),
-        error_message="Did not find the mlt exit-code log line after graceful termination.",
-    )
+    require_graceful_termination_logs(restart_text, "mlt", process_manager_type)
 
     # Note difference in the reboot message between the PM and PMS.
     assert_match_contains_uuid(

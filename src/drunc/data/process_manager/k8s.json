@@ -29,7 +29,7 @@
             "headless_discovery_port": 80
         },
         "pod_management": {
-            "kill_timeout": 120,
+            "kill_timeout": 20,
             "pod_ready_timeout": 60
         },
         "cleanup": {

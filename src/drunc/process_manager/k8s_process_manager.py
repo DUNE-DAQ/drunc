@@ -31,6 +31,7 @@ from kubernetes import client, config, watch
 from kubernetes.client.rest import ApiException
 from kubernetes.config.config_exception import ConfigException
 
+from drunc.grpc_settings import CONTROLLER_ADVERTISE_ADDRESS_ENV
 from drunc.k8s_exceptions import (
     DruncK8sException,
     DruncK8sNamespaceException,
@@ -80,7 +81,6 @@ class K8sPodWatcherThread(threading.Thread):
         threading.Thread.__init__(self)
         self.pm = pm
         self.daemon = True
-        self.processed_uuids = set()
 
     def run(self) -> None:
         """
@@ -110,7 +110,12 @@ class K8sPodWatcherThread(threading.Thread):
                     if not proc_uuid:
                         continue
 
-                    if proc_uuid in self.processed_uuids:
+                    # Each event is one ADDED/MODIFIED/DELETED update for a pod.
+                    # Restart keeps the process UUID but creates a new pod, so
+                    # ignore events from an older pod of this process (e.g. a
+                    # late DELETED event) by comparing Kubernetes pod UIDs.
+                    # Repeat events are deduplicated in notify_termination.
+                    if not self.pm._is_current_pod(proc_uuid, metadata.uid):
                         continue
 
                     self.pm.log.debug(
@@ -142,20 +147,14 @@ class K8sPodWatcherThread(threading.Thread):
                                 terminated_state.reason
                             )  # Finally, handle deleted events
                         elif is_deleted_event:
-                            if phase == "Succeeded":
-                                exit_code = 0
-                                reason = "GracefulShutdown"
-                            else:
-                                exit_code = -1
-                                reason = "PodDeleted"
+                            reason = "PodDeleted"
 
                         self.pm.log.debug(
                             f"Final result for pod {proc_uuid}: exit_code={exit_code}, reason={reason}"
                         )
 
-                        self.processed_uuids.add(proc_uuid)
                         self.pm.notify_termination(
-                            proc_uuid, exit_code, reason, session
+                            proc_uuid, metadata.uid, exit_code, reason, session
                         )
 
             except ApiException as e:
@@ -229,11 +228,20 @@ class K8sProcessManager(ProcessManager):
         # keeps concurrent kills (e.g. different sessions) from sharing state.
         self._pending_deletion_batches: dict[str, tuple[set[str], threading.Event]] = {}
         self._pending_deletion_lock = threading.Lock()
-        # Guards against notify_termination running twice
-        self._notified_uuids: set[str] = set()
+        # Kubernetes pod UIDs whose termination was already logged/recorded.
+        # Every pod has its own UID, so a restarted process starts clean.
+        self._notified_pod_uids: set[str] = set()
         self.final_exit_codes = {}
+        # Process UUID -> Kubernetes pod UID (metadata.uid) of the process's
+        # current pod. None while a (re)boot is in progress. Lets the watcher
+        # drop events from the process's old pods.
+        self._pod_uid_by_uuid: dict[str, str | None] = {}
         # Guards inserts/deletes on boot_request against concurrent iteration
         self.boot_request_lock = threading.Lock()
+        # Boot requests of processes killed by name/uuid, kept (like the SSH
+        # process manager) so 'restart' can boot them again. Guarded by
+        # boot_request_lock.
+        self._killed_boot_requests: dict[str, BootRequest] = {}
         # Per-session LCS state. Keyed by session (k8s namespace) name.
         # Use _lcs_state_for(session) to read and _lcs_state.pop(session) to clean up.
         self._lcs_state: dict[str, _LcsSessionState] = {}
@@ -367,7 +375,12 @@ class K8sProcessManager(ProcessManager):
             )
 
     def notify_termination(
-        self, proc_uuid: str, exit_code: int, reason: str, session: str
+        self,
+        proc_uuid: str,
+        pod_uid: str | None,
+        exit_code: int,
+        reason: str,
+        session: str,
     ) -> None:
         """
         Callback for when a pod terminates.
@@ -376,21 +389,27 @@ class K8sProcessManager(ProcessManager):
         batch (if any) once every uuid in it is confirmed.
 
         Args:
-            proc_uuid: The UUID string of the terminated process.
+            proc_uuid: The process UUID of the terminated process.
+            pod_uid: The Kubernetes pod UID (metadata.uid) of the terminated
+                pod, or None if no pod was ever created for this boot.
             exit_code: The integer exit code of the terminated pod.
             reason: A string describing the termination reason (e.g. 'GracefulShutdown', 'PodDeleted').
             session: The Kubernetes namespace (session) the pod belonged to.
         """
         self.log.debug(f"notify_termination called for '{proc_uuid}'.")
 
-        # Only process each uuid's termination once
+        # Only record/publish each pod's termination once. The batch
+        # confirmation below must still run: a pod that already exited (and was
+        # reported) can later be deleted by kill, which waits on that batch.
         with self._pending_deletion_lock:
-            if proc_uuid in self._notified_uuids:
-                return
-            self._notified_uuids.add(proc_uuid)
+            first_notification = (
+                pod_uid is None or pod_uid not in self._notified_pod_uids
+            )
+            if pod_uid is not None:
+                self._notified_pod_uids.add(pod_uid)
 
         # Publish a log message and to kafka for each process that is terminated
-        if proc_uuid in self.boot_request:
+        if first_notification and proc_uuid in self.boot_request:
             # Get the exit data, and compose a message for tty viewing
             self.final_exit_codes[proc_uuid] = exit_code
             meta = self.boot_request[proc_uuid].process_description.metadata
@@ -429,6 +448,26 @@ class K8sProcessManager(ProcessManager):
             if all_done:
                 self.log.debug("All pods in this batch terminated, setting event.")
                 batch_event.set()
+
+    def _is_current_pod(self, proc_uuid: str, pod_uid: str | None) -> bool:
+        """
+        Checks whether a watch event comes from the current pod of a process.
+
+        The current pod is the one created by the latest boot or restart of
+        the process with this process UUID. Restart keeps the process UUID but
+        creates a new pod with a new Kubernetes pod UID, so the pod UID is
+        used to tell the old pod's events apart from the new one's.
+
+        Args:
+            proc_uuid: The process UUID, read from the pod's uuid label.
+            pod_uid: The Kubernetes pod UID (metadata.uid) of the pod in the event.
+
+        Returns:
+            True if the event should be handled, False if it is from a replaced pod.
+        """
+        if proc_uuid not in self._pod_uid_by_uuid:
+            return True
+        return self._pod_uid_by_uuid[proc_uuid] == pod_uid
 
     def is_alive(self, podname: str, session: str) -> bool:
         """
@@ -826,38 +865,50 @@ class K8sProcessManager(ProcessManager):
                 ],
             ),
         )
-        try:
-            self._core_v1_api.create_namespaced_service(
-                namespace=session, body=service_manifest
-            )
-            self.log.info(
-                f'Created NodePort service "{session}.{podname}" on port {port} '
-                f"(NodePort: {node_port} for external access)"
-            )
-
-        except self._api_error_v1_api as e:
-            is_port_conflict = False
-
-            # Check for 422="Unprocessable Entity" or 409="Conflict" status
-            if e.status == 422 or e.status == 409:
-                if e.body and (
-                    "provided nodeport is already allocated" in e.body.lower()
-                    or "port is already in use" in e.body.lower()
-                ):
-                    is_port_conflict = True
-
-            if is_port_conflict:
-                error_message = (
-                    f"NodePort {node_port} is already in use by another service. "
-                    f"Cannot start '{podname}'."
+        start_time = time()
+        while True:
+            try:
+                self._core_v1_api.create_namespaced_service(
+                    namespace=session, body=service_manifest
                 )
-                self.log.error(error_message)
-                raise DruncK8sException(error_message) from e
-            else:
-                # other K8s API error
-                error_message = f"Failed to create NodePort service for {podname}: {e.reason} ({e.status})"
-                self.log.error(error_message)
-                raise DruncK8sException(error_message) from e
+                self.log.info(
+                    f'Created NodePort service "{session}.{podname}" on port {port} '
+                    f"(NodePort: {node_port} for external access)"
+                )
+                return
+            except self._api_error_v1_api as e:
+                # On restart, the previous pod's service (same name and NodePort)
+                # is garbage-collected asynchronously after the pod is deleted:
+                # retry like _execute_pod_creation_api does for the pod
+                if (
+                    e.status in (409, 422)
+                    and time() - start_time < self.restart_cleanup_time
+                ):
+                    sleep(self.restart_cleanup_polling)
+                    continue
+
+                is_port_conflict = False
+
+                # Check for 422="Unprocessable Entity" or 409="Conflict" status
+                if e.status == 422 or e.status == 409:
+                    if e.body and (
+                        "already allocated" in e.body.lower()
+                        or "port is already in use" in e.body.lower()
+                    ):
+                        is_port_conflict = True
+
+                if is_port_conflict:
+                    error_message = (
+                        f"NodePort {node_port} is already in use by another service. "
+                        f"Cannot start '{podname}'."
+                    )
+                    self.log.error(error_message)
+                    raise DruncK8sException(error_message) from e
+                else:
+                    # other K8s API error
+                    error_message = f"Failed to create NodePort service for {podname}: {e.reason} ({e.status})"
+                    self.log.error(error_message)
+                    raise DruncK8sException(error_message) from e
 
     def _get_pod_volumes_and_mounts(
         self, boot_request: BootRequest
@@ -1152,6 +1203,26 @@ class K8sProcessManager(ProcessManager):
             self.log.debug(
                 "Added POD_IP environment variable via Downward API for root-controller"
             )
+
+            # The pod IP changes on every restart: advertise the NodePort
+            # address <node>:<port> instead (node_port == port), which does not.
+            port = self._extract_port_from_cmd(boot_request)
+            if port:
+                container_env += [
+                    client.V1EnvVar(
+                        name="NODE_NAME",
+                        value_from=client.V1EnvVarSource(
+                            field_ref=client.V1ObjectFieldSelector(
+                                field_path="spec.nodeName"
+                            )
+                        ),
+                    ),
+                    # $(NODE_NAME) is expanded by Kubernetes
+                    client.V1EnvVar(
+                        name=CONTROLLER_ADVERTISE_ADDRESS_ENV,
+                        value=f"grpc://$(NODE_NAME):{port}",
+                    ),
+                ]
 
         return container_env
 
@@ -1711,6 +1782,9 @@ class K8sProcessManager(ProcessManager):
 
             # Execute the pod creation API call
             pod_uid = self._execute_pod_creation_api(session, podname, pod_manifest)
+            proc_uuid = tree_labels.get(f"uuid.{self.drunc_label}")
+            if proc_uuid:
+                self._pod_uid_by_uuid[proc_uuid] = pod_uid
 
             # Create associated service
             self._create_associated_service(
@@ -1904,7 +1978,7 @@ class K8sProcessManager(ProcessManager):
                 podname, session, tail_lines=log_request.how_far or 100
             )
             return LogLines(
-                name=podname, uuid=ProcessUUID(uuid=uuid), lines=logs.split("\n")
+                name=podname, uuid=ProcessUUID(uuid=uuid), lines=logs.splitlines()
             )
         except self._api_error_v1_api as e:
             return LogLines(
@@ -2210,6 +2284,10 @@ class K8sProcessManager(ProcessManager):
         # Pre-checks (Session validation, NodePort collision)
         self._run_pre_boot_checks(session, podname, boot_request)
 
+        # Ignore watch events for this process until its new pod exists, so a
+        # late event from the pod being replaced on restart is not counted.
+        self._pod_uid_by_uuid[uuid] = None
+
         # Resource Creation (Namespace, Pod, Labels)
         self._prepare_namespace(session)
         with self.boot_request_lock:
@@ -2217,7 +2295,8 @@ class K8sProcessManager(ProcessManager):
             self.boot_request[uuid].CopyFrom(boot_request)
 
         self._create_pod(podname, session, boot_request, tree_labels)
-        self.log.info(f'"{session}.{podname}":{uuid} boot request sent.')
+        # Same wording as the SSH process manager
+        self.log.info(f"Booted '{podname}' from session '{session}' with UUID {uuid}")
 
         # Special handling and blocking wait for critical processes
         if self._is_local_connection_server(tree_labels, podname):
@@ -2321,9 +2400,10 @@ class K8sProcessManager(ProcessManager):
         """
         Handles the 'restart' command.
 
-        Kills each matched process and re-boots it using the original boot request.
-        Handles race conditions where a pod may be in a terminal state but not yet
-        fully deleted. Failed restarts are included in the result with DEAD status.
+        Kills each matched process and re-boots it under the same process UUID
+        using the original boot request. If the old pod object is not fully gone yet, pod
+        creation retries on 409 Conflict (see _execute_pod_creation_api).
+        Failed restarts are included in the result with DEAD status.
 
         Args:
             query: A ProcessQuery specifying which processes to restart.
@@ -2336,6 +2416,16 @@ class K8sProcessManager(ProcessManager):
             DruncK8sPodException: If no processes match the query.
         """
         uuids = self._get_process_uid(query)
+        # Also match processes previously stopped with 'kill'
+        with self.boot_request_lock:
+            killed = dict(self._killed_boot_requests)
+        uuids += [
+            u
+            for u in self._match_processes_against_query(
+                query, list(killed), killed
+            )
+            if u not in uuids
+        ]
         if not uuids:
             raise DruncK8sPodException("No processes found matching the query.")
 
@@ -2343,43 +2433,25 @@ class K8sProcessManager(ProcessManager):
         br_by_uuid = {}
         for u in uuids:
             br = BootRequest()
-            br.CopyFrom(self.boot_request[u])
+            br.CopyFrom(self.boot_request[u] if u in self.boot_request else killed[u])
             br_by_uuid[u] = br
 
         ret = []
         for u in uuids:
             try:
+                meta = br_by_uuid[u].process_description.metadata
+                self.log.info(f"Restarting {meta.name} in session {meta.session}")
+
+                # Kill the existing process, if still running (blocks until the
+                # pod is confirmed gone)
                 if u in self.boot_request:
-                    pod_name = self.boot_request[u].process_description.metadata.name
-                    session = self.boot_request[u].process_description.metadata.session
+                    self._kill_impl(ProcessQuery(uuids=[ProcessUUID(uuid=u)]))
 
-                    self.log.info(f"Restarting {pod_name} in session {session}")
-
-                    # Kill the existing process
-                    kill_query = ProcessQuery(uuids=[ProcessUUID(uuid=u)])
-                    self._kill_impl(kill_query)
-
-                    # Handle case where pod completes but isn't deleted (race condition fix)
-                    try:
-                        pod_status = self._core_v1_api.read_namespaced_pod_status(
-                            pod_name, session
-                        )
-                        if pod_status.status.phase in ["Succeeded", "Failed"]:
-                            self.log.info(
-                                f"Pod {pod_name} is in terminal state {pod_status.status.phase}, deleting it"
-                            )
-                            self._core_v1_api.delete_namespaced_pod(
-                                name=pod_name, namespace=session
-                            )
-                            sleep(2)  # Wait for deletion to complete
-                    except self._api_error_v1_api as e:
-                        if e.status != 404:  # 404 means pod is already deleted
-                            self.log.warning(
-                                f"Error checking pod status after kill: {e}"
-                            )
-
-                # Boot the new process
+                # Boot the new process; the killed entry is kept until this
+                # succeeds, so a failed restart can be retried
                 pi = self.__boot(br_by_uuid[u], u)
+                with self.boot_request_lock:
+                    self._killed_boot_requests.pop(u, None)
                 ret.append(pi)
 
             except Exception as e:
@@ -2474,6 +2546,15 @@ class K8sProcessManager(ProcessManager):
         (or a timeout is reached). After all pods are killed, cleans up
         managed namespaces if no tracked processes remain.
 
+        Processes killed by name or uuid are kept in _killed_boot_requests so
+        'restart' can boot them again. A kill of a whole scope (no names and no
+        uuids, e.g. terminate or the unified shell's terminate) keeps nothing
+        and forgets the processes killed earlier in that scope.
+
+        With query.crash, simulates a crash as the SSH process manager does: the
+        pods are force-deleted (grace period 0, no staged shutdown) and the
+        processes stay tracked, so ps shows them DEAD until 'flush'.
+
         Args:
             query - a ProcessQuery specifying which processes to kill
 
@@ -2481,6 +2562,29 @@ class K8sProcessManager(ProcessManager):
             process_list - a ProcessInstanceList with DEAD status and exit codes
                            for all terminated processes
         """
+        if query.crash:
+            ret = []
+            for proc_uuid in self._get_process_uid(query):
+                br = self.boot_request[proc_uuid]
+                meta = br.process_description.metadata
+                self.log.info(
+                    f'Simulating crash of "{meta.session}/{meta.name}" (UUID '
+                    f"{proc_uuid}): force-deleting its pod, no cleanup."
+                )
+                self._kill_pod(meta.name, meta.session, grace_period_seconds=0)
+                ret.append(
+                    ProcessInstance(
+                        process_description=br.process_description,
+                        process_restriction=br.process_restriction,
+                        status_code=ProcessInstance.StatusCode.DEAD,
+                        uuid=ProcessUUID(uuid=proc_uuid),
+                    )
+                )
+            return ProcessInstanceList(values=ret)
+
+        keep_for_restart = bool(query.names or query.uuids)
+        if not keep_for_restart:
+            self._forget_killed(query)
 
         # Get all UUIDs
         targeted_uuids = set(self._get_process_uid(query))
@@ -2565,7 +2669,11 @@ class K8sProcessManager(ProcessManager):
                         f'{pd.metadata.name}" (UUID {proc_uuid}); confirming directly.'
                     )
                     self.notify_termination(
-                        proc_uuid, -1, "PodDeleted", pd.metadata.session
+                        proc_uuid,
+                        self._pod_uid_by_uuid.get(proc_uuid),
+                        -1,
+                        "PodDeleted",
+                        pd.metadata.session,
                     )
 
             with self._pending_deletion_lock:
@@ -2634,14 +2742,15 @@ class K8sProcessManager(ProcessManager):
                     )
                     kill_and_wait(depth_uuids)  # This call is blocking
                     self.log.info(
-                        f"--- Termination of role '{role}' at depth {depth} complete ---"
+                        f"--- Shutdown stage: Role '{role}' at depth {depth} complete ---"
                     )
             else:
                 self.log.info(
                     f"--- Termination of role '{role}' ({len(uuids_in_step)} pod(s)) ---"
                 )
                 kill_and_wait(uuids_in_step)  # This call is blocking
-                self.log.info(f"--- Termination of role '{role}' complete ---")
+                # Same wording as the SSH process manager
+                self.log.info(f"--- Shutdown stage: Role '{role}' complete ---")
 
         # Finalize and clean up
         final_ret = []
@@ -2657,10 +2766,15 @@ class K8sProcessManager(ProcessManager):
                         ].process_restriction,
                         status_code=ProcessInstance.StatusCode.DEAD,
                         uuid=ProcessUUID(uuid=proc_uuid),
-                        return_code=self.final_exit_codes.get(proc_uuid, -1),
+                        return_code=self.final_exit_codes.pop(proc_uuid, -1),
                     )
                     final_ret.append(pi)
-                    del self.boot_request[proc_uuid]
+                    killed_br = self.boot_request.pop(proc_uuid)
+                    if keep_for_restart:
+                        self._killed_boot_requests[proc_uuid] = killed_br
+                    pod_uid = self._pod_uid_by_uuid.pop(proc_uuid, None)
+                    with self._pending_deletion_lock:
+                        self._notified_pod_uids.discard(pod_uid)
 
         # drop process once it's gone
         for pi in final_ret:
@@ -2697,27 +2811,66 @@ class K8sProcessManager(ProcessManager):
             processes, or an empty list if there were no processes to terminate.
         """
         self.log.info("Terminating")
-        if not self.boot_request:
-            self.log.info("No processes to terminate.")
-            return ProcessInstanceList(values=[])
-        all_processes_query = ProcessQuery(names=[".*"])
-        return self._kill_impl(all_processes_query)
+        # An empty query matches every process, and also forgets killed ones
+        return self._kill_impl(ProcessQuery())
+
+    def _forget_killed(self, query: ProcessQuery) -> dict[str, BootRequest]:
+        """
+        Removes the killed processes matching the query from
+        _killed_boot_requests, so they can no longer be restarted.
+
+        Args:
+            query: A ProcessQuery selecting the killed processes to forget.
+
+        Returns:
+            The removed boot requests, keyed by process UUID.
+        """
+        with self.boot_request_lock:
+            return {
+                u: self._killed_boot_requests.pop(u)
+                for u in self._match_processes_against_query(
+                    query, list(self._killed_boot_requests), self._killed_boot_requests
+                )
+            }
 
     def _flush_impl(self, query: ProcessQuery) -> ProcessInstanceList:
         """
-        Handles the 'flush' command (no-op for Kubernetes).
+        Handles the 'flush' command.
 
-        Cleanup of dead processes is handled automatically in real-time by the
-        pod watcher thread, so this command performs no action.
+        Like the SSH process manager, forgets the dead processes matching the
+        query: tracked processes whose pod is gone or has exited (e.g. after
+        'kill --crash'), whose leftover pod objects are deleted, and processes
+        stopped with 'kill', which can then no longer be restarted.
 
         Args:
-            query: A ProcessQuery specifying which processes to flush (ignored).
+            query: A ProcessQuery specifying which processes to flush.
 
         Returns:
-            An empty ProcessInstanceList.
+            A ProcessInstanceList with a DEAD entry for each flushed process.
         """
-        self.log.info(
-            "The 'flush' command is not needed for the K8sProcessManager. "
-            "Cleanup of dead processes is handled automatically in real-time."
-        )
-        return ProcessInstanceList(values=[])
+        # _ps_impl reads the pod states from the Kubernetes API
+        dead = [
+            pi
+            for pi in self._ps_impl(query).values
+            if pi.status_code == ProcessInstance.StatusCode.DEAD
+        ]
+        with self.boot_request_lock:
+            for pi in dead:
+                self.boot_request.pop(pi.uuid.uuid, None)
+                self._pod_uid_by_uuid.pop(pi.uuid.uuid, None)
+                self.final_exit_codes.pop(pi.uuid.uuid, None)
+        for pi in dead:
+            meta = pi.process_description.metadata
+            self._kill_pod(meta.name, meta.session, grace_period_seconds=0)
+
+        dead += [
+            ProcessInstance(
+                process_description=br.process_description,
+                process_restriction=br.process_restriction,
+                status_code=ProcessInstance.StatusCode.DEAD,
+                uuid=ProcessUUID(uuid=u),
+            )
+            for u, br in self._forget_killed(query).items()
+        ]
+        self.log.info(f"Flushed {len(dead)} dead process(es)")
+        return ProcessInstanceList(values=dead)

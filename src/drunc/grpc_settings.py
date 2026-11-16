@@ -10,3 +10,7 @@ CONTROLLER_CLIENT_GRPC_CONFIG = []
 
 MANAGER_SERVER_GRPC_MAX_WORKERS = 10
 CONTROLLER_SERVER_GRPC_MAX_WORKERS = 10
+
+# If set, the address a controller advertises to the connectivity service
+# instead of the one it binds to (set by the K8s process manager)
+CONTROLLER_ADVERTISE_ADDRESS_ENV = "DRUNC_CONTROLLER_ADVERTISE_ADDRESS"
