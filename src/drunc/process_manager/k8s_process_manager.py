@@ -235,8 +235,15 @@ class K8sProcessManager(ProcessManager):
         # current pod. None while a (re)boot is in progress. Lets the watcher
         # drop events from the process's old pods.
         self._pod_uid_by_uuid: dict[str, str | None] = {}
-        # Guards inserts/deletes on boot_request against concurrent iteration
+        # Guards inserts/deletes on boot_request (and _killed_boot_requests)
+        # against concurrent iteration
         self.boot_request_lock = threading.Lock()
+        # Process UUID -> BootRequest of processes stopped with 'kill'. They are
+        # no longer tracked in boot_request (so ps/kill/logs ignore them), but
+        # are kept so 'restart' can boot them again under the same UUID, as the
+        # SSH process manager does. Dropped by 'flush', 'terminate', or a fresh
+        # 'boot' of a process with the same name in the same session.
+        self._killed_boot_requests: dict[str, BootRequest] = {}
         # Per-session LCS state. Keyed by session (k8s namespace) name.
         # Use _lcs_state_for(session) to read and _lcs_state.pop(session) to clean up.
         self._lcs_state: dict[str, _LcsSessionState] = {}
@@ -1964,6 +1971,19 @@ class K8sProcessManager(ProcessManager):
             A ProcessInstanceList containing a single ProcessInstance for the booted process.
         """
         self.log.debug(f"{self.name} running boot command")
+
+        # A fresh boot replaces any killed process with the same name in the
+        # same session; otherwise 'restart -n <name>' would match both.
+        meta = boot_request.process_description.metadata
+        with self.boot_request_lock:
+            for killed_uuid, killed_br in list(self._killed_boot_requests.items()):
+                killed_meta = killed_br.process_description.metadata
+                if (
+                    killed_meta.name == meta.name
+                    and killed_meta.session == meta.session
+                ):
+                    del self._killed_boot_requests[killed_uuid]
+
         this_uuid = str(uuid.uuid4())
         process = self.__boot(boot_request, this_uuid)
         return ProcessInstanceList(values=[process])
@@ -2365,7 +2385,10 @@ class K8sProcessManager(ProcessManager):
         Kills each matched process and re-boots it under the same process UUID
         using the original boot request. If the old pod object is not fully gone yet, pod
         creation retries on 409 Conflict (see _execute_pod_creation_api).
-        Failed restarts are included in the result with DEAD status.
+        Processes previously stopped with 'kill' (kept in _killed_boot_requests)
+        are also matched and booted again directly, without a kill step.
+        Failed restarts are included in the result with DEAD status, and their
+        boot request is kept so the restart can be retried.
 
         Args:
             query: A ProcessQuery specifying which processes to restart.
@@ -2377,15 +2400,32 @@ class K8sProcessManager(ProcessManager):
         Raises:
             DruncK8sPodException: If no processes match the query.
         """
-        uuids = self._get_process_uid(query)
+        live_uuids = self._get_process_uid(query)
+        with self.boot_request_lock:
+            killed_snapshot = dict(self._killed_boot_requests)
+        killed_uuids = [
+            u
+            for u in self._match_processes_against_query(
+                query=query,
+                available_uuids=list(killed_snapshot.keys()),
+                boot_request_dict=killed_snapshot,
+                order_by="random",
+            )
+            if u not in live_uuids
+        ]
+        uuids = live_uuids + killed_uuids
         if not uuids:
             raise DruncK8sPodException("No processes found matching the query.")
 
         # Create copies of boot requests for each process
         br_by_uuid = {}
-        for u in uuids:
+        for u in live_uuids:
             br = BootRequest()
             br.CopyFrom(self.boot_request[u])
+            br_by_uuid[u] = br
+        for u in killed_uuids:
+            br = BootRequest()
+            br.CopyFrom(killed_snapshot[u])
             br_by_uuid[u] = br
 
         ret = []
@@ -2394,8 +2434,17 @@ class K8sProcessManager(ProcessManager):
                 meta = br_by_uuid[u].process_description.metadata
                 self.log.info(f"Restarting {meta.name} in session {meta.session}")
 
-                # Kill the existing process (blocks until the pod is confirmed gone)
-                self._kill_impl(ProcessQuery(uuids=[ProcessUUID(uuid=u)]))
+                if u in killed_uuids:
+                    # Already killed: no pod to stop, just boot it again
+                    with self.boot_request_lock:
+                        self._killed_boot_requests.pop(u, None)
+                else:
+                    # Kill the existing process (blocks until the pod is confirmed
+                    # gone). Not archived: it is rebooted right below.
+                    self._kill_impl(
+                        ProcessQuery(uuids=[ProcessUUID(uuid=u)]),
+                        keep_for_restart=False,
+                    )
 
                 # Boot the new process
                 pi = self.__boot(br_by_uuid[u], u)
@@ -2403,6 +2452,13 @@ class K8sProcessManager(ProcessManager):
 
             except Exception as e:
                 self.log.error(f"Restart failed for UUID {u}: {e!s}")
+
+                # Keep the boot request so the restart can be retried, unless
+                # the process is still tracked (the failure happened before or
+                # during the kill, or after the boot request was re-stored).
+                with self.boot_request_lock:
+                    if u not in self.boot_request:
+                        self._killed_boot_requests[u] = br_by_uuid[u]
 
                 # Create a dead process instance for failed restarts
                 pd = ProcessDescription()
@@ -2480,7 +2536,9 @@ class K8sProcessManager(ProcessManager):
             )
             return False
 
-    def _kill_impl(self, query: ProcessQuery) -> ProcessInstanceList:
+    def _kill_impl(
+        self, query: ProcessQuery, keep_for_restart: bool = True
+    ) -> ProcessInstanceList:
         """
         Handle the 'kill' gRPC command with staged, role-based shutdown.
 
@@ -2493,8 +2551,15 @@ class K8sProcessManager(ProcessManager):
         (or a timeout is reached). After all pods are killed, cleans up
         managed namespaces if no tracked processes remain.
 
+        Killed processes stop being tracked in boot_request. Unless
+        keep_for_restart is False, their boot requests are moved to
+        _killed_boot_requests so 'restart' can boot them again.
+
         Args:
             query - a ProcessQuery specifying which processes to kill
+            keep_for_restart - keep the boot requests of killed processes for a
+                               later 'restart' (False for terminate and for the
+                               kill step of restart itself)
 
         Returns:
             process_list - a ProcessInstanceList with DEAD status and exit codes
@@ -2683,7 +2748,9 @@ class K8sProcessManager(ProcessManager):
                         return_code=self.final_exit_codes.pop(proc_uuid, -1),
                     )
                     final_ret.append(pi)
-                    del self.boot_request[proc_uuid]
+                    killed_br = self.boot_request.pop(proc_uuid)
+                    if keep_for_restart:
+                        self._killed_boot_requests[proc_uuid] = killed_br
                     pod_uid = self._pod_uid_by_uuid.pop(proc_uuid, None)
                     with self._pending_deletion_lock:
                         self._notified_pod_uids.discard(pod_uid)
@@ -2693,57 +2760,97 @@ class K8sProcessManager(ProcessManager):
             if pi.uuid.uuid in self.expected_dead_applications:
                 self.remove_process_from_expected_dead_processes(pi.uuid.uuid)
 
-        # If our internal process list is empty, we can clean up the namespace we used.
-        if not self.boot_request:
-            self.log.info(
-                "All tracked processes terminated. Cleaning up managed namespace..."
-            )
-            try:
-                for session in list(self.managed_sessions):
-                    self.log.info(f'Session "{session}" is empty, deleting namespace.')
-                    self._core_v1_api.delete_namespace(session)
-                    self.managed_sessions.remove(session)
-                    with self._lcs_state_lock:
-                        self._lcs_state.pop(session, None)
-
-            except self._api_error_v1_api as e:
-                self.log.warning(f"Failed during namespace cleanup: {e}")
+        self._cleanup_namespaces_if_empty()
 
         return ProcessInstanceList(values=final_ret)
+
+    def _cleanup_namespaces_if_empty(self) -> None:
+        """
+        Deletes the managed namespaces once no process is tracked any more.
+
+        Namespaces are kept while killed processes are still restartable
+        (_killed_boot_requests is not empty), so their restart lands in the
+        same namespace, next to the session's LCS.
+        """
+        with self.boot_request_lock:
+            if self.boot_request or self._killed_boot_requests:
+                return
+
+        self.log.info(
+            "All tracked processes terminated. Cleaning up managed namespace..."
+        )
+        try:
+            for session in list(self.managed_sessions):
+                self.log.info(f'Session "{session}" is empty, deleting namespace.')
+                self._core_v1_api.delete_namespace(session)
+                self.managed_sessions.remove(session)
+                with self._lcs_state_lock:
+                    self._lcs_state.pop(session, None)
+
+        except self._api_error_v1_api as e:
+            self.log.warning(f"Failed during namespace cleanup: {e}")
 
     def _terminate_impl(self) -> ProcessInstanceList:
         """
         Handles the 'terminate' command, killing all known processes.
 
         Issues a kill command matching all process names ('.*') to shut down
-        every tracked process. If no processes are tracked, returns an empty list.
+        every tracked process, and forgets processes kept for restart after a
+        'kill'. If no processes are tracked, returns an empty list.
 
         Returns:
             A ProcessInstanceList containing DEAD-status entries for all terminated
             processes, or an empty list if there were no processes to terminate.
         """
         self.log.info("Terminating")
+        with self.boot_request_lock:
+            self._killed_boot_requests.clear()
         if not self.boot_request:
             self.log.info("No processes to terminate.")
+            # Killed processes may have kept the namespaces alive until now
+            self._cleanup_namespaces_if_empty()
             return ProcessInstanceList(values=[])
         all_processes_query = ProcessQuery(names=[".*"])
-        return self._kill_impl(all_processes_query)
+        return self._kill_impl(all_processes_query, keep_for_restart=False)
 
     def _flush_impl(self, query: ProcessQuery) -> ProcessInstanceList:
         """
-        Handles the 'flush' command (no-op for Kubernetes).
+        Handles the 'flush' command.
 
-        Cleanup of dead processes is handled automatically in real-time by the
-        pod watcher thread, so this command performs no action.
+        Forgets processes stopped with 'kill' that match the query, so they can
+        no longer be restarted. Pods themselves are cleaned up in real time by
+        the pod watcher thread, so nothing is deleted in Kubernetes.
 
         Args:
-            query: A ProcessQuery specifying which processes to flush (ignored).
+            query: A ProcessQuery specifying which killed processes to flush.
 
         Returns:
-            An empty ProcessInstanceList.
+            A ProcessInstanceList with a DEAD-status entry for each flushed process.
         """
-        self.log.info(
-            "The 'flush' command is not needed for the K8sProcessManager. "
-            "Cleanup of dead processes is handled automatically in real-time."
-        )
-        return ProcessInstanceList(values=[])
+        self.log.info(f"{self.name} flushing killed processes matching {query.names}")
+
+        flushed = []
+        with self.boot_request_lock:
+            flush_uuids = self._match_processes_against_query(
+                query=query,
+                available_uuids=list(self._killed_boot_requests.keys()),
+                boot_request_dict=self._killed_boot_requests,
+                order_by="random",
+            )
+            for proc_uuid in flush_uuids:
+                br = self._killed_boot_requests.pop(proc_uuid)
+                self.log.info(
+                    f"Flushed killed process {proc_uuid} "
+                    f"(name: {br.process_description.metadata.name})."
+                )
+                flushed.append(
+                    ProcessInstance(
+                        process_description=br.process_description,
+                        process_restriction=br.process_restriction,
+                        status_code=ProcessInstance.StatusCode.DEAD,
+                        uuid=ProcessUUID(uuid=proc_uuid),
+                    )
+                )
+
+        self._cleanup_namespaces_if_empty()
+        return ProcessInstanceList(values=flushed)
