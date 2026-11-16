@@ -1978,7 +1978,7 @@ class K8sProcessManager(ProcessManager):
                 podname, session, tail_lines=log_request.how_far or 100
             )
             return LogLines(
-                name=podname, uuid=ProcessUUID(uuid=uuid), lines=logs.split("\n")
+                name=podname, uuid=ProcessUUID(uuid=uuid), lines=logs.splitlines()
             )
         except self._api_error_v1_api as e:
             return LogLines(
@@ -2295,7 +2295,8 @@ class K8sProcessManager(ProcessManager):
             self.boot_request[uuid].CopyFrom(boot_request)
 
         self._create_pod(podname, session, boot_request, tree_labels)
-        self.log.info(f'"{session}.{podname}":{uuid} boot request sent.')
+        # Same wording as the SSH process manager
+        self.log.info(f"Booted '{podname}' from session '{session}' with UUID {uuid}")
 
         # Special handling and blocking wait for critical processes
         if self._is_local_connection_server(tree_labels, podname):
@@ -2741,14 +2742,15 @@ class K8sProcessManager(ProcessManager):
                     )
                     kill_and_wait(depth_uuids)  # This call is blocking
                     self.log.info(
-                        f"--- Termination of role '{role}' at depth {depth} complete ---"
+                        f"--- Shutdown stage: Role '{role}' at depth {depth} complete ---"
                     )
             else:
                 self.log.info(
                     f"--- Termination of role '{role}' ({len(uuids_in_step)} pod(s)) ---"
                 )
                 kill_and_wait(uuids_in_step)  # This call is blocking
-                self.log.info(f"--- Termination of role '{role}' complete ---")
+                # Same wording as the SSH process manager
+                self.log.info(f"--- Shutdown stage: Role '{role}' complete ---")
 
         # Finalize and clean up
         final_ret = []
