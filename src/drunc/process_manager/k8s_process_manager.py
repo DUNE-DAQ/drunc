@@ -2545,18 +2545,42 @@ class K8sProcessManager(ProcessManager):
         (or a timeout is reached). After all pods are killed, cleans up
         managed namespaces if no tracked processes remain.
 
-        Args:
-            query - a ProcessQuery specifying which processes to kill
-
         Processes killed by name or uuid are kept in _killed_boot_requests so
         'restart' can boot them again. A kill of a whole scope (no names and no
         uuids, e.g. terminate or the unified shell's terminate) keeps nothing
         and forgets the processes killed earlier in that scope.
 
+        With query.crash, simulates a crash as the SSH process manager does: the
+        pods are force-deleted (grace period 0, no staged shutdown) and the
+        processes stay tracked, so ps shows them DEAD until 'flush'.
+
+        Args:
+            query - a ProcessQuery specifying which processes to kill
+
         Returns:
             process_list - a ProcessInstanceList with DEAD status and exit codes
                            for all terminated processes
         """
+        if query.crash:
+            ret = []
+            for proc_uuid in self._get_process_uid(query):
+                br = self.boot_request[proc_uuid]
+                meta = br.process_description.metadata
+                self.log.info(
+                    f'Simulating crash of "{meta.session}/{meta.name}" (UUID '
+                    f"{proc_uuid}): force-deleting its pod, no cleanup."
+                )
+                self._kill_pod(meta.name, meta.session, grace_period_seconds=0)
+                ret.append(
+                    ProcessInstance(
+                        process_description=br.process_description,
+                        process_restriction=br.process_restriction,
+                        status_code=ProcessInstance.StatusCode.DEAD,
+                        uuid=ProcessUUID(uuid=proc_uuid),
+                    )
+                )
+            return ProcessInstanceList(values=ret)
+
         keep_for_restart = bool(query.names or query.uuids)
         if not keep_for_restart:
             self._forget_killed(query)
@@ -2812,8 +2836,9 @@ class K8sProcessManager(ProcessManager):
         Handles the 'flush' command.
 
         Like the SSH process manager, forgets the dead processes matching the
-        query: here, the processes stopped with 'kill', which can then no longer
-        be restarted. Pods are cleaned up in real time by the pod watcher thread.
+        query: tracked processes whose pod is gone or has exited (e.g. after
+        'kill --crash'), whose leftover pod objects are deleted, and processes
+        stopped with 'kill', which can then no longer be restarted.
 
         Args:
             query: A ProcessQuery specifying which processes to flush.
@@ -2821,16 +2846,29 @@ class K8sProcessManager(ProcessManager):
         Returns:
             A ProcessInstanceList with a DEAD entry for each flushed process.
         """
-        flushed = self._forget_killed(query)
-        self.log.info(f"Flushed {len(flushed)} killed process(es)")
-        return ProcessInstanceList(
-            values=[
-                ProcessInstance(
-                    process_description=br.process_description,
-                    process_restriction=br.process_restriction,
-                    status_code=ProcessInstance.StatusCode.DEAD,
-                    uuid=ProcessUUID(uuid=u),
-                )
-                for u, br in flushed.items()
-            ]
-        )
+        # _ps_impl reads the pod states from the Kubernetes API
+        dead = [
+            pi
+            for pi in self._ps_impl(query).values
+            if pi.status_code == ProcessInstance.StatusCode.DEAD
+        ]
+        with self.boot_request_lock:
+            for pi in dead:
+                self.boot_request.pop(pi.uuid.uuid, None)
+                self._pod_uid_by_uuid.pop(pi.uuid.uuid, None)
+                self.final_exit_codes.pop(pi.uuid.uuid, None)
+        for pi in dead:
+            meta = pi.process_description.metadata
+            self._kill_pod(meta.name, meta.session, grace_period_seconds=0)
+
+        dead += [
+            ProcessInstance(
+                process_description=br.process_description,
+                process_restriction=br.process_restriction,
+                status_code=ProcessInstance.StatusCode.DEAD,
+                uuid=ProcessUUID(uuid=u),
+            )
+            for u, br in self._forget_killed(query).items()
+        ]
+        self.log.info(f"Flushed {len(dead)} dead process(es)")
+        return ProcessInstanceList(values=dead)
