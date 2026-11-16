@@ -11,6 +11,7 @@ from integ_test_utils import (
     get_column_for_friendly_name,
     get_ps_table_after_echo,
     require_echo_marker_index,
+    require_graceful_termination_logs,
     require_line_containing,
     require_pattern_match,
     require_pattern_match_index,
@@ -35,6 +36,10 @@ ignored_logfile_problems = {
     ],
     "SSH_SHELL_process_manager": [
         "was terminated unexpectedly through the remote pid by a SIGKILL",
+    ],
+    "K8s_process_manager": [
+        r"terminated with exit code \d+\. Reason: Error",
+        r"Timeout\. Remaining:",
     ],
     "connectivity-service": [
         "errorlog: -",
@@ -443,7 +448,7 @@ def test_wait_progress_steps_from_logs(run_dunerc) -> None:
     )
 
 
-def test_restart_mlt_logs(run_dunerc) -> None:
+def test_restart_mlt_logs(run_dunerc, process_manager_type) -> None:
     """Checks that restarting mlt produces the expected restart, exit, and boot logs."""
     lines = strip_ansi(run_dunerc.completed_processes["drunc"].stdout).splitlines()
 
@@ -456,23 +461,7 @@ def test_restart_mlt_logs(run_dunerc) -> None:
     restart_lines = lines[echo_idx + 1 : post_restart_idx]
     restart_text = "\n".join(restart_lines)
 
-    require_pattern_match(
-        restart_text,
-        re.compile(
-            r"Remote process .*?terminated gracefully following SIGQUIT signal\.",
-            re.DOTALL,
-        ),
-        error_message="Did not find the graceful termination log line for mlt after restart request.",
-    )
-
-    require_pattern_match(
-        restart_text,
-        re.compile(
-            r"Process 'mlt' \(.*?\) was terminated by the process manager through the remote pid\. Reported exit code: 0\.",
-            re.DOTALL,
-        ),
-        error_message="Did not find the mlt exit-code log line after graceful termination.",
-    )
+    require_graceful_termination_logs(restart_text, "mlt", process_manager_type)
 
     booted_match = require_pattern_match(
         restart_text,

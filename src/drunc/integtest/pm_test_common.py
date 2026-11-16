@@ -18,6 +18,10 @@ ignored_logfile_problems = {
     "SSH_SHELL_process_manager": [
         "was terminated unexpectedly through the remote pid by a SIGKILL",
     ],
+    "K8s_process_manager": [
+        r"terminated with exit code \d+\. Reason: Error",
+        r"Timeout\. Remaining:",
+    ],
     "-controller": [
         "Worker with pid \\d+ was terminated due to signal 1",
         "Connection '.*' not found on the application registry",
