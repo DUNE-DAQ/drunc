@@ -8,6 +8,9 @@ class RunControlContext(ShellContext):
     shell_id = "run_control_shell"
 
     def __init__(self, *args, **kwargs) -> None:
+        self.override_logs = (
+            False  # TODO: This should be propagated to the shell initialisation..
+        )
         super().__init__(*args, **kwargs)
 
     def create_drivers(self, **kwargs: object) -> MutableMapping[str, object]:
