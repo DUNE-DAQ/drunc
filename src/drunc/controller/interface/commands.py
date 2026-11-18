@@ -2,6 +2,7 @@ import json
 
 import click
 from druncschema.common_pb2 import LoggerTarget
+from druncschema.controller_pb2 import ExecuteExpertCommandResponse
 
 from drunc.controller.interface.context import ControllerContext
 from drunc.controller.interface.shell_utils import controller_setup, render_status_table
@@ -23,11 +24,11 @@ log = get_logger("controller.iface", rich_handler=True)
 @click.option("--target", type=str, help="The target to address", default="")
 @click.pass_obj
 def list_transitions(obj: ControllerContext, all: bool, target: str) -> None:
-    desc = obj.get_driver("controller").describe_fsm(
+    desc = obj.get_controller_driver().describe_fsm(
         target=target,
         execute_along_path=False,
         execute_on_all_subsequent_children_in_path=False,
-        key="all-transitions" if all else None,
+        key="all-transitions" if all else "",
     )
     if not desc:
         log.error("Could not get the list of commands available")
@@ -164,7 +165,7 @@ def recompute_status(
     execute_along_path: bool,
     execute_on_all_subsequent_children_in_path: bool,
 ) -> None:
-    obj.get_driver("controller").recompute_status(
+    obj.get_controller_driver().recompute_status(
         target=target,
         execute_along_path=execute_along_path,
         execute_on_all_subsequent_children_in_path=execute_on_all_subsequent_children_in_path,
@@ -177,7 +178,7 @@ def recompute_status(
 @click.pass_obj
 def connect(obj: ControllerContext, controller_address: str, force: bool) -> None:
     if obj.has_driver("controller"):
-        driver = obj.get_driver("controller")
+        driver = obj.get_controller_driver()
         log.info(f"Already connected to a controller ({driver.name}@{driver.address})")
         if not force:
             click.confirm("Do you want to disconnect from it before?", abort=True)
@@ -201,7 +202,7 @@ def disconnect(obj: ControllerContext, force: bool) -> None:
         log.info("You are not connected to any controller.")
         return
 
-    driver = obj.get_driver("controller")
+    driver = obj.get_controller_driver()
 
     if not force:
         log.info(
@@ -250,7 +251,7 @@ def take_control(
     execute_along_path: bool,
     execute_on_all_subsequent_children_in_path: bool,
 ) -> None:
-    obj.get_driver("controller").take_control(
+    obj.get_controller_driver().take_control(
         target=target,
         execute_along_path=execute_along_path,
         execute_on_all_subsequent_children_in_path=execute_on_all_subsequent_children_in_path,
@@ -280,7 +281,7 @@ def surrender_control(
     execute_along_path: bool,
     execute_on_all_subsequent_children_in_path: bool,
 ) -> None:
-    obj.get_driver("controller").surrender_control(
+    obj.get_controller_driver().surrender_control(
         target=target,
         execute_along_path=execute_along_path,
         execute_on_all_subsequent_children_in_path=execute_on_all_subsequent_children_in_path,
@@ -350,7 +351,7 @@ def echo(
         getattr(echo_logger, severity.lower(), echo_logger.info)(text)
         return
 
-    obj.get_driver("controller").send_log(
+    obj.get_controller_driver().send_log(
         text=text,
         target=target,
         severity=severity,
@@ -383,7 +384,7 @@ def who_is_in_charge(
     execute_along_path: bool,
     execute_on_all_subsequent_children_in_path: bool,
 ) -> None:
-    result = obj.get_driver("controller").who_is_in_charge(
+    result = obj.get_controller_driver().who_is_in_charge(
         target=target,
         execute_along_path=execute_along_path,
         execute_on_all_subsequent_children_in_path=execute_on_all_subsequent_children_in_path,
@@ -399,7 +400,7 @@ def include(
     obj: ControllerContext,
     target: str,
 ) -> None:
-    result = obj.get_driver("controller").include(
+    result = obj.get_controller_driver().include(
         target=target,
         execute_along_path=False,
         execute_on_all_subsequent_children_in_path=True,
@@ -416,7 +417,7 @@ def exclude(
     obj: ControllerContext,
     target: str,
 ) -> None:
-    result = obj.get_driver("controller").exclude(
+    result = obj.get_controller_driver().exclude(
         target=target,
         execute_along_path=False,
         execute_on_all_subsequent_children_in_path=True,
@@ -459,14 +460,14 @@ def expert_command(
         log.error(f"JSON decode error: {e}")
         return
 
-    result = obj.get_driver("controller").execute_expert_command(
+    result = obj.get_controller_driver().execute_expert_command(
         json.dumps(data),
         target=target,
         execute_along_path=False,
         execute_on_all_subsequent_children_in_path=True,
     )
 
-    def print_result(result, prefix=""):
+    def print_result(result: ExecuteExpertCommandResponse, prefix: str = "") -> None:
         log.info(f"{prefix}[yellow]{result.name}[/yellow] [green]{result.data}[/green]")
 
         for child in result.children:
@@ -498,7 +499,7 @@ def to_error(
     execute_along_path: bool,
     execute_on_all_subsequent_children_in_path: bool,
 ) -> None:
-    obj.get_driver("controller").to_error(
+    obj.get_controller_driver().to_error(
         target=target,
         execute_along_path=execute_along_path,
         execute_on_all_subsequent_children_in_path=execute_on_all_subsequent_children_in_path,
