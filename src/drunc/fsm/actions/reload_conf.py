@@ -35,7 +35,7 @@ class ReloadConf(FSMAction):
 
         # tries to open the file to see if the configuration is valid
         db = conffwk.Configuration('oksconflibs:' + new_file)
-        test_dal = db.get_dal(class_name="Session", uid=session)
+        db.get_dal(class_name="Session", uid=session)
 
         # Add the information in the data sent to Applications
         _input_data["reload_configuration"] = True
