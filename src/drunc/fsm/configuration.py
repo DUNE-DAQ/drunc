@@ -1,9 +1,9 @@
 from __future__ import annotations
 
-from curses import raw
-from typing import List, cast
 
-from conffwk.dal import FSMData, FSMxTransition
+from typing import cast
+
+from conffwk.dal import FSMData
 from druncschema.controller_pb2 import FSMSequence
 
 from drunc.fsm._protocols import FSMActionProtocol
@@ -68,9 +68,12 @@ class FSMConfHandler(ConfHandler):
             )
 
             arguments = []
+
+            # pre and post transitions shall always be created 
+            # even if they are empty in the configuration
+            seq = PreOrPostTransitionSequence(tr,"pre")
             pre = transition.pre_transition
             if pre is not None:
-                seq = PreOrPostTransitionSequence(tr,"pre")
                 ## add the action
                 for a in pre.actions :
                     ## The action could be registerered by many transisionts 
@@ -83,11 +86,11 @@ class FSMConfHandler(ConfHandler):
                         mandatory=a.name in pre.mandatory,
                     )    
                 arguments += seq.get_arguments()
-                self.pre_transitions[tr] = seq
-                            
+            self.pre_transitions[tr] = seq
+
+            seq = PreOrPostTransitionSequence(tr,"post")                
             post = transition.post_transition
             if post is not None:
-                seq = PreOrPostTransitionSequence(tr,"post")
                 ## add the action
                 for a in post.actions :
                     ## The action could be registerered by many transisionts 
@@ -100,7 +103,7 @@ class FSMConfHandler(ConfHandler):
                         mandatory=a.name in post.mandatory,
                     )    
                 arguments += seq.get_arguments()
-                self.post_transitions[tr] = seq
+            self.post_transitions[tr] = seq
 
             ## fill the arguments
             ## at this points all the actions are registered we just need to register arguments
