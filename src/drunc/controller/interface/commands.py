@@ -4,8 +4,10 @@ import click
 from druncschema.common_pb2 import LoggerTarget
 from druncschema.controller_pb2 import ExecuteExpertCommandResponse
 
+from drunc.controller.controller_driver import ControllerDriver
 from drunc.controller.interface.context import ControllerContext
 from drunc.controller.interface.shell_utils import controller_setup, render_status_table
+from drunc.unified_shell.context import UnifiedShellContext
 from drunc.utils.shell_utils import format_table_width
 from drunc.utils.shell_utils import wait as shell_wait
 from drunc.utils.utils import get_logger, log_echo
@@ -128,7 +130,7 @@ def status(
         if target
         else "Getting status for all targets..."
     )
-    obj.log.info(log_msg)
+    (getattr(obj, "log", None) or log).info(log_msg)
     table = render_status_table(
         obj,
         target=target,
@@ -176,7 +178,9 @@ def recompute_status(
 @click.argument("controller_address", type=str)
 @click.option("-f", "--force", is_flag=True, help="Confirm the disconnect")
 @click.pass_obj
-def connect(obj: ControllerContext, controller_address: str, force: bool) -> None:
+def connect(
+    obj: ControllerContext | UnifiedShellContext, controller_address: str, force: bool
+) -> None:
     if obj.has_driver("controller"):
         driver = obj.get_controller_driver()
         log.info(f"Already connected to a controller ({driver.name}@{driver.address})")
@@ -190,7 +194,13 @@ def connect(obj: ControllerContext, controller_address: str, force: bool) -> Non
     if controller_address.startswith("grpc://"):
         controller_address = controller_address.replace("grpc://", "")
 
-    obj.set_controller_driver(controller_address)
+    if isinstance(obj, UnifiedShellContext):
+        obj.set_controller_driver(controller_address)
+    else:
+        obj.set_driver(
+            "controller", ControllerDriver(controller_address, obj.get_token())
+        )
+        obj.address = controller_address
     controller_setup(obj, controller_address)
 
 
@@ -338,7 +348,7 @@ def echo(
     obj: ControllerContext,
     text: str,
     server: bool,
-    logger: int,
+    logger: LoggerTarget.ValueType,
     severity: str,
     target: str,
     execute_along_path: bool,

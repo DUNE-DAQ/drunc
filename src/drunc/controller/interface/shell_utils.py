@@ -518,7 +518,6 @@ def controller_cleanup_wrapper(
                 log.error("Could not surrender control.")
                 log.error(e)
             log.info("Control surrendered.")
-        ctx.terminate()
 
     return controller_cleanup
 
@@ -566,8 +565,7 @@ def controller_setup(
                 log.critical("Could not get the controller's status")
                 log.critical(e)
                 log.critical("Exiting.")
-                ctx.terminate()
-                raise e
+                raise
 
     if stored_exception is not None:
         raise stored_exception

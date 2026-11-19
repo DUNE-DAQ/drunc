@@ -1,0 +1,101 @@
+labels:
+  "Architecture/Design":
+    reviewers:
+      - username: Aurashk
+        weight: 1
+      - username: PawelPlesniak
+        weight: 3
+      - username: jamesturner246
+        weight: 1
+      - username: mroda88
+        weight: 1
+      - username: emmuhamm
+        weight: 1
+  CI:
+    reviewers:
+      - username: emmuhamm
+        weight: 1
+      - username: PawelPlesniak
+        weight: 3
+      - username: Aurashk
+        weight: 1
+  Controller:
+    reviewers:
+      - username: jamesturner246
+        weight: 1
+      - username: PawelPlesniak
+        weight: 3
+      - username: Aurashk
+        weight: 1
+  documentation:
+    reviewers:
+      - username: PawelPlesniak
+        weight: 3
+  gRPC:
+    reviewers:
+      - username: miruuna
+        weight: 1
+      - username: Aurashk
+        weight: 1
+      - username: PawelPlesniak
+        weight: 3
+  K8s:
+    reviewers:
+      - username: wanyuSu
+        weight: 1
+      - username: MRiganSUSX
+        weight: 1
+      - username: PawelPlesniak
+        weight: 3
+  "Process Manager":
+    reviewers:
+      - username: Aurashk
+        weight: 1
+      - username: miruuna
+        weight: 1
+      - username: emmuhamm
+        weight: 1
+      - username: PawelPlesniak
+        weight: 3
+  "Resource Manager":
+    reviewers:
+      - username: mroda88
+        weight: 1
+      - username: PawelPlesniak
+        weight: 3
+      - username: jamesturner246
+        weight: 1
+      - username: MRiganSUSX
+        weight: 1
+  "Run Control":
+    reviewers:
+      - username: emmuhamm
+        weight: 1
+      - username: PawelPlesniak
+        weight: 3
+      - username: jamesturner246
+        weight: 1
+  "Session Manager":
+    reviewers:
+      - username: Aurashk
+        weight: 1
+      - username: miruuna
+        weight: 1
+      - username: PawelPlesniak
+        weight: 3
+  Testing:
+    reviewers:
+      - username: emmuhamm
+        weight: 1
+      - username: jamesturner246
+        weight: 1
+      - username: PawelPlesniak
+        weight: 3
+  Utilities:
+    reviewers:
+      - username: emmuhamm
+        weight: 1
+      - username: PawelPlesniak
+        weight: 3
+      - username: wanyuSu
+        weight: 1
