@@ -738,7 +738,6 @@ def validate_and_format_fsm_arguments(
         Argument.Type.STRING: string_msg,
         Argument.Type.BOOL: bool_msg,
     }
-
     # Strip out any arguments that are None, as they are considered not passed, and will
     # be set to default values if they exist, or raise an error if they are mandatory
     # without default value
@@ -777,7 +776,7 @@ def validate_and_format_fsm_arguments(
                 out_dict[aname] = ScalarArgument(string_val=str(value))
             else:
                 if not isinstance(value, (str, bool)):
-                    raise TypeError("Boolean arguments must be strings or booleans")
+                    raise ValueError(f"Invalid boolean value: {value}")
                 out_dict[aname] = ScalarArgument(bool_val=parse_bool(value))
         except (TypeError, ValueError) as error:
             raise InvalidArgumentType(aname, value, atype_name) from error
