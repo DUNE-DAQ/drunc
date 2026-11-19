@@ -35,13 +35,14 @@ def test_test_fsm() :
     expected_actions = ['user-provided-run-number', 'file-run-registry', 'trigger-rate-specifier', "file-logbook"]
     assert Counter(oks_actions) == Counter(expected_actions)
 
+    # The FSM core requires pre and post transisitions for all the trancitions
     pre_transitions = configuration.get_pre_transitions_sequences()
     expected_transitions = [t.name for t in pre_transitions.keys()]
-    assert Counter(expected_transitions) == Counter(["start", "change_rate"])
+    assert Counter(expected_transitions) == Counter(oks_transitions)
 
     post_transitions = configuration.get_post_transitions_sequences()
     expected_transitions = [t.name for t in post_transitions.keys()]
-    assert Counter(expected_transitions) == Counter(["start", "drain_dataflow"])
+    assert Counter(expected_transitions) == Counter(oks_transitions)
 
 
 def test_prod_fsm() :
