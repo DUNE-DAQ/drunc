@@ -1,0 +1,13 @@
+name: Set up .github scripts
+description: Install Python and the dependencies used by the scripts in .github/scripts.
+
+runs:
+  using: composite
+  steps:
+    - uses: actions/setup-python@v5
+      with:
+        python-version: "3.11"
+
+    - name: Install script dependencies
+      shell: bash
+      run: python -m pip install PyYAML==6.0.2

@@ -8,6 +8,11 @@
           - docs/Messaging-format.md
           - docs/FSM.md
 
+CI:
+  - changed-files:
+      - any-glob-to-any-file:
+          - .github/**
+
 Controller:
   - changed-files:
       - any-glob-to-any-file:
@@ -45,11 +50,13 @@ K8s:
 "Process Manager":
   - changed-files:
       - any-glob-to-any-file:
+          - src/drunc/processes/**
           - src/drunc/process_manager/**
           - src/drunc/data/process_manager/**
           - src/drunc/apps/pm.py
           - src/drunc/apps/pm_shell.py
           - tests/process_manager/**
+          - tests/processes/**
           - docs/Process-manager*.md
 
 "Resource Manager":
@@ -57,6 +64,16 @@ K8s:
       - any-glob-to-any-file:
           - src/drunc/resource_manager/**
           - tests/resource_manager/**
+
+"Run Control":
+  - changed-files:
+      - any-glob-to-any-file:
+          - src/drunc/unified_shell/**
+          - src/drunc/run_control/**
+          - src/drunc/apps/rc.py
+          - src/drunc/apps/rc_shell.py
+          - tests/unified_shell/**
+          - tests/run_control/**
 
 "Session Manager":
   - changed-files:
@@ -77,8 +94,4 @@ Utilities:
   - changed-files:
       - any-glob-to-any-file:
           - src/drunc/utils/**
-          - src/drunc/processes/**
-          - src/drunc/unified_shell/**
           - tests/utils/**
-          - tests/processes/**
-          - tests/unified_shell/**
