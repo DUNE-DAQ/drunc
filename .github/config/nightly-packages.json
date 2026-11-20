@@ -23,10 +23,8 @@
       "install_extras": ["dev"],
       "order": 10,
       "baseline": {
-        "strategy": "main_pr_branch_then_develop",
-        "branch_source": "main_pr_head",
-        "fallback_repository": "DUNE-DAQ/druncschema",
-        "fallback_branch": "develop"
+        "strategy": "nightly_supplied",
+        "provenance": "setup_dbt_latest"
       }
     },
     {
@@ -38,10 +36,8 @@
       "install_extras": ["test"],
       "order": 20,
       "baseline": {
-        "strategy": "main_pr_branch_then_develop",
-        "branch_source": "main_pr_head",
-        "fallback_repository": "DUNE-DAQ/daqpytools",
-        "fallback_branch": "develop"
+        "strategy": "nightly_supplied",
+        "provenance": "setup_dbt_latest"
       }
     }
   ]

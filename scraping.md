@@ -2,20 +2,13 @@
 
 # Dependency-aware nightly setup and reusable package actions
 
-## Other human suggestion (that hasn't been propagated to the rest of the document)
+## Resolved package-selection policy
 
-Later on for the choosing which repositories to include in the build, follow this heiarchy:
-- follow exactly all the things that is asked for in the dependency-pr bit
-- If its not explicitly asked for, get anyway the following repositories
-  - drunc (pythoncode)
-  - druncschema (sourcecode)
-  - daqpytools(pythoncoode)
-- For the above, go for the exact same branch name as in the current PR. If that branch name doesnt exist, then use develop. 
-
-- We also want an extra trigger word to retrigger all of the integgtests in the CI. this is similar to the /retry-checklist that already exissts in the #1076 PR, but its a new command that retriggers a full workflow rather than an individual job (it should re-resolve the dependencies and grab everything, basically like running a new pipeline of that job)
-
-
-- it should be possible to check if something is a python package or if its not. Possibly by checking to see `    if [ -f "pyproject.toml" ] || [ -f "setup.py" ]; then`. If its a python one, install in pythoncode, if its not installs in sourcecode. 
+- Always use the workflow-selected revision for `drunc`; do not replace it with `develop` or a newly fetched PR head.
+- For an explicitly listed dependency, resolve the declared PR and use its head repository and exact head SHA.
+- For an unlisted package, use its trusted, configured baseline. Do not infer a branch with the same name as the `drunc` PR, and do not automatically fall back to `develop`.
+- Keep package kind, destination, Python installation, extras, and baseline in repository-controlled configuration. A DBT source package may still require Python installation; package placement and install behaviour must not be selected from PR text.
+- Provide a separate human comment command to rerun the full integration-test workflow. That rerun must run setup and resolve dependencies afresh; it is distinct from `/checklist-complete`, which retries only the reviewer-checklist job.
 
 ## Summary
 
