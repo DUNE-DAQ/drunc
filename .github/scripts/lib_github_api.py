@@ -39,6 +39,10 @@ class GitHubApiError(RoutingError):
         self.detail = detail
 
 
+class GitHubApiTransportError(RoutingError):
+    """A transient network failure while contacting the GitHub API."""
+
+
 class GitHubApi:
     """Small GitHub API client for routing metadata and reviewer requests."""
 
@@ -47,8 +51,8 @@ class GitHubApi:
         owner, separator, name = repository.partition("/")
         if not separator or not owner or not name or "/" in name:
             raise RoutingError("GITHUB_REPOSITORY must be owner/name")
-        self.owner = quote(owner, safe="")
-        self.name = quote(name, safe="")
+        self.owner = owner
+        self.name = name
         self.token = token
 
     @classmethod
@@ -76,7 +80,31 @@ class GitHubApi:
 
     def request(self, method: str, path: str, body: dict | None = None) -> dict | list:
         """Send one authenticated request to the GitHub REST API."""
-        url = f"https://api.github.com/repos/{self.owner}/{self.name}/{path}"
+        return self.request_repository(self.owner, self.name, method, path, body)
+
+    def request_repository(
+        self,
+        owner: str,
+        repository: str,
+        method: str,
+        path: str,
+        body: dict | None = None,
+    ) -> dict | list:
+        """Send one request to a repository on the fixed GitHub API host."""
+        if (
+            not owner
+            or not repository
+            or "/" in owner
+            or "/" in repository
+            or not path
+            or path.startswith("/")
+            or "\\" in path
+        ):
+            raise RoutingError("Invalid GitHub repository API request")
+        url = (
+            "https://api.github.com/repos/"
+            f"{quote(owner, safe='')}/{quote(repository, safe='')}/{path}"
+        )
         return self._request(method, url, body)
 
     def graphql(self, query: str, variables: dict) -> dict:
@@ -116,7 +144,9 @@ class GitHubApi:
             detail = error.read().decode("utf-8", errors="replace")
             raise GitHubApiError(error.code, detail) from error
         except (URLError, TimeoutError) as error:
-            raise RoutingError(f"GitHub API request failed: {error}") from error
+            raise GitHubApiTransportError(
+                f"GitHub API request failed: {error}"
+            ) from error
         return json.loads(content) if content else {}
 
     def paginated(

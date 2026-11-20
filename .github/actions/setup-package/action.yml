@@ -18,6 +18,10 @@ inputs:
   destination:
     description: Fixed workarea-relative package path
     required: true
+  replace_existing:
+    description: Replace the package already supplied at this destination
+    required: false
+    default: "false"
   python_install:
     description: Whether to install this package with Python
     required: false
@@ -50,6 +54,7 @@ runs:
         REVISION: ${{ inputs.revision }}
         WORKFLOW_CHECKOUT: ${{ inputs.workflow_checkout }}
         DESTINATION: ${{ inputs.destination }}
+        REPLACE_EXISTING: ${{ inputs.replace_existing }}
         PYTHON_INSTALL: ${{ inputs.python_install }}
         INSTALL_EXTRAS: ${{ inputs.install_extras }}
       run: |
@@ -71,6 +76,10 @@ runs:
           echo "Workarea does not exist: $WORKAREA" >&2
           exit 1
         fi
+        if [[ "$REPLACE_EXISTING" != "true" && "$REPLACE_EXISTING" != "false" ]]; then
+          echo "replace_existing must be true or false" >&2
+          exit 1
+        fi
 
         selected_repository="$REPOSITORY"
         selected_revision="$REVISION"
@@ -87,13 +96,35 @@ runs:
             echo "Package revision must be an immutable commit SHA: $REVISION" >&2
             exit 1
           fi
-
-        package_path="$WORKAREA/$DESTINATION"
-        if [[ -e "$package_path" ]]; then
-          echo "Package destination already exists: $package_path" >&2
-          exit 1
         fi
+
+        workarea_path="$(realpath -e "$WORKAREA")"
+        package_path="$workarea_path/$DESTINATION"
         mkdir -p "$(dirname "$package_path")"
+        package_parent="$(realpath -e "$(dirname "$package_path")")"
+        case "$package_parent/" in
+          "$workarea_path/"*) ;;
+          *)
+            echo "Package destination resolves outside the workarea" >&2
+            exit 1
+            ;;
+        esac
+        package_path="$package_parent/$(basename "$package_path")"
+        if [[ -e "$package_path" || -L "$package_path" ]]; then
+          if [[ "$REPLACE_EXISTING" != "true" ]]; then
+            echo "Package destination already exists: $package_path" >&2
+            exit 1
+          fi
+          existing_path="$(realpath -m "$package_path")"
+          case "$existing_path" in
+            "$workarea_path/"*) ;;
+            *)
+              echo "Existing package path resolves outside the workarea" >&2
+              exit 1
+              ;;
+          esac
+          rm -rf -- "$package_path"
+        fi
         if [[ "$WORKFLOW_CHECKOUT" == "true" ]]; then
           git clone --quiet --no-hardlinks --no-checkout "$GITHUB_WORKSPACE" "$package_path"
           git -C "$package_path" remote set-url origin "https://github.com/$GITHUB_REPOSITORY.git"
@@ -103,6 +134,10 @@ runs:
         git -C "$package_path" checkout --detach "$selected_revision"
 
         checkout_sha="$(git -C "$package_path" rev-parse HEAD)"
+        if [[ "${checkout_sha,,}" != "${selected_revision,,}" ]]; then
+          echo "Checked out $checkout_sha, expected $selected_revision" >&2
+          exit 1
+        fi
         source "$WORKAREA/env.sh"
         if [[ "$PYTHON_INSTALL" == "true" ]]; then
           install_target="$package_path"
