@@ -37,6 +37,7 @@ from druncschema.generic_pb2 import PlainText, Stacktrace
 from druncschema.token_pb2 import Token
 from grpc_status import rpc_status
 
+from drunc.connectivity_service.client import ConnectivityServiceClient
 from drunc.connectivity_service.exceptions import (
     ApplicationLookupUnsuccessful,
 )
@@ -51,7 +52,6 @@ from drunc.utils.grpc_utils import (
 )
 from drunc.utils.utils import (
     ControlType,
-    _ConnectivityService,
     get_control_type_and_uri_from_connectivity_service,
 )
 
@@ -89,7 +89,7 @@ class gRPCChildNode(ChildNode):
         name: str,
         configuration: gRCPChildConfHandler,
         uri: str,
-        connectivity_service: _ConnectivityService | None,
+        connectivity_service: ConnectivityServiceClient | None,
         init_token: Token | None = None,
     ):
         super().__init__(name, ControlType.gRPC)
@@ -629,7 +629,7 @@ class gRPCChildNode(ChildNode):
         self,
         text: str,
         severity: str = "INFO",
-        logger: "LoggerTarget.ValueType" = LoggerTarget.MAIN,
+        logger: LoggerTarget.ValueType = LoggerTarget.MAIN,
         target: str = "",
         execute_along_path: bool = False,
         execute_on_all_subsequent_children_in_path: bool = True,

@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import json
 import logging
 import multiprocessing
@@ -70,7 +72,7 @@ class CouldnotSendCommand(ChildError):
 class ResponseDispatcher(threading.Thread):
     STOP = "RESPONSE_QUEUE_STOP"
 
-    def __init__(self, listener: "type[ResponseListener]") -> None:
+    def __init__(self, listener: type[ResponseListener]) -> None:
         threading.Thread.__init__(self)
         self.listener = listener
         self.log = get_logger("controller.child_iface.ResponseDispatcher")
@@ -96,124 +98,6 @@ class ResponseDispatcher(threading.Thread):
 
     def __str__(self) -> str:
         return "ResponseDispatcher"
-
-
-class ResponseListener:
-    _instance: ClassVar["ResponseListener | None"] = None
-    manager: ClassVar[FlaskManager | None] = None
-    app: ClassVar[Flask]
-    api: ClassVar[object]
-    port: ClassVar[int]
-    queue: ClassVar[multiprocessing.queues.Queue[object]]
-    handlers: ClassVar[dict[str, "AppCommander"]]
-    dispatcher: ClassVar[ResponseDispatcher]
-    log: ClassVar[logging.Logger]
-    _lock: ClassVar[threading.Lock] = threading.Lock()
-
-    def __init__(self) -> None:
-        raise DruncSetupException("Call get() instead")
-
-    @classmethod
-    def get(cls) -> "ResponseListener":
-        with cls._lock:
-            if cls._instance is None:
-                cls._instance = cls.__new__(cls)
-                cls.port = get_new_port()
-                cls.app = Flask("response-listener")
-                cls.api = Api(cls.app)
-                cls.queue = multiprocessing.Queue()
-                cls.handlers = {}
-
-                cls.dispatcher = ResponseDispatcher(cls)
-                cls.dispatcher.start()
-
-                def index() -> str:
-                    log = get_logger("controller.child_iface.ResponseListener")
-                    json = request.get_json(force=True)
-                    log.debug(f"Received {json}")
-                    # enqueue command reply
-                    cls.queue.put(json)
-                    log.debug(f"Queue size {cls.queue.qsize()}")
-                    log.debug(f"Queue pointer {cls.queue}")
-                    return "Response received"
-
-                def get() -> str:
-                    return "ready"
-
-                cls.app.add_url_rule("/response", "index", index, methods=["POST"])
-                cls.app.add_url_rule("/", "get", get, methods=["GET"])
-                cls.manager = FlaskManager(
-                    port=cls.port, app=cls.app, name="response-listener-flaskmanager"
-                )
-                cls.manager.start()
-                while not cls.manager.is_ready():
-                    time.sleep(0.1)
-
-        return cls._instance
-
-    @classmethod
-    def exists(cls) -> bool:
-        return cls._instance is not None
-
-    @classmethod
-    def get_port(cls) -> int:
-        return cls.port
-
-    @classmethod
-    def __del__(cls) -> None:
-        cls.terminate()
-
-    @classmethod
-    def terminate(cls) -> None:
-        cls.queue.close()
-        cls.queue.join_thread()
-        if cls.manager:
-            cls.manager.stop()
-
-    @classmethod
-    def register(cls, app: str, handler: "AppCommander") -> None:
-        """Register a new notification handler
-
-        :param      app:           The application
-        :type       app:           str
-        :param      handler:       The handler
-        :type       handler:       { type_description }
-
-        :rtype:     None
-
-        :raises     RuntimeError:  { exception_description }
-        """
-        if app in cls.handlers:
-            raise DruncSetupException(
-                f"Handler already registered with notification listerner for app {app}"
-            )
-
-        cls.handlers[app] = handler
-
-    @classmethod
-    def unregister(cls, app: str) -> None:
-        """De-register a notification handler
-
-        Args:
-            app (str): application name
-
-        """
-        if app not in cls.handlers:
-            raise DruncException(f"No handler registered for app {app}")
-        del cls.handlers[app]
-
-    @classmethod
-    def notify(cls, reply: dict[str, object]) -> None:
-        if "appname" not in reply:
-            raise DruncException(f"No 'appname' field in reply {reply}")
-
-        app = reply["appname"]
-
-        if app not in cls.handlers:
-            cls.log.warning(f"Received notification for unregistered app '{app}'")
-            return
-
-        cls.handlers[app].notify(reply)
 
 
 class AppCommander:
@@ -366,6 +250,124 @@ class AppCommander:
                     f"Timeout while waiting for a reply from {self.app} for command {self.sent_cmd}"
                 )
         return r
+
+
+class ResponseListener:
+    _instance: ClassVar[ResponseListener | None] = None
+    manager: ClassVar[FlaskManager | None] = None
+    app: ClassVar[Flask]
+    api: ClassVar[object]
+    port: ClassVar[int]
+    queue: ClassVar[multiprocessing.queues.Queue[object]]
+    handlers: ClassVar[dict[str, AppCommander]]
+    dispatcher: ClassVar[ResponseDispatcher]
+    log: ClassVar[logging.Logger]
+    _lock: ClassVar[threading.Lock] = threading.Lock()
+
+    def __init__(self) -> None:
+        raise DruncSetupException("Call get() instead")
+
+    @classmethod
+    def get(cls) -> ResponseListener:
+        with cls._lock:
+            if cls._instance is None:
+                cls._instance = cls.__new__(cls)
+                cls.port = get_new_port()
+                cls.app = Flask("response-listener")
+                cls.api = Api(cls.app)
+                cls.queue = multiprocessing.Queue()
+                cls.handlers = {}
+
+                cls.dispatcher = ResponseDispatcher(cls)
+                cls.dispatcher.start()
+
+                def index() -> str:
+                    log = get_logger("controller.child_iface.ResponseListener")
+                    json = request.get_json(force=True)
+                    log.debug(f"Received {json}")
+                    # enqueue command reply
+                    cls.queue.put(json)
+                    log.debug(f"Queue size {cls.queue.qsize()}")
+                    log.debug(f"Queue pointer {cls.queue}")
+                    return "Response received"
+
+                def get() -> str:
+                    return "ready"
+
+                cls.app.add_url_rule("/response", "index", index, methods=["POST"])
+                cls.app.add_url_rule("/", "get", get, methods=["GET"])
+                cls.manager = FlaskManager(
+                    port=cls.port, app=cls.app, name="response-listener-flaskmanager"
+                )
+                cls.manager.start()
+                while not cls.manager.is_ready():
+                    time.sleep(0.1)
+
+        return cls._instance
+
+    @classmethod
+    def exists(cls) -> bool:
+        return cls._instance is not None
+
+    @classmethod
+    def get_port(cls) -> int:
+        return cls.port
+
+    @classmethod
+    def __del__(cls) -> None:
+        cls.terminate()
+
+    @classmethod
+    def terminate(cls) -> None:
+        cls.queue.close()
+        cls.queue.join_thread()
+        if cls.manager:
+            cls.manager.stop()
+
+    @classmethod
+    def register(cls, app: str, handler: AppCommander) -> None:
+        """Register a new notification handler
+
+        :param      app:           The application
+        :type       app:           str
+        :param      handler:       The handler
+        :type       handler:       { type_description }
+
+        :rtype:     None
+
+        :raises     RuntimeError:  { exception_description }
+        """
+        if app in cls.handlers:
+            raise DruncSetupException(
+                f"Handler already registered with notification listerner for app {app}"
+            )
+
+        cls.handlers[app] = handler
+
+    @classmethod
+    def unregister(cls, app: str) -> None:
+        """De-register a notification handler
+
+        Args:
+            app (str): application name
+
+        """
+        if app not in cls.handlers:
+            raise DruncException(f"No handler registered for app {app}")
+        del cls.handlers[app]
+
+    @classmethod
+    def notify(cls, reply: dict[str, object]) -> None:
+        if "appname" not in reply:
+            raise DruncException(f"No 'appname' field in reply {reply}")
+
+        app = reply["appname"]
+
+        if app not in cls.handlers:
+            cls.log.warning(f"Received notification for unregistered app '{app}'")
+            return
+
+        cls.handlers[app].notify(reply)
 
 
 """
@@ -901,7 +903,7 @@ class RESTAPIChildNode(ChildNode):
         self,
         text: str,
         severity: str = "INFO",
-        logger: "LoggerTarget.ValueType" = LoggerTarget.MAIN,
+        logger: LoggerTarget.ValueType = LoggerTarget.MAIN,
         target: str = "",
         execute_along_path: bool = False,
         execute_on_all_subsequent_children_in_path: bool = True,
