@@ -20,6 +20,7 @@ from drunc.fsm.actions.trigger_rate_specifier import TriggerRateSpecifier
 from drunc.fsm.actions.user_provided_run_number import UserProvidedRunNumber
 from drunc.fsm.actions.usvc_elisa_logbook import ElisaLogbook
 from drunc.fsm.actions.usvc_provided_run_number import UsvcProvidedRunNumber
+from drunc.fsm.actions.reload_conf import ReloadConf
 
 
 class FSMActionFactory:
@@ -116,6 +117,8 @@ class FSMActionFactory:
                 iface = DBRunRegistry(action_configuration)
             case "thread-pinning":
                 iface = ThreadPinning(action_configuration)
+            case "reload-conf":
+                iface = ReloadConf(action_configuration)
             case "master-send-fl-command":
                 iface = MasterSendFLCommand(action_configuration)
             case "trigger-rate-specifier":

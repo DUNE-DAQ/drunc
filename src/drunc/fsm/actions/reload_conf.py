@@ -18,8 +18,8 @@ from drunc.utils.utils import get_logger
 
 class ReloadConf(FSMAction):
     def __init__(self, configuration: InitConfigurationProtocol) -> None:
-        super().__init__(name="reload-configuration")
-        self.log = get_logger("controller.iface.reload-configuration")
+        super().__init__(name="reload-conf")
+        self.log = get_logger("controller.iface.reload-conf")
         self.conf_dict = {p.name: p.value for p in configuration.parameters}
 
     def reload_conf(self, 
