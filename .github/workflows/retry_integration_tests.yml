@@ -1,0 +1,37 @@
+name: Rerun integration tests
+
+'on':
+  issue_comment:
+    types: [created]
+
+permissions:
+  contents: read
+  actions: write
+  pull-requests: read
+
+concurrency:
+  group: rerun-integration-tests-${{ github.event.issue.number }}
+  cancel-in-progress: false
+
+jobs:
+  rerun-integration-tests:
+    if: >-
+      github.event.issue.pull_request &&
+      github.event.comment.user.type == 'User' &&
+      contains(github.event.comment.body, '/rerun-integration-tests')
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout trusted workflow code
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+
+      - name: Set up .github scripts
+        uses: ./.github/actions/setup-scripts
+
+      - name: Rerun the full testing workflow
+        id: rerun
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: python .github/scripts/retry_integration_tests.py

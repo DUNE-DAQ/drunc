@@ -21,8 +21,22 @@ ___DELETE THOSE THAT DONT APPLY___
 - Breaking change
 - Documentation
 
-## List of required branches from other repositories
-_WHAT PRs NEED TO BE INCLUDED TO MAKE THE CHANGE._
+## Dependency PRs for CI
+
+List dependency PRs that must be included when building the test workarea.
+Use one PR reference per bullet, either `owner/repository#123` or a full GitHub PR URL.
+Currently supported dependency repositories are `DUNE-DAQ/druncschema` and
+`DUNE-DAQ/daqpytools`. `drunc` always uses the revision selected by the workflow.
+Unlisted packages use their nightly-provided versions. Leave this block empty
+when no dependency override is needed.
+
+<!-- dependency-prs:start:v1 -->
+<!-- dependency-prs:end:v1 -->
+
+Editing this section does not start a build. The next eligible setup reads the
+current PR description. To rerun the full integration-test workflow and refresh
+dependency selections, comment `/rerun-integration-tests` on this PR. A qualifying
+`testing.yml` run must already exist for the current PR revision.
 
 ## Change log
 

@@ -1,6 +1,11 @@
 name: Setup Test Runner
 description: Prepares a runner for testing by checking out code, starting SSH, and unpacking the nightly build
 
+inputs:
+  artifact_name:
+    description: Name of the nightly environment artifact produced by this workflow run
+    required: true
+
 runs:
   using: composite
   steps:
@@ -10,7 +15,7 @@ runs:
     - name: Download environment artifact
       uses: actions/download-artifact@v8
       with:
-        name: nightly-env
+        name: ${{ inputs.artifact_name }}
 
     - name: Install dependencies and unpack
       shell: bash
