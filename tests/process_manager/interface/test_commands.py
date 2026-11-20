@@ -127,7 +127,8 @@ class MockContext:
         self.driver = driver or MockDriver()
         self.output = []
         self.session_name = "mock-session"
-        self._console = Console()
+        self.console = Console()
+        self._console = self.console
 
     def get_driver(self, name):
         return self.driver
@@ -144,7 +145,7 @@ class MockContext:
     def print(self, *args: object, **kwargs: object) -> None:
         # Capture all printed objects so we can assert against them in tests
         self.output.extend(args)
-        self._console.print(*args, **kwargs)
+        self.console.print(*args, **kwargs)
 
 
 class MockBootResult:

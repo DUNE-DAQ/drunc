@@ -287,11 +287,11 @@ def release_or_dev() -> str:
 def print_logs(obj, result, grep):
     display_name = result.name or result.uuid.uuid or ""
     if result.name is not None:
-        obj.rule(f"[yellow]{display_name}[/yellow] logs")
+        obj.console.rule(f"[yellow]{display_name}[/yellow] logs")
 
     for line in result.lines:
         if not line.strip():  # keep empty lines for visual clarity
-            obj.print("")
+            obj.console.print("")
             continue
 
         line = line.rstrip("\n")  # remove trailing newline
@@ -308,9 +308,9 @@ def print_logs(obj, result, grep):
         else:
             escaped_line = escape(line)
 
-        obj.print(escaped_line, soft_wrap=True)
+        obj.console.print(escaped_line, soft_wrap=True)
     if result.name is not None:
-        obj.rule(f"[yellow]{display_name}[/yellow] end")
+        obj.console.rule(f"[yellow]{display_name}[/yellow] end")
 
 
 def print_ps_table(query, results, obj, logger, long_format, width, fit) -> None:
@@ -332,8 +332,8 @@ def print_ps_table(query, results, obj, logger, long_format, width, fit) -> None
             width=width,
         )
 
-        table = format_table_width(obj._console, table, fit)
-        obj.print(table, soft_wrap=not fit)
+        table = format_table_width(obj.console, table, fit)
+        obj.console.print(table, soft_wrap=not fit)
     else:
         if session_name:
             logger.info(

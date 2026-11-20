@@ -19,11 +19,8 @@ from drunc.process_manager.utils import (
     print_ps_table,
     tabulate_process_instance_list,
 )
-from drunc.run_control.interface.context import RunControlContext
-from drunc.utils.shell_utils import (
-    InterruptedCommand,
-    log_rc_cmd,
-)
+from drunc.run_control.interface.context import SHELL_ID, RunControlContext
+from drunc.utils.shell_utils import InterruptedCommand, shell_cmd_message
 from drunc.utils.utils import format_table_width, get_logger, log_echo
 from drunc.utils.utils import wait as shell_wait
 
@@ -52,8 +49,7 @@ def session_empty(f: FC) -> FC:
     default=None,
     help="Number of progress updates to print when --progress is set.",
 )
-@click.pass_obj
-def wait(obj: RunControlContext, sleep_time: int, progress_steps: int | None) -> None:
+def wait(sleep_time: int, progress_steps: int | None) -> None:
     log = get_logger("run_control.wait")
     shell_wait(log, sleep_time, progress_steps)
 
@@ -135,14 +131,14 @@ def echo(
         (log_echo if logger == LoggerTarget.ECHO else log).info(text)
         return
 
-    obj.get_run_control_driver().send_log(text=text, severity=severity, logger=logger)
+    obj.run_control_driver.send_log(text=text, severity=severity, logger=logger)
 
     #! to be added later!
     # if target_server in ["", "process_manager"]:
-    #     obj.get_pm_driver().send_log(text=text, severity=severity, logger=logger)
+    #     obj.process_manager_driver.send_log(text=text, severity=severity, logger=logger)
 
-    # if target_server in ["", "controller"] and obj.has_driver("controller"):
-    #     obj.get_controller_driver().send_log(
+    # if target_server in ["", "controller"]:
+    #     obj.controller_driver.send_log(
     #         text=text,
     #         severity=severity,
     #         target=target,
@@ -158,7 +154,7 @@ def echo(
 def connect_to_pm(obj: RunControlContext, address: str):
     log = get_logger("run_control.shell")
     log.warning(f"Connecting to pm at {address}")
-    obj.get_run_control_driver().connect_to_pm(address=address)
+    obj.run_control_driver.connect_to_pm(address=address)
 
 
 @click.command("ps")
@@ -173,11 +169,11 @@ def ps(
     width: int | None,
     fit: bool,
 ) -> None:
-    log_rc_cmd(obj)
+    obj.run_control_driver.send_log(shell_cmd_message(shell_id=SHELL_ID))
     log = get_logger("run_control.shell")
     log.info(f"Running ps with query {query}")
 
-    results = obj.get_run_control_driver().ps(query)
+    results = obj.run_control_driver.ps(query)
     log.info("received results")
 
     print_ps_table(query, results, obj, log, long_format, width, fit)
@@ -194,7 +190,7 @@ def logs(
     grep: str | None,
     query: ProcessQuery,
 ) -> None:
-    log_rc_cmd(obj)
+    obj.run_control_driver.send_log(shell_cmd_message(shell_id=SHELL_ID))
     log = get_logger("run_control.shell")
     log.info(f"Running logs with query {query}")
 
@@ -203,7 +199,7 @@ def logs(
         query=query,
     )
 
-    result = obj.get_run_control_driver().logs(log_req)
+    result = obj.run_control_driver.logs(log_req)
     print_logs(obj, result, grep)
 
 
@@ -222,8 +218,8 @@ def set_session_config(
     if not any((configuration_file, configuration_id, session_name)):
         raise click.UsageError("Provide at least one configuration option.")
 
-    log_rc_cmd(obj)
-    response = obj.get_run_control_driver().set_session_config(
+    obj.run_control_driver.send_log(shell_cmd_message(shell_id=SHELL_ID))
+    response = obj.run_control_driver.set_session_config(
         configuration_file=configuration_file,
         configuration_id=configuration_id,
         session_name=session_name,
@@ -233,15 +229,15 @@ def set_session_config(
             f"Configuration update failed: {ResponseFlag.Name(response.flag)}"
         )
 
-    obj.print("Session configuration updated.")
+    obj.console.print("Session configuration updated.")
 
 
 @click.command("print-session-config")
 @click.pass_obj
 def print_session_config(obj: RunControlContext) -> None:
     """Display the server's current session configuration."""
-    log_rc_cmd(obj)
-    config = obj.get_run_control_driver().print_session_config()
+    obj.run_control_driver.send_log(shell_cmd_message(shell_id=SHELL_ID))
+    config = obj.run_control_driver.print_session_config()
 
     table = Table(title="Session configuration")
     table.add_column("Setting")
@@ -250,21 +246,21 @@ def print_session_config(obj: RunControlContext) -> None:
     table.add_row("Configuration ID", config.configuration_id)
     table.add_row("Session name", config.session_name)
     table.add_row("Valid", str(config.valid))
-    obj.print(table)
+    obj.console.print(table)
 
 
 @click.command("validate")
 @click.pass_obj
 def validate(obj: RunControlContext) -> None:
     """Set the server's session configuration valid flag to true."""
-    log_rc_cmd(obj)
-    response = obj.get_run_control_driver().validate()
+    obj.run_control_driver.send_log(shell_cmd_message(shell_id=SHELL_ID))
+    response = obj.run_control_driver.validate()
     if response.flag != ResponseFlag.EXECUTED_SUCCESSFULLY:
         raise click.ClickException(
             f"Setting valid flag failed: {ResponseFlag.Name(response.flag)}"
         )
 
-    obj.print("Session configuration valid flag set to True.")
+    obj.console.print("Session configuration valid flag set to True.")
 
 
 @click.command("boot")
@@ -293,7 +289,7 @@ def boot(
     controller_log_level: str | None,
     sleep_between_app_boot: float = 0,
 ) -> None:
-    log_rc_cmd(obj)
+    obj.run_control_driver.send_log(shell_cmd_message(shell_id=SHELL_ID))
     log = get_logger("run_control.shell")
     user = getpass.getuser()
 
@@ -304,7 +300,7 @@ def boot(
 
     # needs error handling
     try:
-        obj.get_run_control_driver().boot(
+        obj.run_control_driver.boot(
             log_level=controller_log_level,
             user=user,
             override_logs=override_logs_boot,
@@ -334,21 +330,18 @@ def boot(
     help="Restrict the table to the available terminal width.",
 )
 @click.pass_obj
-@click.pass_context
-def terminate(
-    ctx: click.core.Context, obj: RunControlContext, width: int | None, fit: bool
-) -> None:
+def terminate(obj: RunControlContext, width: int | None, fit: bool) -> None:
     """
     Execute the process manager terminate command, but only do this for the current
     session
     """
 
     log = get_logger("run_control.shell")
-    log_rc_cmd(obj)
+    obj.run_control_driver.send_log(shell_cmd_message(shell_id=SHELL_ID))
 
     log.info("Terminating session [green][/]")
 
-    result = obj.get_run_control_driver().terminate()
+    result = obj.run_control_driver.terminate()
 
     if not result:
         return
@@ -357,5 +350,5 @@ def terminate(
         result, "Terminated process", False, width=width
     )
 
-    table = format_table_width(obj._console, table, fit=fit)
-    obj.print(table, soft_wrap=not fit)
+    table = format_table_width(obj.console, table, fit=fit)
+    obj.console.print(table, soft_wrap=not fit)

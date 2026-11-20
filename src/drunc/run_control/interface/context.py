@@ -1,19 +1,17 @@
-from collections.abc import MutableMapping
+from dataclasses import dataclass
+
+from rich.console import Console
 
 from drunc.run_control.run_control_driver import RunControlDriver
-from drunc.utils.shell_utils import ShellContext
+
+SHELL_ID = "run_control_shell"
 
 
-class RunControlContext(ShellContext):
-    shell_id = "run_control_shell"
+@dataclass
+class RunControlContext:
+    run_control_driver: RunControlDriver
+    console: Console = Console()
+    override_logs: bool = False
 
-    def __init__(self, *args, **kwargs) -> None:
-        self.override_logs = (
-            False  # TODO: This should be propagated to the shell initialisation..
-        )
-        super().__init__(*args, **kwargs)
 
-    def create_drivers(self, **kwargs: object) -> MutableMapping[str, object]:
-        if not self.address:
-            return {}
-        return {"run_control": RunControlDriver(self.address, self._token)}
+# TODO: override_logs should be propagated to the shell initialisation.
