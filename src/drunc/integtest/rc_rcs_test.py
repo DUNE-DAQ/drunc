@@ -5,6 +5,7 @@ import functools
 import getpass
 import os
 import re
+import socket
 
 import integrationtest.data_classes as idc
 import pytest
@@ -34,7 +35,8 @@ conf_dict.daq_session_name = "rc-rcs-test"
 confgen_arguments = {"SmallFootprint": conf_dict}
 
 
-# Find a free network port to use for the process manager
+# Find a free network port to use for the services
+hostname = socket.gethostname()
 rc_port = find_free_port(50020, 52000)
 pm_port = find_free_port(50020, 52000)
 
@@ -294,7 +296,7 @@ def test_connections(run_dunerc) -> None:
     rc_connect = f"{user_name} connected from run_control_shell"
     rcs_connect = (
         f"{user_name} connected to the run control through a "
-        f"drunc-run-control-shell via address localhost:{rc_port}"
+        f"drunc-run-control-shell via address {hostname}:{rc_port}"
     )
 
     assert any(rc_connect in line for line in lines_rc), (
