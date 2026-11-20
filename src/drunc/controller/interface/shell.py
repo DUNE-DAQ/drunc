@@ -86,6 +86,7 @@ def controller_shell(ctx: click.Context, controller_address: str, log_level: str
 
     if not isinstance(ctx.command, click.Group):
         raise TypeError("Controller shell command must be a Click group")
+    
     ctx.command.add_command(status, "status")
     ctx.command.add_command(recompute_status, "recompute-status")
     ctx.command.add_command(connect, "connect")

@@ -130,7 +130,7 @@ def status(
         if target
         else "Getting status for all targets..."
     )
-    (getattr(obj, "log", None) or log).info(log_msg)
+    obj.log.info(log_msg)
     table = render_status_table(
         obj,
         target=target,
@@ -194,6 +194,7 @@ def connect(
     if controller_address.startswith("grpc://"):
         controller_address = controller_address.replace("grpc://", "")
 
+    # only the UnifiedShellContext has 'set_controller_driver'
     if isinstance(obj, UnifiedShellContext):
         obj.set_controller_driver(controller_address)
     else:

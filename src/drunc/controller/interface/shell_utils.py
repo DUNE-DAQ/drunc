@@ -565,7 +565,7 @@ def controller_setup(
                 log.critical("Could not get the controller's status")
                 log.critical(e)
                 log.critical("Exiting.")
-                raise
+                raise e
 
     if stored_exception is not None:
         raise stored_exception
@@ -595,7 +595,7 @@ def controller_setup(
     if state == "initialising":
         log.error("Controller did not initialise in time")
         raise DruncSetupException("Controller did not initialise in time")
-
+    
     log.debug(f"Taking control of the controller as {ctx.get_token()}")
     try:
         ret = ctx.get_controller_driver().take_control()
@@ -1039,14 +1039,12 @@ def generate_fsm_command(
     """
 
     # Construct the partial command executing the defined FSM command with click options
-    def run_transition(
-        obj: ControllerContext | UnifiedShellContext,
-        target: str,
-        **kwargs: int | bool | str | float | None,
-    ) -> None:
-        run_one_fsm_command(obj, controller_name, transition.name, target, **kwargs)
-
-    cmd = click.pass_obj(run_transition)
+    base_cmd = functools.partial(
+        run_one_fsm_command,
+        controller_name=controller_name,
+        transition_name=transition.name,
+    )
+    cmd = click.pass_obj(base_cmd)
     cmd = click.option(
         "--target",
         type=str,
