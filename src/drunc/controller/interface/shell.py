@@ -49,7 +49,7 @@ from drunc.utils.utils import (
 )
 @click.argument("controller-address", type=str, callback=validate_command_facility)
 @click.pass_context
-def controller_shell(ctx, controller_address: str, log_level: str) -> None:
+def controller_shell(ctx: click.Context, controller_address: str, log_level: str) -> None:
     get_root_logger(log_level)
     controller_shell_log = get_logger("controller.iface.shell", rich_handler=True)
 
@@ -81,9 +81,11 @@ def controller_shell(ctx, controller_address: str, log_level: str) -> None:
     # ctx.call_on_close(cleanup)
 
     transitions = (
-        ctx.obj.get_driver("controller").describe_fsm(key="all-transitions").description
+        ctx.obj.get_controller_driver().describe_fsm(key="all-transitions").description
     )
 
+    if not isinstance(ctx.command, click.Group):
+        raise TypeError("Controller shell command must be a Click group")
     ctx.command.add_command(status, "status")
     ctx.command.add_command(recompute_status, "recompute-status")
     ctx.command.add_command(connect, "connect")

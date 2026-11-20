@@ -40,6 +40,8 @@ from drunc.utils.utils import get_logger
 
 
 class ControllerDriver:
+    name: str
+
     @staticmethod
     def _resolve_address_to_ipv4(address: str) -> str:
         """

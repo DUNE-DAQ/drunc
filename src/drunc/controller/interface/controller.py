@@ -1,6 +1,7 @@
 import concurrent
 import os
 import signal
+from types import FrameType
 
 import click
 import grpc
@@ -74,7 +75,7 @@ def controller_cli(
     name: str,
     configurationid: str,
     log_level: str,
-):
+) -> None:
     """Spawns a single controller defined in the boot-configuration file, in a given session identified by its name, with communications defined through the command-facility.\n"""
     get_root_logger(log_level)
     log = get_logger(
@@ -106,7 +107,7 @@ def controller_cli(
         token=token,
     )
 
-    def serve(listen_addr: str) -> None:
+    def serve(listen_addr: str) -> tuple[grpc.Server, int]:
         server = grpc.server(
             concurrent.futures.ThreadPoolExecutor(
                 max_workers=CONTROLLER_SERVER_GRPC_MAX_WORKERS
@@ -120,21 +121,21 @@ def controller_cli(
         log.debug(f"'{ctrlr.name}' was started on '{port}'")
         return server, port
 
-    def controller_shutdown():
+    def controller_shutdown() -> None:
         log.info("Requested termination")
         log.info("Calling ctrlr.terminate()")
         ctrlr.terminate()
         log.info("ctrlr.terminate() completed")
 
-    def kill_me(sig, frame):
+    def kill_me(sig: int, frame: FrameType | None) -> None:
         log_km = get_logger("controller.iface.kill_me")
         log_km.info("Sending SIGKILL")
-        if ctrlr.top_segment_controller:
+        if ctrlr.top_segment_controller and ctrlr.connectivity_service:
             ctrlr.connectivity_service.retract_partition(fail_quickly=True)
         pgrp = os.getpgid(os.getpid())
         os.killpg(pgrp, signal.SIGKILL)
 
-    def shutdown(sig, frame):
+    def shutdown(sig: int, frame: FrameType | None) -> None:
         log.info(f"Shutting down gracefully (received signal: {sig})")
         try:
             controller_shutdown()
@@ -149,7 +150,7 @@ def controller_cli(
         ctrlr.init_controller()
 
         # Add signal handling for gRPC server
-        def signal_handler(signum, frame):
+        def signal_handler(signum: int, frame: FrameType | None) -> None:
             log.info(f"Received signal {signum}, shutting down gRPC server")
             server.stop(grace=2.0)  # Give 2 seconds for graceful shutdown
             log.info("gRPC server shutdown completed")
