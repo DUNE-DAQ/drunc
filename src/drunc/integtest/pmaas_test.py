@@ -17,7 +17,6 @@ import re
 import integrationtest.data_classes as idc
 import integrationtest.log_file_checks as log_file_checks
 import integrationtest.utility_functions as utility_functions
-import pytest
 from daqconf.utils import find_free_port
 from integ_test_utils import (
     _parse_table_from_index,
@@ -28,16 +27,17 @@ from integ_test_utils import (
     require_line_containing,
     strip_ansi,
 )
-from pm_test_common import ignored_logfile_problems, make_conf_dict
-
-from drunc.process_manager.oks_parser import get_full_db_path
-from drunc.utils.utils import file_is_read_only
+from pm_test_common import ignored_logfile_problems
 
 print = functools.partial(print, flush=True)  # always flush print() output
 
 pytest_plugins = "integrationtest.integrationtest_drunc"
 
-conf_dict = make_conf_dict("pmaas-us")
+conf_dict = idc.integtest_params_for_predefined_dunedaq_config()
+conf_dict.predefined_config_db = (
+    os.environ.get("DAQSYSTEMTEST_SHARE")
+    + "/config/daqsystemtest/example-configs.data.xml"
+)
 
 confgen_arguments = {"SmallFootprint": conf_dict}
 
@@ -48,13 +48,6 @@ us_session_name_1 = "pmaas-us-1"
 us_session_name_2 = "pmaas-us-2"
 
 conf = "local-1x1-config"
-file_path = "config/daqsystemtest/example-configs.data.xml"
-
-
-pytestmark = pytest.mark.skipif(
-    file_is_read_only(get_full_db_path(file_path)),
-    reason="Daqsystemtest needs to be locally installed and read/writeabe to use drunc with multiple sessions",
-)
 
 # Commands in requested order:
 # 1) pms: boot session 1, boot session 2
@@ -64,10 +57,10 @@ pytestmark = pytest.mark.skipif(
 # 5) pms: ps, terminate, ps
 pmshell_commands_stage_1 = f"""
     echo pms_boot_1
-    boot config/daqsystemtest/example-configs.data.xml {conf} {pms_session_name_1}
+    boot <config_data_file> {conf} {pms_session_name_1}
     wait 5
     echo pms_boot_2
-    boot config/daqsystemtest/example-configs.data.xml {conf} {pms_session_name_2}
+    boot <config_data_file> {conf} {pms_session_name_2}
     wait 15
     """.split()
 
