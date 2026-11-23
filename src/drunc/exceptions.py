@@ -129,11 +129,7 @@ class ChildCommandException(DruncException):
         child_message: str,
         **kwargs,
     ) -> None:
-        self.child_name = child_name
-        self.child_code = child_code
-        self.child_message = child_message
         self._child_details = child_details
-
         super().__init__(
             message=f"Child '{child_name}' failed [{child_code}]: {child_message}",
             child_name=child_name,
