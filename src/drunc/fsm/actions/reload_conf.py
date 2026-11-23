@@ -25,13 +25,15 @@ class ReloadConf(FSMAction):
     def reload_conf(self, 
                     new_file: str, 
                     session: str,
+                    check_existence:bool,
                     _input_data: dict[str, object]
     ) -> dict[str, object]:
 
         # check if the file exists
-        file_path = Path(new_file)
-        if not file_path.exists():
-            raise DruncSetupException(f"Configuration file {new_file} not found")
+        if check_existence :
+            file_path = Path(new_file)
+            if not file_path.exists():
+                raise DruncSetupException(f"Configuration file {new_file} not found")
 
         # tries to open the file to see if the configuration is valid
         db = conffwk.Configuration('oksconflibs:' + new_file)
@@ -40,7 +42,7 @@ class ReloadConf(FSMAction):
         # Add the information in the data sent to Applications
         _input_data["reload_configuration"] = True
         _input_data["confspec"] = new_file
-
+        
         return _input_data
 
     def pre_reconf(
@@ -51,13 +53,17 @@ class ReloadConf(FSMAction):
             **kwargs: object,
     ) -> dict[str, object]:
 
+        check_existence = True
+        
         if not new_file:
             # in this case the file is the same
-            new_file = _context.configuration.initial_data
+            new_file = _context.configuration.initial_data.split(":")[1]
+            check_existence = False
 
         return self.reload_conf(
             new_file, 
             session=_context.configuration.oks_key.session,
+            check_existence = check_existence,
             _input_data=_input_data
         )
 
