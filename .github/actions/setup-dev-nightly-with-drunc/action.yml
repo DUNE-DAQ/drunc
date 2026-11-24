@@ -5,29 +5,98 @@ runs:
   using: composite
   steps:
     - name: Set up dev nightly
+      id: nightly
+      uses: ./.github/actions/setup-dev-nightly
+
+    - name: Set up .github scripts
+      uses: ./.github/actions/setup-scripts
+
+    - name: Resolve dependency PRs
+      id: resolve
       shell: bash
+      env:
+        WORKAREA: ${{ steps.nightly.outputs.workarea }}
+        NIGHTLY_IDENTIFIER: ${{ steps.nightly.outputs.nightly_identifier }}
+        GITHUB_TOKEN: ${{ github.token }}
       run: |
-        mkdir nightly
-        cd nightly
+        set -eo pipefail
+        python "$GITHUB_WORKSPACE/.github/scripts/dependency_prs.py" \
+          --output "$WORKAREA/dependency-manifest.json"
 
-        source /cvmfs/dunedaq.opensciencegrid.org/setup_dunedaq.sh
-        setup_dbt latest
-        dbt-create -n last_fddaq
+    - name: Verify nightly package baselines
+      shell: bash
+      env:
+        WORKAREA: ${{ steps.nightly.outputs.workarea }}
+        DRUNCSCHEMA_SELECTION: ${{ steps.resolve.outputs.druncschema_selection }}
+        DAQPYTOOLS_SELECTION: ${{ steps.resolve.outputs.daqpytools_selection }}
+      run: |
+        set -eo pipefail
+        source "$WORKAREA/env.sh"
 
-        cd NFD_DEV*
-        source env.sh
+        case "$DRUNCSCHEMA_SELECTION" in
+          nightly_supplied)
+            if [[ ! -d "$WORKAREA/sourcecode/druncschema" ]]; then
+              echo "Nightly baseline package druncschema is missing from sourcecode/druncschema" >&2
+              exit 1
+            fi
+            ;;
+          pull_request) ;;
+          *) echo "Unknown druncschema selection: $DRUNCSCHEMA_SELECTION" >&2; exit 1 ;;
+        esac
 
+        case "$DAQPYTOOLS_SELECTION" in
+          nightly_supplied)
+            if ! python -c 'import daqpytools' >/dev/null 2>&1; then
+              echo "Nightly baseline package daqpytools is not importable in the workarea Python environment" >&2
+              exit 1
+            fi
+            ;;
+          pull_request) ;;
+          *) echo "Unknown daqpytools selection: $DAQPYTOOLS_SELECTION" >&2; exit 1 ;;
+        esac
 
-        cd sourcecode
-        git clone "https://github.com/${REPO_OWNER}/druncschema.git" -b "$HEAD_REF" || git clone https://github.com/DUNE-DAQ/druncschema.git
-        cd druncschema
-        pip install .[test]
+    - name: Set up druncschema PR override
+      if: steps.resolve.outputs.druncschema_selection == 'pull_request'
+      uses: ./.github/actions/setup-package
+      with:
+        workarea: ${{ steps.nightly.outputs.workarea }}
+        repository: ${{ steps.resolve.outputs.druncschema_source_repository }}
+        revision: ${{ steps.resolve.outputs.druncschema_sha }}
+        destination: ${{ steps.resolve.outputs.druncschema_destination }}
+        python_install: ${{ steps.resolve.outputs.druncschema_python_install }}
+        install_extras: ${{ steps.resolve.outputs.druncschema_install_extras }}
+        replace_existing: "true"
 
-        cd ../../pythoncode
-        git clone "https://github.com/${REPO_OWNER}/drunc.git" -b "$HEAD_REF" || git clone https://github.com/DUNE-DAQ/drunc.git
-        cd drunc
-        pip install .[test]
+    - name: Set up daqpytools PR override
+      if: steps.resolve.outputs.daqpytools_selection == 'pull_request'
+      uses: ./.github/actions/setup-package
+      with:
+        workarea: ${{ steps.nightly.outputs.workarea }}
+        repository: ${{ steps.resolve.outputs.daqpytools_source_repository }}
+        revision: ${{ steps.resolve.outputs.daqpytools_sha }}
+        destination: ${{ steps.resolve.outputs.daqpytools_destination }}
+        python_install: ${{ steps.resolve.outputs.daqpytools_python_install }}
+        install_extras: ${{ steps.resolve.outputs.daqpytools_install_extras }}
+        replace_existing: "true"
 
-        cd ../..
+    - name: Set up drunc
+      uses: ./.github/actions/setup-package
+      with:
+        workarea: ${{ steps.nightly.outputs.workarea }}
+        repository: DUNE-DAQ/drunc
+        revision: ${{ github.sha }}
+        workflow_checkout: "true"
+        destination: ${{ steps.resolve.outputs.main_destination }}
+        python_install: ${{ steps.resolve.outputs.main_python_install }}
+        install_extras: ${{ steps.resolve.outputs.main_install_extras }}
+
+    - name: Build workarea
+      shell: bash
+      env:
+        WORKAREA: ${{ steps.nightly.outputs.workarea }}
+      run: |
+        set -eo pipefail
+        source "$WORKAREA/env.sh"
+        cd "$WORKAREA"
         dbt-build --skip-python-install
         dbt-workarea-env

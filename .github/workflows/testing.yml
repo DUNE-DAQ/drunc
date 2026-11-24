@@ -20,17 +20,16 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.head_ref || github.ref }}
   cancel-in-progress: true
 
-# Define globals used across multiple jobs
-env:
-  REPO_OWNER: ${{ github.event.pull_request.head.repo.owner.login || github.repository_owner }}
-  HEAD_REF: ${{ github.head_ref || github.ref_name }}
-
-
 jobs:
   generate-release-tarball:
     name: Generate Release Tarball
     if: github.event.pull_request.draft == false
     runs-on: ubuntu-latest
+    outputs:
+      nightly_artifact_name: ${{ steps.artifact.outputs.name }}
+    permissions:
+      contents: read
+      pull-requests: read
     defaults:
       run:
         shell: bash
@@ -44,6 +43,19 @@ jobs:
       - name: Set up dev nightly
         uses: ./.github/actions/setup-dev-nightly-with-drunc
 
+      - name: Define nightly artifact identity
+        id: artifact
+        run: echo "name=nightly-env-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}" >> "$GITHUB_OUTPUT"
+
+      - name: Upload dependency manifest diagnostic
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: dependency-manifest-${{ github.run_id }}-${{ github.run_attempt }}
+          path: nightly/NFD_DEV*/dependency-manifest.json
+          if-no-files-found: ignore
+          retention-days: 1
+
       - name: Install zstd
         run: dnf install -y --disablerepo=epel zstd
 
@@ -53,7 +65,7 @@ jobs:
       - name: Upload environment artifact
         uses: actions/upload-artifact@v7
         with:
-          name: nightly-env
+          name: ${{ steps.artifact.outputs.name }}
           path: /tmp/nightly.tar.zst
           compression-level: 0
           retention-days: 1
@@ -78,6 +90,8 @@ jobs:
 
       - name: Initialize Test Environment
         uses: ./.github/actions/setup-test-runner
+        with:
+          artifact_name: ${{ needs.generate-release-tarball.outputs.nightly_artifact_name }}
 
       - name: Run unit tests
         run: |
@@ -151,15 +165,25 @@ jobs:
     outputs:
       matrix: ${{ steps.set-matrix.outputs.matrix }}
     steps:
+      - name: Checkout workflow-selected drunc revision
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+
       - name: Generate test list
         id: set-matrix
+        shell: bash
         run: |
-          # Clone just the drunc repository to read the file list
-          git clone "https://github.com/${REPO_OWNER}/drunc.git" -b "$HEAD_REF" || git clone https://github.com/DUNE-DAQ/drunc.git
-          cd drunc/src/drunc/integtest
+          cd "$GITHUB_WORKSPACE/src/drunc/integtest"
+          shopt -s nullglob
+          test_files=( *_test.py )
+          if [[ ${#test_files[@]} -eq 0 ]]; then
+            echo "No drunc integration test files found at the workflow-selected revision" >&2
+            exit 1
+          fi
 
-          # Find all python files, build a JSON array, and set it as an output variable
-          FILES_JSON=$(ls -1 *_test.py | jq -R -s -c 'split("\n")[:-1]')
+          FILES_JSON=$(printf '%s\n' "${test_files[@]}" | jq -R -s -c 'split("\n")[:-1]')
           echo "matrix=$FILES_JSON" >> "$GITHUB_OUTPUT"
 
 
@@ -185,6 +209,8 @@ jobs:
 
       - name: Initialize Test Environment
         uses: ./.github/actions/setup-test-runner
+        with:
+          artifact_name: ${{ needs.generate-release-tarball.outputs.nightly_artifact_name }}
 
       - name: Run daqsystemtest (${{ matrix.test_script }})
         run: |
@@ -215,6 +241,8 @@ jobs:
 
       - name: Initialize Test Environment
         uses: ./.github/actions/setup-test-runner
+        with:
+          artifact_name: ${{ needs.generate-release-tarball.outputs.nightly_artifact_name }}
 
       - name: Run drunc (${{ matrix.test_script }})
         run: |
@@ -250,6 +278,8 @@ jobs:
 
       - name: Initialize Test Environment
         uses: ./.github/actions/setup-test-runner
+        with:
+          artifact_name: ${{ needs.generate-release-tarball.outputs.nightly_artifact_name }}
 
       - name: Setup Kind and Kubectl
         uses: ./.github/actions/setup-kind
@@ -334,6 +364,8 @@ jobs:
 
       - name: Initialize Test Environment
         uses: ./.github/actions/setup-test-runner
+        with:
+          artifact_name: ${{ needs.generate-release-tarball.outputs.nightly_artifact_name }}
 
       - name: Setup Kind and Kubectl
         uses: ./.github/actions/setup-kind

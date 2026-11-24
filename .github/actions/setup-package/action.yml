@@ -1,0 +1,152 @@
+name: Setup package
+description: Check out a package into a nightly workarea and optionally install it
+
+inputs:
+  workarea:
+    description: Absolute path to the initialized DBT workarea
+    required: true
+  repository:
+    description: GitHub owner/repository for the preferred package checkout
+    required: true
+  revision:
+    description: Immutable commit SHA to check out
+    required: true
+  workflow_checkout:
+    description: Use the exact repository revision selected by the workflow
+    required: false
+    default: "false"
+  destination:
+    description: Fixed workarea-relative package path
+    required: true
+  replace_existing:
+    description: Replace the package already supplied at this destination
+    required: false
+    default: "false"
+  python_install:
+    description: Whether to install this package with Python
+    required: false
+    default: "true"
+  install_extras:
+    description: Trusted package extras to install
+    required: false
+    default: ""
+
+outputs:
+  checkout_sha:
+    description: Commit SHA checked out for this package
+    value: ${{ steps.setup.outputs.checkout_sha }}
+  selected_repository:
+    description: Repository selected for this package
+    value: ${{ steps.setup.outputs.selected_repository }}
+  selected_revision:
+    description: Commit SHA selected for this package
+    value: ${{ steps.setup.outputs.selected_revision }}
+
+runs:
+  using: composite
+  steps:
+    - name: Check out and install package
+      id: setup
+      shell: bash
+      env:
+        WORKAREA: ${{ inputs.workarea }}
+        REPOSITORY: ${{ inputs.repository }}
+        REVISION: ${{ inputs.revision }}
+        WORKFLOW_CHECKOUT: ${{ inputs.workflow_checkout }}
+        DESTINATION: ${{ inputs.destination }}
+        REPLACE_EXISTING: ${{ inputs.replace_existing }}
+        PYTHON_INSTALL: ${{ inputs.python_install }}
+        INSTALL_EXTRAS: ${{ inputs.install_extras }}
+      run: |
+        set -eo pipefail
+
+        valid_repository() {
+          [[ "$1" =~ ^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$ ]]
+        }
+
+        if [[ "$WORKFLOW_CHECKOUT" != "true" ]] && ! valid_repository "$REPOSITORY"; then
+          echo "Invalid package repository: $REPOSITORY" >&2
+          exit 1
+        fi
+        if [[ ! "$DESTINATION" =~ ^(pythoncode|sourcecode)/[A-Za-z0-9_.-]+$ ]]; then
+          echo "Package destination must be a fixed path under pythoncode or sourcecode" >&2
+          exit 1
+        fi
+        if [[ ! -d "$WORKAREA" ]]; then
+          echo "Workarea does not exist: $WORKAREA" >&2
+          exit 1
+        fi
+        if [[ "$REPLACE_EXISTING" != "true" && "$REPLACE_EXISTING" != "false" ]]; then
+          echo "replace_existing must be true or false" >&2
+          exit 1
+        fi
+
+        selected_repository="$REPOSITORY"
+        selected_revision="$REVISION"
+        if [[ "$WORKFLOW_CHECKOUT" == "true" ]]; then
+          selected_repository="$GITHUB_REPOSITORY"
+          selected_revision="$GITHUB_SHA"
+          workspace_sha="$(git -C "$GITHUB_WORKSPACE" rev-parse HEAD)"
+          if [[ "$workspace_sha" != "$GITHUB_SHA" ]]; then
+            echo "Workflow checkout is at $workspace_sha, expected $GITHUB_SHA" >&2
+            exit 1
+          fi
+        else
+          if [[ ! "$REVISION" =~ ^[0-9a-fA-F]{40,64}$ ]]; then
+            echo "Package revision must be an immutable commit SHA: $REVISION" >&2
+            exit 1
+          fi
+        fi
+
+        workarea_path="$(realpath -e "$WORKAREA")"
+        package_path="$workarea_path/$DESTINATION"
+        mkdir -p "$(dirname "$package_path")"
+        package_parent="$(realpath -e "$(dirname "$package_path")")"
+        case "$package_parent/" in
+          "$workarea_path/"*) ;;
+          *)
+            echo "Package destination resolves outside the workarea" >&2
+            exit 1
+            ;;
+        esac
+        package_path="$package_parent/$(basename "$package_path")"
+        if [[ -e "$package_path" || -L "$package_path" ]]; then
+          if [[ "$REPLACE_EXISTING" != "true" ]]; then
+            echo "Package destination already exists: $package_path" >&2
+            exit 1
+          fi
+          existing_path="$(realpath -m "$package_path")"
+          case "$existing_path" in
+            "$workarea_path/"*) ;;
+            *)
+              echo "Existing package path resolves outside the workarea" >&2
+              exit 1
+              ;;
+          esac
+          rm -rf -- "$package_path"
+        fi
+        if [[ "$WORKFLOW_CHECKOUT" == "true" ]]; then
+          git clone --quiet --no-hardlinks --no-checkout "$GITHUB_WORKSPACE" "$package_path"
+          git -C "$package_path" remote set-url origin "https://github.com/$GITHUB_REPOSITORY.git"
+        else
+          git clone --no-checkout "https://github.com/$selected_repository.git" "$package_path"
+        fi
+        git -C "$package_path" checkout --detach "$selected_revision"
+
+        checkout_sha="$(git -C "$package_path" rev-parse HEAD)"
+        if [[ "${checkout_sha,,}" != "${selected_revision,,}" ]]; then
+          echo "Checked out $checkout_sha, expected $selected_revision" >&2
+          exit 1
+        fi
+        source "$WORKAREA/env.sh"
+        if [[ "$PYTHON_INSTALL" == "true" ]]; then
+          install_target="$package_path"
+          if [[ -n "$INSTALL_EXTRAS" ]]; then
+            install_target="${package_path}[${INSTALL_EXTRAS}]"
+          fi
+          python -m pip install "$install_target"
+        fi
+
+        echo "checkout_sha=$checkout_sha" >> "$GITHUB_OUTPUT"
+        echo "selected_repository=$selected_repository" >> "$GITHUB_OUTPUT"
+        echo "selected_revision=$selected_revision" >> "$GITHUB_OUTPUT"
