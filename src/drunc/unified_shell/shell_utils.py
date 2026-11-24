@@ -176,12 +176,13 @@ def generate_fsm_sequence_command(
     sequence_options: dict[str, SequenceOptionLike] = {}
     command_group = cast(click.Group, ctx.command)
 
-    command_ids: list[str] = [command.id for command in sequence.sequence]
+    command_ids: list[str] = [command.cmd for command in sequence.sequence]
 
     # Build the command string for help
     sequence_str: str = ""
     middle_text: str = "[optionally], then "
 
+    # MaR we need this additions to be based on configuration flags and not on the name
     # Special handling for start_run and shutdown sequences
     if sequence.id == "start_run":
         command_ids = ["boot"] + command_ids
