@@ -583,7 +583,7 @@ class Controller(ControllerServicer):
 
         def safe_call(child: ChildNode, target: str) -> T:
             """Wrapper for each child operation which handles exceptions and failure responses.
-            
+
             It handles three outcomes:
             - success
             - expected failure (grpc.RpcError or DruncException) = Return a response containing
@@ -591,18 +591,19 @@ class Controller(ControllerServicer):
             - unexpected failures = Log the traceback and attach error details to response
             """
             try:
-                return child_callable(child, target) # preserve the child's response
+                return child_callable(child, target)  # preserve the child's response
             except Exception as error:
-
                 # Unexpected failures
                 if not isinstance(error, (grpc.RpcError, DruncException)):
-                    if failure_response is None: 
+                    if failure_response is None:
                         raise
 
                     log = get_logger("controller.core.propagate_concurrently")
                     log.exception(
-                            "Unexpected failure contacting child '%s': %s", child.name, error
-                        )
+                        "Unexpected failure contacting child '%s': %s",
+                        child.name,
+                        error,
+                    )
                     message = (
                         f"Unexpected failure contacting child '{child.name}'. "
                         "Check controller logs"
@@ -616,29 +617,32 @@ class Controller(ControllerServicer):
                     response = failure_response(child)
                     response.flag = ResponseFlag.UNHANDLED_EXCEPTION_THROWN
                     response.error.CopyFrom(
-                        ResponseError(message=message, details=[pack_to_any(error_info)])
+                        ResponseError(
+                            message=message, details=[pack_to_any(error_info)]
+                        )
                     )
                     return response
 
                 # reraise ServerTimeout only if no failure response is provided
                 # if raised by default, then if one child is in timeout we lose sibling's responses
                 if isinstance(error, ServerTimeout) and failure_response is None:
-                    raise # should this propagate the server timeout as is or return a normal response?
+                    raise  # should this propagate the server timeout as is or return a normal response?
                 rpc_error: BaseException | None = error
 
-                # Expected failures    
+                # Expected failures
                 if isinstance(error, ServerUnreachable):
                     # ServerUnreachable may wrap the original gRPC error
                     while rpc_error is not None and not isinstance(
                         rpc_error, grpc.RpcError
                     ):
-                        rpc_error = rpc_error.__cause__ # extract its status and structured details
+                        rpc_error = (
+                            rpc_error.__cause__
+                        )  # extract its status and structured details
 
                 if isinstance(rpc_error, grpc.RpcError):
                     rich = extract_grpc_rich_error(rpc_error)
                     child_details = [
-                        detail for detail in rich.details
-                        if isinstance(detail, Message)
+                        detail for detail in rich.details if isinstance(detail, Message)
                     ]
                     child_code = rich.code
                     child_message = rich.message
@@ -693,9 +697,7 @@ class Controller(ControllerServicer):
         with ThreadPoolExecutor() as executor:
             return list(
                 executor.map(
-                    lambda child_target: safe_call(
-                        child_target[0], child_target[1]
-                    ),
+                    lambda child_target: safe_call(child_target[0], child_target[1]),
                     selected_child_list,
                 )
             )
@@ -790,9 +792,11 @@ class Controller(ControllerServicer):
                 request.execute_on_all_subsequent_children_in_path,
                 include_excluded_nodes=True,
             )
-            connected_indices, disconnected_indices = self._partition_connected_children(
-                child_list,
-                operation_name="status",
+            connected_indices, disconnected_indices = (
+                self._partition_connected_children(
+                    child_list,
+                    operation_name="status",
+                )
             )
             child_responses = self.propagate_concurrently(
                 lambda child, target: child.status(
@@ -884,7 +888,7 @@ class Controller(ControllerServicer):
             indices=connected_indices,
             failure_response=lambda child: DescribeResponse(name=child.name),
         )
-        
+
         child_responses.extend(
             [
                 DescribeResponse(
@@ -1009,7 +1013,9 @@ class Controller(ControllerServicer):
             # Extract command information.
             command = request.command
 
-            fsm_cmd_log = f"FSM command run: {command_name} for target {request.target} "
+            fsm_cmd_log = (
+                f"FSM command run: {command_name} for target {request.target} "
+            )
             if command_name == "start" and (
                 cmd := self.stateful_node.decode_fsm_arguments(command)
             ):
@@ -1022,9 +1028,11 @@ class Controller(ControllerServicer):
                 request.target,
                 request.execute_on_all_subsequent_children_in_path,
             )
-            connected_indices, disconnected_indices = self._partition_connected_children(
-                child_list,
-                operation_name=f"execute_fsm_command:{command_name}",
+            connected_indices, disconnected_indices = (
+                self._partition_connected_children(
+                    child_list,
+                    operation_name=f"execute_fsm_command:{command_name}",
+                )
             )
             for i in disconnected_indices:
                 response.children.append(
@@ -1061,7 +1069,9 @@ class Controller(ControllerServicer):
 
             # Check if node is excluded.
             if not self.stateful_node.node_is_included():
-                self.log.error(f"Command '{command_name}' not executed: node is excluded.")
+                self.log.error(
+                    f"Command '{command_name}' not executed: node is excluded."
+                )
                 response.fsm_flag = FSMResponseFlag.FSM_NOT_EXECUTED_EXCLUDED
                 return response
 
@@ -1102,7 +1112,9 @@ class Controller(ControllerServicer):
                                 "disable_data_storage", False
                             ),
                             trigger_rate=self.runinfo.get("trigger_rate", 0.0),
-                            run_time_at_start=int(self.runinfo.get("run_time_at_start", 0)),
+                            run_time_at_start=int(
+                                self.runinfo.get("run_time_at_start", 0)
+                            ),
                             run_time_since_start=0,
                             run_config_file=self.configuration.oks_path,
                             run_config_name=self.configuration.oks_key.session,
@@ -1145,13 +1157,14 @@ class Controller(ControllerServicer):
                             and detail.domain == "drunc"
                             and (
                                 detail.reason == "ServerTimeout"
-                                or detail.metadata.get("child_code") == "DEADLINE_EXCEEDED"
+                                or detail.metadata.get("child_code")
+                                == "DEADLINE_EXCEEDED"
                             )
                         ):
                             timeout_children.append(child_response.name)
                             break
 
-                # if any children is in timeout then place the parent in error           
+                # if any children is in timeout then place the parent in error
                 if timeout_children:
                     response.fsm_flag = FSMResponseFlag.FSM_FAILED
                     self.stateful_node.to_error()

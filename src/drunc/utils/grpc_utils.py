@@ -113,7 +113,6 @@ class ServerUnreachable(DruncException):
 
 
 class ServerTimeout(DruncException):
-
     grpc_error_code = code_pb2.DEADLINE_EXCEEDED
 
     """Exception raised when the gRPC server times out."""
@@ -374,7 +373,7 @@ def extract_grpc_rich_error(grpc_error: grpc.RpcError) -> GrpcErrorDetails:
     """
     code = grpc_error.code().name if grpc_error.code() else "UNKNOWN"
     message = grpc_error.details() or "No message"
-    
+
     try:
         status = rpc_status.from_call(cast(grpc.Call, grpc_error))
     except NotImplementedError:
@@ -457,7 +456,6 @@ class RichErrorServerInterceptor(grpc.ServerInterceptor):
         Intercept gRPC service calls to handle exceptions and convert them
         into rich error statuses.
         """
-
         handler = continuation(handler_call_details)
         if handler is None:
             return None
@@ -476,9 +474,7 @@ class RichErrorServerInterceptor(grpc.ServerInterceptor):
             except grpc.RpcError:
                 raise
             except Exception as error:
-                trace_logger = get_logger(
-                    "grpc.unexpected_errors",
-                    rich_handler=False)
+                trace_logger = get_logger("grpc.unexpected_errors", rich_handler=False)
                 trace_logger.error(
                     "Unexpected exception in gRPC handler:\n%s",
                     traceback.format_exc(),

@@ -4,10 +4,11 @@ from google.rpc import code_pb2, error_details_pb2
 
 class DruncException(Exception):
     """Base class for all Drunc exceptions."""
+
     def __init__(
         self,
         message: str | None = "An error occurred in Drunc.",
-        grpc_error_code: int | None = None, # the gRPC status API expects an INT
+        grpc_error_code: int | None = None,
         details: str | None = None,
         reason: str | None = None,
         domain: str | None = None,
@@ -118,20 +119,17 @@ class DruncNotImplementedException(DruncException):
 
 
 class ChildCommandException(DruncException):
-    
+    """Indicates an exception occurred on a child node."""
+
     def __init__(
         self,
         child_name: str,
         child_details: list[Message],
-        child_code: str, # str is useful for display or metadata purposes
+        child_code: str,
         child_message: str,
         **kwargs,
     ) -> None:
-        self.child_name = child_name
-        self.child_code = child_code
-        self.child_message = child_message
         self._child_details = child_details
-
         super().__init__(
             message=f"Child '{child_name}' failed [{child_code}]: {child_message}",
             child_name=child_name,

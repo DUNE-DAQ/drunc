@@ -16,6 +16,7 @@ from drunc.utils.grpc_utils import GrpcErrorDetails, ServerTimeout
 class FakeRpcError(grpc.RpcError):
     pass
 
+
 @pytest.fixture
 def controller():
     instance = Controller.__new__(Controller)
@@ -28,9 +29,7 @@ def controller():
     return instance
 
 
-def test_propagation_degrades_rpc_error_and_keeps_sibling(
-    controller, monkeypatch
-):
+def test_propagation_degrades_rpc_error_and_keeps_sibling(controller, monkeypatch):
     child_detail = error_details_pb2.ErrorInfo(
         reason="REMOTE_CHILD_FAILURE",
         domain="test",
@@ -74,7 +73,10 @@ def test_propagation_degrades_rpc_error_and_keeps_sibling(
     )
     # Should return 2 responses, one for each child
     assert len(responses) == 2
-    assert [response.name for response in responses] == ["C_with_failure", "C_no_failure"]
+    assert [response.name for response in responses] == [
+        "C_with_failure",
+        "C_no_failure",
+    ]
 
     # The first response is that of thechild that failed
     assert responses[0].flag == ResponseFlag.DRUNC_EXCEPTION_THROWN
@@ -91,10 +93,7 @@ def test_propagation_degrades_rpc_error_and_keeps_sibling(
         if packed.Unpack(detail):
             unpacked_details.append(detail)
 
-    assert any(
-        detail.reason == "REMOTE_CHILD_FAILURE"
-        for detail in unpacked_details
-    )
+    assert any(detail.reason == "REMOTE_CHILD_FAILURE" for detail in unpacked_details)
 
 
 def test_propagation_degrades_local_drunc_exception(controller):
@@ -119,6 +118,7 @@ def test_propagation_degrades_local_drunc_exception(controller):
 
 def test_propagation_does_not_degrade_timeout():
     """Test that propagation does not degrade ServerTimeout exceptions."""
+
     def call_child(_child, _target):
         raise ServerTimeout("timed out")
 
@@ -171,7 +171,7 @@ def test_propagation_without_degrade_callback_raises_child_exception(
     with pytest.raises(ChildCommandException) as exc_info:
         Controller.propagate_concurrently(
             call_child,
-            [(child, "")], # do not provide a degrade_response callback
+            [(child, "")],  # do not provide a degrade_response callback
         )
 
     failure = exc_info.value
@@ -212,9 +212,8 @@ def test_nested_rpc_error_preserves_grandchild_details(controller, monkeypatch):
                 FakeRpcError("grandchild failed")
             ),
             [(SimpleNamespace(name="grandchild"), "")],
-            degrade_response=lambda grandchild, failure: controller._degrade_fsm_response(
-                grandchild, failure, "start"
-            ),
+            degrade_response=lambda grandchild,
+            failure: controller._degrade_fsm_response(grandchild, failure, "start"),
         )
 
         middle_child = success("middle")
