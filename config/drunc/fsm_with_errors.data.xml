@@ -137,21 +137,18 @@
  <attr name="source" type="string" val="initial"/>
  <attr name="dest" type="string" val="configured"/>
  <attr name="cmd" type="string" val="conf"/>
- <attr name="reload_configuration" type="bool" val="0"/>
 </obj>
 
 <obj class="FSMtransition" id="conf_2">
  <attr name="source" type="string" val="initial"/>
  <attr name="dest" type="string" val="configured"/>
  <attr name="cmd" type="string" val="conf"/>
- <attr name="reload_configuration" type="bool" val="0"/>
 </obj>
 
 <obj class="FSMtransition" id="start">
  <attr name="source" type="string" val="configured"/>
  <attr name="dest" type="string" val="ready"/>
  <attr name="cmd" type="string" val="start"/>
- <attr name="reload_configuration" type="bool" val="0"/>
 </obj>
 
 </oks-data>
