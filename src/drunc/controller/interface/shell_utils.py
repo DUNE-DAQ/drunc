@@ -58,6 +58,18 @@ from drunc.utils.utils import format_name_for_cli, get_logger, get_shared_rich_c
 log = get_logger("controller.iface.shell_utils")
 is_interactive = sys.stdout.isatty() and os.environ.get("TERM") != "dumb"
 
+# Define the mapping of gRPC argument types to their corresponding protobuf message
+# types for default value unpacking. The ProtobufScalarMsgType is a type alias for
+# the union of the protobuf message types used for scalar values, and is used by
+# mypy to check the types of the unpacked default values. The msg_map is the
+# dictionary that maps the gRPC argument types to their corresponding protobuf
+# message types, which are later handed off to click to define the click command
+# options.
+ProtobufScalarMsgType: TypeAlias = (
+    type[string_msg] | type[int_msg] | type[float_msg] | type[bool_msg]
+)
+ClickValueType: TypeAlias = type[str] | type[int] | type[float] | type[bool]
+
 
 @dataclass(slots=True)
 class StatusDescriptionPair:
@@ -524,7 +536,7 @@ def controller_cleanup_wrapper(
 
 def controller_setup(
     ctx: ControllerContext | UnifiedShellContext, controller_address: str
-) -> Description:
+) -> Description | None:
     log = logging.getLogger("controller.shell_utils")
     if not hasattr(ctx, "took_control"):
         raise DruncSetupException(
@@ -594,8 +606,8 @@ def controller_setup(
 
     if state == "initialising":
         log.error("Controller did not initialise in time")
-        raise DruncSetupException("Controller did not initialise in time")
-    
+        return
+
     log.debug(f"Taking control of the controller as {ctx.get_token()}")
     try:
         ret = ctx.get_controller_driver().take_control()
@@ -642,7 +654,9 @@ class DuplicateArgument(ArgumentException):
 
 
 class InvalidArgumentType(ArgumentException):
-    def __init__(self, argument_name: object, value: object, expected_type: object) -> None:
+    def __init__(
+        self, argument_name: object, value: object, expected_type: object
+    ) -> None:
         message = f'Argument: "{argument_name}" ({value}) does not have the expected type {expected_type}'
         super(InvalidArgumentType, self).__init__(message)
 
@@ -745,7 +759,7 @@ def validate_and_format_fsm_arguments(
 
     # Iterate over the command's argument descriptions, validate the passed arguments,
     # and format them to be sent to the controller
-    for argument_desc in command_arguments:  #  type: Argument
+    for argument_desc in command_arguments:
         aname: str = argument_desc.name
         atype_name: str = Argument.Type.Name(argument_desc.type)
 
@@ -872,10 +886,10 @@ def run_one_fsm_command(
     else:
         command_arguments = []
 
+    timeout = 60
+
     try:
-        formated_args = validate_and_format_fsm_arguments(
-            kwargs, command_arguments
-        )
+        formated_args = validate_and_format_fsm_arguments(kwargs, command_arguments)
         data = FSMCommand(
             command_name=transition_name,
             arguments=formated_args,
@@ -893,11 +907,13 @@ def run_one_fsm_command(
                 f"The following nodes could not be reached and will not execute '{transition_name}': {not_ready}. "
                 f"If this is expected, consider excluding them with the 'exclude' command before retrying."
             )
-            if isinstance(obj, UnifiedShellContext) and obj.running_mode in [UnifiedShellMode.BATCH, UnifiedShellMode.SEMIBATCH]:
+            if isinstance(obj, UnifiedShellContext) and obj.running_mode in [
+                UnifiedShellMode.BATCH,
+                UnifiedShellMode.SEMIBATCH,
+            ]:
                 sys.exit(1)
             return
 
-        timeout = 60
         time_start = time.time()
         result = None
 
@@ -1053,7 +1069,6 @@ def generate_fsm_command(
     )(cmd)
 
     # Define the mapping of gRPC argument types to click types
-    ClickValueType: TypeAlias = type[str] | type[int] | type[float] | type[bool]
     type_map: dict[int, ClickValueType] = {
         Argument.Type.STRING: str,
         Argument.Type.INT: int,
@@ -1061,16 +1076,6 @@ def generate_fsm_command(
         Argument.Type.BOOL: bool,
     }
 
-    # Define the mapping of gRPC argument types to their corresponding protobuf message
-    # types for default value unpacking. The ProtobufScalarMsgType is a type alias for
-    # the union of the protobuf message types used for scalar values, and is used by
-    # mypy to check the types of the unpacked default values. The msg_map is the
-    # dictionary that maps the gRPC argument types to their corresponding protobuf
-    # message types, which are later handed off to click to define the click command
-    # options.
-    ProtobufScalarMsgType: TypeAlias = (
-        type[string_msg] | type[int_msg] | type[float_msg] | type[bool_msg]
-    )
     msg_map: dict[ClickValueType, ProtobufScalarMsgType] = {
         str: string_msg,
         int: int_msg,
@@ -1080,7 +1085,7 @@ def generate_fsm_command(
 
     # Iterate over the Arguments of the Transitions, and add them as click options to
     # the click command
-    for argument in transition.arguments:  # type: Argument
+    for argument in transition.arguments:
         # Map the gRPC argument type to a click type, raise an exception if the type is
         # unhandled
         atype = type_map.get(argument.type)
