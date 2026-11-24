@@ -182,11 +182,10 @@ def generate_fsm_sequence_command(
     sequence_str: str = ""
     middle_text: str = "[optionally], then "
 
-    # MaR we need this additions to be based on configuration flags and not on the name
     # Special handling for start_run and shutdown sequences
-    if sequence.id == "start_run":
+    if sequence.add_initial_boot:
         command_ids = ["boot"] + command_ids
-    elif sequence.id == "shutdown":
+    if sequence.add_final_terminate:
         command_ids = command_ids + ["terminate"]
 
     # Parse the sequence commands, construct the command string, and gather parameters
