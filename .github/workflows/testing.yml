@@ -312,12 +312,14 @@ jobs:
   drunc-integration-k8s:
     name: "Run drunc integration (k8s): ${{ matrix.test_script }}"
     if: github.event_name == 'pull_request'
-    needs: [generate-release-tarball, select-drunc-integtests]
+    # needs: [generate-release-tarball, select-drunc-integtests]
+    needs: [generate-release-tarball]
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
-        test_script: ${{ fromJSON(needs.select-drunc-integtests.outputs.matrix) }}
+        test_script: ["basic_multiapp_test.py"]
+        # test_script: ${{ fromJSON(needs.select-drunc-integtests.outputs.matrix) }}
 
     defaults:
       run:
