@@ -469,7 +469,7 @@ class RichErrorServerInterceptor(grpc.ServerInterceptor):
                     context, int(e.grpc_error_code), str(e), e.rich_details
                 )
             except Exception as error:
-                # Don't overwrite an existing non-OK status
+                # Don't replace an existing non-OK status
                 code = context.code()
                 if code is not None and code != grpc.StatusCode.OK:
                     raise
