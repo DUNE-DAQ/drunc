@@ -3,13 +3,11 @@
 import abc
 import getpass
 from collections.abc import MutableMapping
-from time import sleep
+from typing import Any
 
 import click
 from druncschema.token_pb2 import Token
-from rich.console import Console, Group
-from rich.measure import Measurement
-from rich.table import Table
+from rich.console import Console
 
 from drunc.controller.controller_driver import ControllerDriver
 from drunc.exceptions import DruncShellException
@@ -40,9 +38,8 @@ def create_dummy_token_from_uname() -> Token:
 class ShellContext:
     """Base class for shell contexts."""
 
-    shell_id: str | None = (
-        None  # used for logging if its a PM shell or Unified shell etc
-    )
+    # used for logging if its a PM shell or Unified shell etc
+    shell_id: str | None = None
 
     def get_shell_id(self) -> str | None:
         """
@@ -62,7 +59,7 @@ class ShellContext:
         """
         return self.shell_id
 
-    def __init__(self, *args: object, **kwargs: object) -> None:
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
         """Initialize the shell context.
 
         Args:
@@ -70,6 +67,7 @@ class ShellContext:
             **kwargs: Additional keyword arguments.
         """
         log = get_logger("utils.ShellContext")
+        self.session_name: str | None = None
         self.dynamic_commands: set[str] = set()
         try:
             self.reset(*args, **kwargs)
@@ -85,7 +83,8 @@ class ShellContext:
             **kwargs: Additional keyword arguments.
         """
         self.address = resolve_localhost_to_hostname(address)
-        self._console = Console()
+        self.console = Console()
+        self._console = self.console
         self._token = create_dummy_token_from_uname()
         self._drivers: MutableMapping[str, object] = self.create_drivers()
 
@@ -142,7 +141,7 @@ class ShellContext:
             log.exception(
                 "Controller-specific commands cannot be sent until the session is booted"
             )
-            log.debug(f"Drivers available are {self._drivers.keys()}")
+            log.critical(f"Drivers available are {self._drivers.keys()}")
             raise SystemExit(
                 1
             )  # used to avoid having to catch multiple Attribute errors when this function gets called
@@ -226,7 +225,7 @@ class ShellContext:
             *args: Positional arguments to pass to the console.
             **kwargs: Keyword arguments to pass to the console.
         """
-        self._console.print(*args, **kwargs)  # type: ignore[arg-type]
+        self.console.print(*args, **kwargs)  # type: ignore[arg-type]
 
     def rule(self, *args: object, **kwargs: object) -> None:
         """Print a rule to the console.
@@ -235,7 +234,7 @@ class ShellContext:
             *args: Positional arguments to pass to the console.
             **kwargs: Keyword arguments to pass to the console.
         """
-        self._console.rule(*args, **kwargs)  # type: ignore[arg-type]
+        self.console.rule(*args, **kwargs)  # type: ignore[arg-type]
 
     def print_status_summary(self) -> None:
         """Print a summary of the FSM status and available transitions."""
@@ -261,77 +260,10 @@ class ShellContext:
             )
 
 
-def format_table_width(
-    ctx_or_console: ShellContext | Console,
-    table: Table | Group,
-    fit: bool,
-) -> Table | Group:
-    """Configure a table or group of tables for single-line row formatting.
-
-    Args:
-        ctx_or_console: Shell context or Rich Console instance.
-        table: Table or Group of tables to format.
-        fit: If True, constrains the table to the console width (using ellipsis truncation
-            to keep single lines). If False, expands the table to its full unconstrained
-            content width without truncating.
-
-    Returns:
-        The formatted table or group.
-    """
-    # Duck-type Console extraction
-    console = (
-        ctx_or_console._console
-        if hasattr(ctx_or_console, "_console")
-        else ctx_or_console
-    )
-
-    # Recursively format Group instances
-    if isinstance(table, Group):
-        for renderable in table.renderables:
-            if isinstance(renderable, (Table, Group)):
-                format_table_width(console, renderable, fit=fit)
-        return table
-
-    table.expand = False
-
-    # 1. Prevent cell line-splitting so each row is always strictly 1 visual line
-    for col in table.columns:
-        col.no_wrap = True
-
-    if fit:
-        # Constrain to the terminal window; columns will truncate with '…' instead of wrapping
-        table.width = console.width
-    else:
-        # Measure and set the true content width up to 10,000 characters
-        options = console.options.update(max_width=10000)
-        table.width = Measurement.get(console, options, table).maximum
-
-    return table
-
-
-def wait(log, sleep_time: int, progress_steps: int | None = None):
-    extra_info = "" if not progress_steps else f" with {progress_steps} steps printed"
-
-    log.info(
-        f"Command [green]wait[/green] running for {sleep_time} seconds{extra_info}."
-    )
-
-    if not progress_steps or progress_steps <= 0:
-        sleep(sleep_time)
-    else:
-        interval = sleep_time / max(progress_steps, 1)
-        elapsed = 0.0
-        while elapsed < sleep_time:
-            chunk = min(interval, sleep_time - elapsed)
-            sleep(chunk)
-            elapsed += chunk
-            log.info(f"Progress: {elapsed:g} / {sleep_time} seconds")
-
-    log.info(f"Command [green]wait[/green] ran for {sleep_time} seconds.")
-
-
-def log_pm_cmd(obj: ShellContext) -> None:
-    """Log a process-manager shell command with only explicitly provided arguments.
+def shell_cmd_message(
+    session_name: str | None = None, shell_id: str | None = None
+) -> str:
+    """Create a log message for a shell command with only explicitly provided arguments.
 
     The current Click command context is inspected and only parameters whose source is
     ``COMMANDLINE`` are included in the log message. This keeps defaulted values out
@@ -342,12 +274,14 @@ def log_pm_cmd(obj: ShellContext) -> None:
     shell
 
     Args:
-        obj (ShellContext): Active shell context used to send the log message.
+        session_name: optional name of the current session
+        shell_id: optional name of the shell (e.g. process manager, run control, ...)
     """
 
     ctx_cmd = click.get_current_context(silent=True)
     cmd_name = ctx_cmd.command.name if ctx_cmd and ctx_cmd.command else None
-    parms_dict: dict[str, str] = {}
+
+    params_dict: dict[str, str] = {}
     if ctx_cmd and ctx_cmd.command:
         for param in ctx_cmd.command.params:
             name = param.name
@@ -357,10 +291,19 @@ def log_pm_cmd(obj: ShellContext) -> None:
                 ctx_cmd.get_parameter_source(name)
                 == click.core.ParameterSource.COMMANDLINE
             ):
-                parms_dict[name] = f"{ctx_cmd.params[name]!r}"
+                params_dict[name] = f"{ctx_cmd.params[name]!r}"
 
-    args = f" with arguments {parms_dict}" if parms_dict else ""
-    session = f" for session {obj.session_name}" if hasattr(obj, "session_name") else ""
-    msg = f"{getpass.getuser()} sent {cmd_name}{args}{session} via {obj.get_shell_id()}"
-    pm_driver = obj.get_pm_driver()
-    pm_driver.send_log(msg)
+    msg = f"{getpass.getuser()} sent {cmd_name}"
+    if params_dict:
+        msg += f" with arguments {params_dict}"
+    if session_name is not None:
+        msg += f" for session {session_name}"
+    if shell_id is not None:
+        msg += f" via {shell_id}"
+
+    return msg
+
+
+def log_pm_cmd(obj: ShellContext) -> None:
+    msg = shell_cmd_message(session_name=obj.session_name, shell_id=obj.get_shell_id())
+    obj.get_pm_driver().send_log(msg)

@@ -1,12 +1,10 @@
-from drunc.run_control.interface.context import RunControlContext
 from drunc.run_control.interface.shell import rc_shell
 from drunc.utils.utils import get_logger, get_root_logger
 
 
 def main():
-    context = RunControlContext()
     try:
-        rc_shell(obj=context)
+        rc_shell()
     except Exception as e:
         get_root_logger("INFO")
         log = get_logger("process_manager", rich_handler=True)
