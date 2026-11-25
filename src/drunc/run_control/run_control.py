@@ -4,6 +4,8 @@ from collections.abc import MutableMapping
 from dataclasses import asdict, dataclass, fields
 from urllib.parse import ParseResult, urlparse
 
+from drunc.process_manager.process_manager_driver import ProcessManagerDriver
+
 import conffwk
 from druncschema.authoriser_pb2 import ActionType, SystemType
 from druncschema.common_pb2 import LoggerTarget, SendLogRequest, SendLogResponse
@@ -47,6 +49,7 @@ class SessionConfig:
 
 class RunControl(abc.ABC, RunControlServicer):
     rc_type = "run_control"
+    process_manager_driver: ProcessManagerDriver
 
     def __init__(self):
         # TODO: This needs to contain the configuration name
@@ -56,6 +59,8 @@ class RunControl(abc.ABC, RunControlServicer):
         self.session_config = SessionConfig()
         self.override_logs = True
         self.drivers: MutableMapping[str, object] = {}
+
+
 
         dach = DummyAuthoriserConfHandler.from_pyobject(
             data=None  # TODO Skeleton: CONFIGURATION NEEDS UPDATING HERE
@@ -259,7 +264,7 @@ class RunControl(abc.ABC, RunControlServicer):
             )
 
         try:
-            pm_driver = self.get_driver("process_manager")
+            pm_driver = self.process_manager_driver
         except ValueError:
             message = "Cannot boot: process manager is not connected"
             self.log.error(message)
@@ -381,11 +386,10 @@ class RunControl(abc.ABC, RunControlServicer):
 
         self.address_pm = address_raw
 
-        from drunc.process_manager.process_manager_driver import (
-            ProcessManagerDriver,
-        )
+        
 
-        self.drivers["process_manager"] = ProcessManagerDriver(
+        
+        self.process_manager_driver = ProcessManagerDriver(
             self.address_pm,
             request.token,
         )
@@ -393,10 +397,10 @@ class RunControl(abc.ABC, RunControlServicer):
         self.log.debug("made process manager driver")
 
         # check if describe works
-        pm_type = self.drivers["process_manager"].describe().type
+        pm_type = self.process_manager_driver.describe().type
         self.log.info(f"PM connected, type: {pm_type}")
 
-        self.drivers["process_manager"].send_log(
+        self.process_manager_driver.send_log(
             f"{getpass.getuser()} connected from run control (!!)"
         )
 
@@ -422,7 +426,7 @@ class RunControl(abc.ABC, RunControlServicer):
         request.session = self.session_config.session_name
 
         try:
-            pm_driver = self.get_driver("process_manager")
+            pm_driver = self.process_manager_driver
         except ValueError:
             message = "Cannot list processes: process manager is not connected"
             self.log.error(message)
@@ -454,7 +458,7 @@ class RunControl(abc.ABC, RunControlServicer):
 
         log_req.query.session = self.session_config.session_name
         try:
-            pm_driver = self.get_driver("process_manager")
+            pm_driver = self.process_manager_driver
         except ValueError:
             message = "Cannot list processes: process manager is not connected"
             self.log.error(message)
@@ -484,7 +488,7 @@ class RunControl(abc.ABC, RunControlServicer):
         )
 
         try:
-            pm_driver = self.get_driver("process_manager")
+            pm_driver = self.process_manager_driver
         except ValueError:
             message = "Cannot list processes: process manager is not connected"
             self.log.error(message)
@@ -498,8 +502,3 @@ class RunControl(abc.ABC, RunControlServicer):
 
         return result
 
-    def get_driver(self, driver_key):
-        if driver_key not in self.drivers:
-            self.log.error(f"{driver_key} is not yet initialised. Please do so!")
-            raise ValueError("bad key")
-        return self.drivers[driver_key]
