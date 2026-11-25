@@ -437,7 +437,8 @@ def abort_with_rich_details(
 class RichErrorServerInterceptor(grpc.ServerInterceptor):
     """
     A gRPC server interceptor that catches exceptions and converts them into
-    rich error statuses with structured error details.
+    rich error statuses with structured error details. A non-OK status already
+    set by a handler is left to gRPC.
     """
 
     def intercept_service(  # type: ignore[override]
@@ -467,9 +468,12 @@ class RichErrorServerInterceptor(grpc.ServerInterceptor):
                 abort_with_rich_details(
                     context, int(e.grpc_error_code), str(e), e.rich_details
                 )
-            except grpc.RpcError:
-                raise
             except Exception as error:
+                # Don't overwrite an existing non-OK status
+                code = context.code()
+                if code is not None and code != grpc.StatusCode.OK:
+                    raise
+
                 trace_logger = get_logger("grpc.unexpected_errors", rich_handler=False)
                 trace_logger.error(
                     "Unexpected exception in gRPC handler:\n%s",
