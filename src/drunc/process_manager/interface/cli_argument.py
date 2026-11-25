@@ -39,7 +39,7 @@ def add_query_options_no_session(
         function: A decorator function that adds query options to a click command.
     """
 
-    def wrapper(f1: FC) -> FC:
+    def wrapper(f1: FC, **kwargs: object) -> FC:
         f2 = click.option(
             "-n",
             "--name",
@@ -62,6 +62,7 @@ def add_query_options_no_session(
             multiple=True,
             help="Select the process of a particular UUIDs",
         )(f3)
+        kwargs.setdefault("session", None)
         return generate_process_query(f4, at_least_one, all_processes_by_default)
 
     return wrapper
