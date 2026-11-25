@@ -120,7 +120,6 @@ class gRPCChildNode(ChildNode):
             self.channel = grpc.insecure_channel(
                 self.uri, options=CONTROLLER_CLIENT_GRPC_CONFIG
             )
-            self.stub = ControllerStub(self.channel)
             self.log.info(f"Created new gRPC channel to {self.uri}")
             self.stub = ControllerStub(self.channel)
 
