@@ -1,5 +1,7 @@
 """A set of utility functions for drunc."""
 
+from __future__ import annotations
+
 import ctypes
 import ipaddress
 import logging
@@ -14,7 +16,7 @@ import time
 from contextlib import closing
 from datetime import datetime
 from enum import Enum
-from typing import Protocol, cast
+from typing import TYPE_CHECKING, cast
 from urllib.parse import ParseResult, urlparse
 
 from click import BadParameter, Context, Parameter
@@ -36,6 +38,9 @@ from rich.theme import Theme
 
 from drunc.connectivity_service.exceptions import ApplicationLookupUnsuccessful
 from drunc.exceptions import DruncException, DruncSetupException
+
+if TYPE_CHECKING:
+    from drunc.connectivity_service.client import ConnectivityServiceClient
 
 CONTEXT_SETTINGS = dict(help_option_names=["-h", "--help"])
 CONSOLE_THEMES = Theme({"info": "dim cyan", "warning": "magenta", "danger": "bold red"})
@@ -590,11 +595,6 @@ def http_delete(
     if not ignore_errors:
         r.raise_for_status()
 
-
-class _ConnectivityService(Protocol):
-    def resolve(self, name: str, message_type: str) -> list[dict[str, object]]: ...
-
-
 class ControlType(Enum):
     """Enumeration of control types for DUNE DAQ services."""
 
@@ -629,7 +629,7 @@ def get_control_type_and_uri_from_cli(cli_args: list[str]) -> tuple[ControlType,
 
 
 def get_control_type_and_uri_from_connectivity_service(
-    connectivity_service: _ConnectivityService,
+    connectivity_service: ConnectivityServiceClient,
     name: str,
     timeout: int = 10,  # seconds
     retry_wait: float = 0.1,  # seconds

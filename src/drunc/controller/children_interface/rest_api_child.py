@@ -1,14 +1,20 @@
+from __future__ import annotations
+
 import json
+import logging
 import multiprocessing
+import multiprocessing.queues
 import os
 import queue
 import socket
 import threading
 import time
+from collections.abc import Mapping, Sequence
 from json import JSONDecodeError
+from typing import ClassVar
 
 import requests
-import socks
+import socks  # type: ignore[import-untyped]
 from druncschema.common_pb2 import LoggerTarget, SendLogResponse
 from druncschema.controller_pb2 import (
     DescribeFSMResponse,
@@ -30,8 +36,9 @@ from druncschema.controller_pb2 import (
 from druncschema.description_pb2 import Description
 from druncschema.request_response_pb2 import ResponseFlag
 from flask import Flask, request
-from flask_restful import Api
+from flask_restful import Api  # type: ignore[import-untyped]
 
+from drunc.connectivity_service.client import ConnectivityServiceClient
 from drunc.connectivity_service.exceptions import ApplicationLookupUnsuccessful
 from drunc.controller.children_interface.child_node import ChildNode
 from drunc.controller.children_interface.client_side_state import ClientSideState
@@ -65,7 +72,7 @@ class CouldnotSendCommand(ChildError):
 class ResponseDispatcher(threading.Thread):
     STOP = "RESPONSE_QUEUE_STOP"
 
-    def __init__(self, listener):
+    def __init__(self, listener: type[ResponseListener]) -> None:
         threading.Thread.__init__(self)
         self.listener = listener
         self.log = get_logger("controller.child_iface.ResponseDispatcher")
@@ -79,6 +86,10 @@ class ResponseDispatcher(threading.Thread):
             if r == self.STOP:
                 self.log.debug("ResponseDispatcher STOP")
                 break
+            if not isinstance(r, dict) or not all(
+                isinstance(key, str) for key in r
+            ):
+                raise DruncException(f"Invalid response notification: {r}")
             self.listener.notify(r)
 
     def stop(self) -> None:
@@ -86,121 +97,7 @@ class ResponseDispatcher(threading.Thread):
         self.join()
 
     def __str__(self) -> str:
-        return f"'{self.name}@{self.uri}' (type {self.node_type})"
-
-
-class ResponseListener:
-    _instance = None
-    manager = None
-    import threading
-
-    _lock = threading.Lock()
-
-    def __init__(self):
-        raise DruncSetupException("Call get() instead")
-
-    @classmethod
-    def get(cls):
-        with cls._lock:
-            if cls._instance is None:
-                cls._instance = cls.__new__(cls)
-                cls.port = get_new_port()
-                cls.app = Flask("response-listener")
-                cls.api = Api(cls.app)
-                cls.queue = multiprocessing.Queue()
-                cls.handlers = {}
-
-                cls.dispatcher = ResponseDispatcher(cls)
-                cls.dispatcher.start()
-
-                def index():
-                    log = get_logger("controller.child_iface.ResponseListener")
-                    json = request.get_json(force=True)
-                    log.debug(f"Received {json}")
-                    # enqueue command reply
-                    cls.queue.put(json)
-                    log.debug(f"Queue size {cls.queue.qsize()}")
-                    log.debug(f"Queue pointer {cls.queue}")
-                    return "Response received"
-
-                def get():
-                    return "ready"
-
-                cls.app.add_url_rule("/response", "index", index, methods=["POST"])
-                cls.app.add_url_rule("/", "get", get, methods=["GET"])
-                cls.manager = FlaskManager(
-                    port=cls.port, app=cls.app, name="response-listener-flaskmanager"
-                )
-
-                cls.manager.start()
-                while not cls.manager.is_ready():
-                    time.sleep(0.1)
-
-        return cls._instance
-
-    @classmethod
-    def exists(cls):
-        return cls._instance is not None
-
-    @classmethod
-    def get_port(cls):
-        return cls.port
-
-    @classmethod
-    def __del__(cls):
-        cls.terminate()
-
-    @classmethod
-    def terminate(cls):
-        cls.queue.close()
-        cls.queue.join_thread()
-        if cls.manager:
-            cls.manager.stop()
-
-    @classmethod
-    def register(cls, app: str, handler):
-        """Register a new notification handler
-
-        :param      app:           The application
-        :type       app:           str
-        :param      handler:       The handler
-        :type       handler:       { type_description }
-
-        :rtype:     None
-
-        :raises     RuntimeError:  { exception_description }
-        """
-        if app in cls.handlers:
-            raise DruncSetupException(
-                f"Handler already registered with notification listerner for app {app}"
-            )
-
-        cls.handlers[app] = handler
-
-    @classmethod
-    def unregister(cls, app: str):
-        """De-register a notification handler
-
-        Args:
-            app (str): application name
-
-        """
-        if app not in cls.handlers:
-            raise DruncException(f"No handler registered for app {app}")
-        del cls.handlers[app]
-
-    @classmethod
-    def notify(cls, reply: dict):
-        if "appname" not in reply:
-            raise DruncException(f"No 'appname' field in reply {reply}")
-
-        app = reply["appname"]
-
-        if app not in cls.handlers:
-            cls.log.warning(f"Received notification for unregistered app '{app}'")
-            return
-
-        cls.handlers[app].notify(reply)
+        return "ResponseDispatcher"
 
 
 class AppCommander:
@@ -211,9 +108,9 @@ class AppCommander:
         app_port: int,
         response_host: str,
         response_port: int,
-        proxy_host: str = None,
-        proxy_port: int = None,
-    ):
+        proxy_host: str | None = None,
+        proxy_port: int | None = None,
+    ) -> None:
         self.app_host = app_host
         self.app_port = app_port
         self.response_host = response_host
@@ -225,26 +122,27 @@ class AppCommander:
         self.log = get_logger(f"controller.core.{self.app}-commander")
         self.app_url = f"http://{self.app_host}:{self.app_port}/command"
 
-        self.response_queue = queue.Queue()
-        self.sent_cmd = None
+        self.response_queue: queue.Queue[dict[str, object]] = queue.Queue()
+        self.sent_cmd: str | None = None
 
-    def notify(self, response):
+    def notify(self, response: dict[str, object]) -> None:
         self.response_queue.put(response)
 
-    def ping(self):
+    def ping(self) -> bool:
         self.log.debug(f"Pinging '{self.app}'")
         if self.proxy_host and self.proxy_port:
             self.log.debug(f"Proxy: '{self.proxy_host}:{self.proxy_port}'")
         self.log.debug(f"App: '{self.app_host}:{self.app_port}'")
 
+        s: socket.socket
         if not self.proxy_host and not self.proxy_port:
             self.log.debug("NO proxy setup")
             s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            s.settimeout(1)
         else:
             self.log.debug("Proxy setup")
-            s = socks.socksocket(socket.AF_INET, socket.SOCK_STREAM)
-            s.set_proxy(socks.SOCKS5, self.proxy_host, self.proxy_port)
+            proxy_socket = socks.socksocket(socket.AF_INET, socket.SOCK_STREAM)
+            proxy_socket.set_proxy(socks.SOCKS5, self.proxy_host, self.proxy_port)
+            s = proxy_socket
             s.settimeout(1)
         n_tries = 2
 
@@ -259,10 +157,15 @@ class AppCommander:
                 self.log.error(f"'{self.app}' does not ping, reason: '{e!s}'")
                 if i_try == n_tries - 1:
                     return False
+        return False
 
     def send_app_command(
-        self, cmd_id: str, module_data: dict, entry_state="ANY", exit_state="ANY"
-    ):
+        self,
+        cmd_id: str,
+        module_data: Mapping[str, object],
+        entry_state: str,
+        exit_state: str,
+    ) -> None:
         # here we go again...
         # module_data = {"modules": [{"data": cmd_data, "match": ""}]}
 
@@ -313,7 +216,7 @@ class AppCommander:
         self.log.debug(f"Ack to {self.app}: {ack.status_code}")
         self.sent_cmd = cmd_id
 
-    def check_response(self, timeout: int = 0) -> dict:
+    def check_response(self, timeout: int = 0) -> dict[str, object]:
         """Check if a response is present in the queue
 
         Args:
@@ -349,6 +252,124 @@ class AppCommander:
         return r
 
 
+class ResponseListener:
+    _instance: ClassVar[ResponseListener | None] = None
+    manager: ClassVar[FlaskManager | None] = None
+    app: ClassVar[Flask]
+    api: ClassVar[object]
+    port: ClassVar[int]
+    queue: ClassVar[multiprocessing.queues.Queue[object]]
+    handlers: ClassVar[dict[str, AppCommander]]
+    dispatcher: ClassVar[ResponseDispatcher]
+    log: ClassVar[logging.Logger]
+    _lock: ClassVar[threading.Lock] = threading.Lock()
+
+    def __init__(self) -> None:
+        raise DruncSetupException("Call get() instead")
+
+    @classmethod
+    def get(cls) -> ResponseListener:
+        with cls._lock:
+            if cls._instance is None:
+                cls._instance = cls.__new__(cls)
+                cls.port = get_new_port()
+                cls.app = Flask("response-listener")
+                cls.api = Api(cls.app)
+                cls.queue = multiprocessing.Queue()
+                cls.handlers = {}
+
+                cls.dispatcher = ResponseDispatcher(cls)
+                cls.dispatcher.start()
+
+                def index() -> str:
+                    log = get_logger("controller.child_iface.ResponseListener")
+                    json = request.get_json(force=True)
+                    log.debug(f"Received {json}")
+                    # enqueue command reply
+                    cls.queue.put(json)
+                    log.debug(f"Queue size {cls.queue.qsize()}")
+                    log.debug(f"Queue pointer {cls.queue}")
+                    return "Response received"
+
+                def get() -> str:
+                    return "ready"
+
+                cls.app.add_url_rule("/response", "index", index, methods=["POST"])
+                cls.app.add_url_rule("/", "get", get, methods=["GET"])
+                cls.manager = FlaskManager(
+                    port=cls.port, app=cls.app, name="response-listener-flaskmanager"
+                )
+                cls.manager.start()
+                while not cls.manager.is_ready():
+                    time.sleep(0.1)
+
+        return cls._instance
+
+    @classmethod
+    def exists(cls) -> bool:
+        return cls._instance is not None
+
+    @classmethod
+    def get_port(cls) -> int:
+        return cls.port
+
+    @classmethod
+    def __del__(cls) -> None:
+        cls.terminate()
+
+    @classmethod
+    def terminate(cls) -> None:
+        cls.queue.close()
+        cls.queue.join_thread()
+        if cls.manager:
+            cls.manager.stop()
+
+    @classmethod
+    def register(cls, app: str, handler: AppCommander) -> None:
+        """Register a new notification handler
+
+        :param      app:           The application
+        :type       app:           str
+        :param      handler:       The handler
+        :type       handler:       { type_description }
+
+        :rtype:     None
+
+        :raises     RuntimeError:  { exception_description }
+        """
+        if app in cls.handlers:
+            raise DruncSetupException(
+                f"Handler already registered with notification listerner for app {app}"
+            )
+
+        cls.handlers[app] = handler
+
+    @classmethod
+    def unregister(cls, app: str) -> None:
+        """De-register a notification handler
+
+        Args:
+            app (str): application name
+
+        """
+        if app not in cls.handlers:
+            raise DruncException(f"No handler registered for app {app}")
+        del cls.handlers[app]
+
+    @classmethod
+    def notify(cls, reply: dict[str, object]) -> None:
+        if "appname" not in reply:
+            raise DruncException(f"No 'appname' field in reply {reply}")
+
+        app = reply["appname"]
+
+        if app not in cls.handlers:
+            cls.log.warning(f"Received notification for unregistered app '{app}'")
+            return
+
+        cls.handlers[app].notify(reply)
+
+
 """
 This is a very simple FSM, because it doesn't exist on the server side (appfwk),
 and hence cannot be figured from there
@@ -358,20 +379,28 @@ and hence cannot be figured from there
 class RESTAPIChildNodeConfHandler(ConfHandler):
     """Handler for REST API child node configuration."""
 
+    id: str | None
+    exposes_service: Sequence[object]
+    runs_on: object | None
+    proxy: tuple[str | None, str | int | None]
+    _raw: object
+
     def _post_process_oks(self) -> None:
         raw = self._raw_data
         # Flatten attributes that are always accessed from outside
         self.id = getattr(raw, "id", None)
         self.exposes_service = getattr(raw, "exposes_service", [])
         self.runs_on = getattr(raw, "runs_on", None)
-        self.proxy = getattr(raw, "proxy", [None, None])
+        self.proxy = getattr(raw, "proxy", (None, None))
         # Pass through any other attributes callers may inspect dynamically
         self._raw = raw
 
-    def get_host_port(self):
+    def get_host_port(self) -> tuple[str, int]:
         for service in self.exposes_service:
-            if self.id + "_control" in service.id:
-                return self.runs_on.runs_on.id, service.port
+            if self.id is not None and self.id + "_control" in getattr(service, "id"):
+                host: str = getattr(getattr(self.runs_on, "runs_on"), "id")
+                port: int = getattr(service, "port")
+                return host, port
         raise DruncSetupException(
             f"REST API child node {self.id} does not expose a control service"
         )
@@ -384,7 +413,7 @@ class RESTAPIChildNode(ChildNode):
         configuration: RESTAPIChildNodeConfHandler,
         uri: str,
         fsm_configuration: FSMConfHandler,
-        connectivity_service=None,
+        connectivity_service: ConnectivityServiceClient | None = None,
     ):
         super().__init__(name, ControlType.REST_API)
         self._state = ClientSideState()
@@ -556,14 +585,23 @@ class RESTAPIChildNode(ChildNode):
             if detector_name := get_detector_name(self.configuration):
                 description.info = detector_name
             raw = self.configuration._raw
-            if hasattr(raw, "application_name"):  # Application nodes.
-                description.type = raw.application_name
-                description.name = raw.id
-            elif hasattr(raw, "controller") and hasattr(
-                raw.controller, "application_name"
-            ):  # Controller nodes.
-                description.type = raw.controller.application_name
-                description.name = raw.controller.id
+            application_name = getattr(raw, "application_name", None)
+            if isinstance(application_name, str):
+                application_id = getattr(raw, "id", None)
+                if isinstance(application_id, str):
+                    description.type = application_name
+                    description.name = application_id
+            else:
+                controller = getattr(raw, "controller", None)
+                controller_application_name = getattr(
+                    controller, "application_name", None
+                )
+                controller_id = getattr(controller, "id", None)
+                if isinstance(controller_application_name, str) and (isinstance(
+                    controller_id, str)
+                ):
+                    description.type = controller_application_name
+                    description.name = controller_id
 
         response.description.CopyFrom(description)
 
@@ -619,11 +657,15 @@ class RESTAPIChildNode(ChildNode):
             entry_state, transition
         )
 
-        if destination_state_result.destination_type == FSMDestinationType.VALID:
+        if (
+            destination_state_result.destination_type == FSMDestinationType.VALID
+            and destination_state_result.destination_state is not None
+        ):
             exit_state = destination_state_result.destination_state
         elif (
             destination_state_result.destination_type
             == FSMDestinationType.DESTINATION_IS_SOURCE
+            and destination_state_result.destination_state is not None
         ):
             self.log.debug(
                 f"Transition {transition} is a self-loop or has no destination,"
@@ -861,8 +903,8 @@ class RESTAPIChildNode(ChildNode):
         self,
         text: str,
         severity: str = "INFO",
+        logger: LoggerTarget.ValueType = LoggerTarget.MAIN,
         target: str = "",
-        logger: "LoggerTarget" = LoggerTarget.MAIN,
         execute_along_path: bool = False,
         execute_on_all_subsequent_children_in_path: bool = True,
     ) -> SendLogResponse:
