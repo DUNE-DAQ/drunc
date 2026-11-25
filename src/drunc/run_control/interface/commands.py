@@ -25,21 +25,6 @@ from drunc.utils.utils import format_table_width, get_logger, log_echo
 from drunc.utils.utils import wait as shell_wait
 
 
-def session_empty(f: FC) -> FC:
-    """
-    Add later
-    """
-
-    @click.pass_context
-    def wrapper(ctx: click.core.Context, *args: object, **kwargs: object) -> object:
-        """
-        Add later
-        """
-        kwargs["session"] = None
-        return ctx.invoke(f, *args, **kwargs)
-
-    return cast(FC, update_wrapper(wrapper, f))
-
 
 @click.command("wait")
 @click.argument("sleep_time", type=int)
@@ -158,7 +143,6 @@ def connect_to_pm(obj: RunControlContext, address: str):
 
 
 @click.command("ps")
-@session_empty  # injected at the run control server
 @add_query_options_no_session(at_least_one=False, all_processes_by_default=True)
 @ps_decorators
 @click.pass_obj
@@ -180,7 +164,6 @@ def ps(
 
 
 @click.command("logs")
-@session_empty  # injected at the run control server
 @add_query_options_no_session(at_least_one=False, all_processes_by_default=True)
 @logs_decorators
 @click.pass_obj

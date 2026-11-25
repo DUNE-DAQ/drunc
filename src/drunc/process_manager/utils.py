@@ -93,10 +93,10 @@ def generate_process_query(
     @click.pass_context
     def new_func(
         ctx: click.Context,
-        session: str | None,
         name: tuple[str, ...],
         user: str | None,
         uuid: tuple[str, ...],
+        session: str | None = None,
         **kwargs: object,
     ) -> object:
         crash = bool(kwargs.pop("crash", False))
