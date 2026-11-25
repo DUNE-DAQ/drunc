@@ -1,9 +1,6 @@
 import getpass
-from functools import update_wrapper
-from typing import cast
 
 import click
-from click.decorators import FC
 from druncschema.common_pb2 import LoggerTarget
 from druncschema.process_manager_pb2 import ProcessQuery
 from druncschema.request_response_pb2 import ResponseFlag
@@ -20,7 +17,6 @@ from drunc.run_control.interface.context import SHELL_ID, RunControlContext
 from drunc.utils.shell_utils import InterruptedCommand, shell_cmd_message
 from drunc.utils.utils import format_table_width, get_logger, log_echo
 from drunc.utils.utils import wait as shell_wait
-
 
 
 @click.command("wait")

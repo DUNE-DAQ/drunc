@@ -8,7 +8,6 @@ from drunc.controller.controller_driver import ControllerDriver
 from drunc.controller.interface.context import ControllerContext
 from drunc.controller.interface.shell_utils import controller_setup, render_status_table
 from drunc.unified_shell.context import UnifiedShellContext
-
 from drunc.utils.utils import format_table_width, get_logger, log_echo
 from drunc.utils.utils import wait as shell_wait
 

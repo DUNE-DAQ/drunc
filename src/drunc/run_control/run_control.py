@@ -4,8 +4,6 @@ from collections.abc import MutableMapping
 from dataclasses import asdict, dataclass, fields
 from urllib.parse import ParseResult, urlparse
 
-from drunc.process_manager.process_manager_driver import ProcessManagerDriver
-
 import conffwk
 from druncschema.authoriser_pb2 import ActionType, SystemType
 from druncschema.common_pb2 import LoggerTarget, SendLogRequest, SendLogResponse
@@ -35,6 +33,7 @@ from drunc.authoriser.configuration import DummyAuthoriserConfHandler
 from drunc.authoriser.decorators import authentified_and_authorised
 from drunc.authoriser.dummy_authoriser import DummyAuthoriser
 from drunc.exceptions import DruncSetupException
+from drunc.process_manager.process_manager_driver import ProcessManagerDriver
 from drunc.utils.shell_utils import InterruptedCommand
 from drunc.utils.utils import get_logger, log_echo, resolve_localhost_to_hostname
 
