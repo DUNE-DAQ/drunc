@@ -966,6 +966,20 @@ class Controller(ControllerServicer):
                 )
                 return response
 
+            failed_children = [
+                child.name
+                for child in response.children
+                if child.fsm_flag == FSMResponseFlag.FSM_FAILED
+            ]
+            if failed_children:
+                response.fsm_flag = FSMResponseFlag.FSM_FAILED
+                self.stateful_node.to_error()
+                self.log.error(
+                    f"FSM command '{command_name}' failed on: {', '.join(failed_children)}",
+                    extra=self.handlerconf.ERS,
+                )
+                return response
+
             # Finish propagating FSM transition to children.
             self.stateful_node.finish_propagating_transition_mark(transition)
 
