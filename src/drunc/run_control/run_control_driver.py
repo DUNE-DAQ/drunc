@@ -7,11 +7,17 @@ from druncschema.process_manager_pb2 import (
     ProcessInstanceList,
     ProcessQuery,
 )
-from druncschema.request_response_pb2 import Request, Response
+from druncschema.request_response_pb2 import Request
 from druncschema.run_control_pb2 import (
     ConnectToPMRequest,
+    ConnectToPMResponse,
     RCBootRequest,
+    RCBootResponse,
+    RCPrintConfigRequest,
+    RCSessionConfigResponse,
     SessionConfiguration,
+    ValidateRequest,
+    ValidateResponse,
 )
 from druncschema.run_control_pb2_grpc import RunControlStub
 from druncschema.token_pb2 import Token
@@ -95,12 +101,12 @@ class RunControlDriver:
         self,
         address: str,
         timeout: int | float = 60,
-    ):
+    ) -> ConnectToPMResponse:
         request = ConnectToPMRequest(
             token=copy_token(self.token),
             address=address,
         )
-        response: Response = self.stub.connect_to_pm(request, timeout=timeout)
+        response: ConnectToPMResponse = self.stub.connect_to_pm(request, timeout=timeout)
         return response
 
     def ps(
@@ -126,9 +132,9 @@ class RunControlDriver:
         response = self.stub.logs(log_req, timeout=timeout)
         return response
 
-    def validate(self, timeout: int | float = 60) -> Response:
+    def validate(self, timeout: int | float = 60) -> ValidateResponse:
         """Set the server's session configuration valid flag to true."""
-        request = Request(token=copy_token(self.token))
+        request = ValidateRequest(token=copy_token(self.token))
         return self.stub.validate(request, timeout=timeout)
 
     def boot(
@@ -138,7 +144,7 @@ class RunControlDriver:
         override_logs,
         sleep_between_app_boot,
         timeout: int | float = 60,
-    ) -> Response:
+    ) -> RCBootResponse:
         """boots.."""
 
         breq = RCBootRequest(
@@ -167,7 +173,7 @@ class RunControlDriver:
         configuration_id: str = "",
         session_name: str = "",
         timeout: int | float = 60,
-    ) -> Response:
+    ) -> RCSessionConfigResponse:
         request = SessionConfiguration(
             token=copy_token(self.token),
             configuration_file=configuration_file,
@@ -180,5 +186,5 @@ class RunControlDriver:
         self,
         timeout: int | float = 60,
     ) -> SessionConfiguration:
-        request = Request(token=copy_token(self.token))
+        request = RCPrintConfigRequest(token=copy_token(self.token))
         return self.stub.print_session_config(request, timeout=timeout)

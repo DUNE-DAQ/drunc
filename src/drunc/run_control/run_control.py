@@ -1,6 +1,6 @@
 import abc
 import getpass
-from collections.abc import Iterator, MutableMapping
+from collections.abc import MutableMapping
 from dataclasses import asdict, dataclass, fields
 from urllib.parse import ParseResult, urlparse
 
@@ -14,11 +14,17 @@ from druncschema.process_manager_pb2 import (
     ProcessInstanceList,
     ProcessQuery,
 )
-from druncschema.request_response_pb2 import Request, Response, ResponseFlag
+from druncschema.request_response_pb2 import Request, ResponseFlag
 from druncschema.run_control_pb2 import (
     ConnectToPMRequest,
+    ConnectToPMResponse,
     RCBootRequest,
+    RCBootResponse,
+    RCPrintConfigRequest,
+    RCSessionConfigResponse,
     SessionConfiguration,
+    ValidateRequest,
+    ValidateResponse,
 )
 from druncschema.run_control_pb2_grpc import RunControlServicer
 from grpc import ServicerContext, StatusCode
@@ -86,19 +92,19 @@ class RunControl(abc.ABC, RunControlServicer):
                 name="set_session_config",
                 data_type=["run_control_pb2.SessionConfiguration"],
                 help="Update non-empty session settings and reset the valid flag.",
-                return_type="request_response_pb2.Response",
+                return_type="run_control_pb2.RCSessionConfigResponse",
             ),
             CommandDescription(
                 name="print_session_config",
-                data_type=["request_response_pb2.Request"],
+                data_type=["run_control_pb2.RCPrintConfigRequest"],
                 help="Return the current session configuration and valid flag.",
                 return_type="run_control_pb2.SessionConfiguration",
             ),
             CommandDescription(
                 name="valid",
-                data_type=["request_response_pb2.Request"],
+                data_type=["run_control_pb2.ValidateRequest"],
                 help="Set the session configuration valid flag to true without validation.",
-                return_type="request_response_pb2.Response",
+                return_type="run_control_pb2.ValidateResponse",
             ),
         ]
 
@@ -106,7 +112,7 @@ class RunControl(abc.ABC, RunControlServicer):
         self,
         config: SessionConfiguration,
         context: ServicerContext,
-    ) -> Response:
+    ) -> RCSessionConfigResponse:
         self.session_config.valid = False
 
         for field in fields(self.session_config):
@@ -126,9 +132,9 @@ class RunControl(abc.ABC, RunControlServicer):
                     )
                 )(self.session_config.configuration_file)
 
-        return Response(
-            name=self.name,
+        return RCSessionConfigResponse(
             token=config.token,
+            name=self.name,
             flag=ResponseFlag.EXECUTED_SUCCESSFULLY,
         )
 
@@ -138,7 +144,7 @@ class RunControl(abc.ABC, RunControlServicer):
     )
     def print_session_config(
         self,
-        request: Request,
+        request: RCPrintConfigRequest,
         context: ServicerContext,
     ) -> SessionConfiguration:
         """Return the current session configuration."""
@@ -151,7 +157,9 @@ class RunControl(abc.ABC, RunControlServicer):
         action=ActionType.UPDATE,
         system=SystemType.RUN_CONTROL,
     )
-    def validate(self, request: Request, context: ServicerContext) -> Response:
+    def validate(
+        self, request: ValidateRequest, context: ServicerContext
+    ) -> ValidateResponse:
         """Set the session configuration valid flag to true."""
 
         self.session_config.valid = False
@@ -183,9 +191,9 @@ class RunControl(abc.ABC, RunControlServicer):
             context.abort(StatusCode.INVALID_ARGUMENT, message)
 
         self.session_config.valid = True
-        return Response(
-            name=self.name,
+        return ValidateResponse(
             token=request.token,
+            name=self.name,
             flag=ResponseFlag.EXECUTED_SUCCESSFULLY,
         )
 
@@ -237,7 +245,7 @@ class RunControl(abc.ABC, RunControlServicer):
     @authentified_and_authorised(action=ActionType.READ, system=SystemType.RUN_CONTROL)
     def boot(
         self, breq: RCBootRequest, context: ServicerContext
-    ) -> Iterator[ProcessInstanceList]:
+    ) -> RCBootResponse:
         # workflow:
         """
         1. add a 'valid' in the dataclass
@@ -265,11 +273,18 @@ class RunControl(abc.ABC, RunControlServicer):
         )
 
         if len(processes.values) > 0:
-            self.log.error(
-                f"Cannot boot: session {self.session_config.session_name} already has {len(processes.values)} processes running. "
-                "Please terminate the existing session first."
+            message = (
+                f"Cannot boot: session {self.session_config.session_name} already has "
+                f"{len(processes.values)} processes running. Please terminate the "
+                "existing session first."
             )
-            return
+            self.log.error(message)
+            return RCBootResponse(
+                token=breq.token,
+                name=self.name,
+                flag=ResponseFlag.FAILED,
+                message=message,
+            )
 
         try:
             results = pm_driver.boot(
@@ -283,8 +298,14 @@ class RunControl(abc.ABC, RunControlServicer):
             )
 
             if results is None:
-                self.log.error("Boot request did not return any results.")
-                return
+                message = "Boot request did not return any results."
+                self.log.error(message)
+                return RCBootResponse(
+                    token=breq.token,
+                    name=self.name,
+                    flag=ResponseFlag.FAILED,
+                    message=message,
+                )
             for result in results:
                 expected_booted_processes += 1
                 self.log.debug(
@@ -297,28 +318,42 @@ class RunControl(abc.ABC, RunControlServicer):
                 )
 
         except InterruptedCommand:
-            self.log.warning("Booting interrupted")
-            return
+            message = "Booting interrupted."
+            self.log.warning(message)
+            return RCBootResponse(
+                token=breq.token,
+                name=self.name,
+                flag=ResponseFlag.FAILED,
+                message=message,
+            )
         except DruncSetupException as e:
             self.log.error(e)
-            return
+            return RCBootResponse(
+                token=breq.token,
+                name=self.name,
+                flag=ResponseFlag.FAILED,
+                message=str(e),
+            )
 
         processes = pm_driver.ps(
             ProcessQuery(user=breq.user, session=self.session_config.session_name)
         )
         if not processes.values:
-            self.log.debug(
-                "No processes found after boot - stopping due to previous errors"
+            message = "No processes found after boot - stopping due to previous errors."
+            self.log.debug(message)
+            return RCBootResponse(
+                token=breq.token,
+                name=self.name,
+                flag=ResponseFlag.FAILED,
+                message=message,
             )
-            return
 
-        # TODO Skeleton: Will obviously need filling up as features pop in
-        response = Response(
-            name="unnamed",
+        return RCBootResponse(
+            token=breq.token,
+            name=self.name,
             flag=ResponseFlag.EXECUTED_SUCCESSFULLY,
-            token=None,
+            message="Boot completed successfully.",
         )
-        return response
 
         ## To be dealt with later!
         # controller_address = pm_driver.controller_address
@@ -336,7 +371,7 @@ class RunControl(abc.ABC, RunControlServicer):
     @authentified_and_authorised(action=ActionType.READ, system=SystemType.RUN_CONTROL)
     def connect_to_pm(
         self, request: ConnectToPMRequest, context: ServicerContext
-    ) -> Response:
+    ) -> ConnectToPMResponse:
         address_raw = request.address
         self.log.info("PM address received: %s", address_raw)
 
@@ -366,7 +401,7 @@ class RunControl(abc.ABC, RunControlServicer):
         )
 
         # TODO Skeleton: Will obviously need filling up as features pop in
-        response = Response(
+        response = ConnectToPMResponse(
             name="unnamed",
             flag=ResponseFlag.EXECUTED_SUCCESSFULLY,
             token=None,
