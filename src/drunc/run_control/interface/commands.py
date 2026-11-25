@@ -5,10 +5,7 @@ from typing import cast
 import click
 from click.decorators import FC
 from druncschema.common_pb2 import LoggerTarget
-from druncschema.process_manager_pb2 import (
-    LogRequest,
-    ProcessQuery,
-)
+from druncschema.process_manager_pb2 import ProcessQuery
 from druncschema.request_response_pb2 import ResponseFlag
 from rich.table import Table
 
@@ -176,13 +173,11 @@ def logs(
     obj.run_control_driver.send_log(shell_cmd_message(shell_id=SHELL_ID))
     log = get_logger("run_control.shell")
     log.info(f"Running logs with query {query}")
-
-    log_req = LogRequest(
-        how_far=how_far,
-        query=query,
+    
+    result = obj.run_control_driver.logs(
+        how_far = how_far,
+        query = query,
     )
-
-    result = obj.run_control_driver.logs(log_req)
     print_logs(obj, result, grep)
 
 

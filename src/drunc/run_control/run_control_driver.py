@@ -114,9 +114,14 @@ class RunControlDriver:
 
     def logs(
         self,
-        log_req: LogRequest,
+        how_far: int,
+        query: ProcessQuery,
         timeout: int | float = 60,
     ) -> LogLines | None:
+        log_req = LogRequest(
+            how_far=how_far,
+            query=query,
+        )
         log_req.token.CopyFrom(self.token)
         response = self.stub.logs(log_req, timeout=timeout)
         return response
