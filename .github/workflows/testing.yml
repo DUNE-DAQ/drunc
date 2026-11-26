@@ -95,7 +95,6 @@ jobs:
           report_paths: 'nightly/NFD_DEV*/pythoncode/drunc/junit/test-results.xml'
 
       - name: Prepare HTML coverage report
-        # if: ${{ !cancelled() && github.event_name == 'push' }}
         run: |
           report_dir=$(find nightly -type d -path '*/pythoncode/drunc/htmlcov' -print -quit)
           if [[ -z "$report_dir" || ! -f "$report_dir/index.html" ]]; then
