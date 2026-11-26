@@ -31,6 +31,7 @@ from grpc import ServicerContext, StatusCode
 from drunc.authoriser.configuration import DummyAuthoriserConfHandler
 from drunc.authoriser.decorators import authentified_and_authorised
 from drunc.authoriser.dummy_authoriser import DummyAuthoriser
+from drunc.controller.controller_driver import ControllerDriver
 from drunc.exceptions import DruncSetupException
 from drunc.process_manager.process_manager_driver import ProcessManagerDriver
 from drunc.utils.shell_utils import InterruptedCommand
@@ -52,10 +53,12 @@ class RunControl(abc.ABC, RunControlServicer):
         # TODO: This needs to contain the configuration name
         self.log = get_logger("run_control.CONFIGURATION_NAME_run_control")
         self.name = "run_control"  # TODO Skeleton: needs to update
-        self.address_pm = None
         self.session_config = SessionConfig()
         self.override_logs = True
+        self.process_manager_address: str | None = None
         self.process_manager_driver: ProcessManagerDriver | None = None
+        self.controller_address: str | None = None
+        self.controller_driver: ControllerDriver | None = None
 
         dach = DummyAuthoriserConfHandler.from_pyobject(
             data=None  # TODO Skeleton: CONFIGURATION NEEDS UPDATING HERE
@@ -239,7 +242,7 @@ class RunControl(abc.ABC, RunControlServicer):
 
     # Almost certianly not a read actiontype..
     @authentified_and_authorised(action=ActionType.READ, system=SystemType.RUN_CONTROL)
-    def boot(self, breq: RCBootRequest, context: ServicerContext) -> RCBootResponse:
+    def boot(self, request: RCBootRequest, context: ServicerContext) -> RCBootResponse:
         # workflow:
         """
         1. add a 'valid' in the dataclass
@@ -261,7 +264,7 @@ class RunControl(abc.ABC, RunControlServicer):
 
         # check if we can boot first by diong a ps
         processes = self.process_manager_driver.ps(
-            ProcessQuery(user=breq.user, session=self.session_config.session_name)
+            ProcessQuery(user=request.user, session=self.session_config.session_name)
         )
 
         if len(processes.values) > 0:
@@ -272,7 +275,7 @@ class RunControl(abc.ABC, RunControlServicer):
             )
             self.log.error(message)
             return RCBootResponse(
-                token=breq.token,
+                token=request.token,
                 name=self.name,
                 flag=ResponseFlag.FAILED,
                 message=message,
@@ -282,18 +285,18 @@ class RunControl(abc.ABC, RunControlServicer):
             results = self.process_manager_driver.boot(
                 conf_file=self.session_config.configuration_file,
                 conf_id=self.session_config.configuration_id,
-                user=breq.user,
+                user=request.user,
                 session_name=self.session_config.session_name,
-                log_level=breq.log_level,
-                override_logs=breq.override_logs,
-                sleep_between_app_boot=breq.sleep_between_app_boot,
+                log_level=request.log_level,
+                override_logs=request.override_logs,
+                sleep_between_app_boot=request.sleep_between_app_boot,
             )
 
             if results is None:
                 message = "Boot request did not return any results."
                 self.log.error(message)
                 return RCBootResponse(
-                    token=breq.token,
+                    token=request.token,
                     name=self.name,
                     flag=ResponseFlag.FAILED,
                     message=message,
@@ -313,7 +316,7 @@ class RunControl(abc.ABC, RunControlServicer):
             message = "Booting interrupted."
             self.log.warning(message)
             return RCBootResponse(
-                token=breq.token,
+                token=request.token,
                 name=self.name,
                 flag=ResponseFlag.FAILED,
                 message=message,
@@ -321,44 +324,47 @@ class RunControl(abc.ABC, RunControlServicer):
         except DruncSetupException as e:
             self.log.error(e)
             return RCBootResponse(
-                token=breq.token,
+                token=request.token,
                 name=self.name,
                 flag=ResponseFlag.FAILED,
                 message=str(e),
             )
 
         processes = self.process_manager_driver.ps(
-            ProcessQuery(user=breq.user, session=self.session_config.session_name)
+            ProcessQuery(user=request.user, session=self.session_config.session_name)
         )
         if not processes.values:
             message = "No processes found after boot - stopping due to previous errors."
             self.log.debug(message)
             return RCBootResponse(
-                token=breq.token,
+                token=request.token,
                 name=self.name,
                 flag=ResponseFlag.FAILED,
                 message=message,
             )
 
+        self.controller_address = self.process_manager_driver.controller_address
+
+        if not self.controller_address:
+            self.log.error("Could not understand where the controller is!")
+            # TODO: add error handling here
+            return
+
+        self.log.debug(f"Controller endpoint is '{self.controller_address}'")
+        self.log.debug("Connecting the unified_shell to the controller endpoint")
+
+        self.controller_driver = ControllerDriver(
+            self.controller_address, request.token
+        )
+
+        # TODO: add error handling here
+
         return RCBootResponse(
-            token=breq.token,
+            token=request.token,
             name=self.name,
             flag=ResponseFlag.EXECUTED_SUCCESSFULLY,
             message="Boot completed successfully.",
         )
-
-        ## To be dealt with later!
-        # controller_address = self.process_manager_driver.controller_address
-        # if controller_address:
-        #     self.log.debug(f"Controller endpoint is '{controller_address}'")
-        #     self.log.debug("Connecting the unified_shell to the controller endpoint")
-        #     obj.set_controller_driver(controller_address)
-        #     controller_setup(obj, controller_address)
-        # else:
-        #     log.error("Could not understand where the controller is!")
-        #     return
-
-        ## Add a bunch of error handling herer
 
     @authentified_and_authorised(action=ActionType.READ, system=SystemType.RUN_CONTROL)
     def connect_to_pm(
@@ -367,13 +373,15 @@ class RunControl(abc.ABC, RunControlServicer):
         self.log.info("PM address received: %s", request.address)
 
         address_raw: ParseResult = urlparse(request.address)
-        self.address_pm = (
+        self.process_manager_address = (
             str(address_raw.netloc) if address_raw.netloc is not None else ""
         )
-        self.address_pm = resolve_localhost_to_hostname(self.address_pm)
+        self.process_manager_address = resolve_localhost_to_hostname(
+            self.process_manager_address
+        )
 
         self.process_manager_driver = ProcessManagerDriver(
-            self.address_pm, request.token
+            self.process_manager_address, request.token
         )
 
         self.log.debug("made process manager driver")
@@ -465,7 +473,7 @@ class RunControl(abc.ABC, RunControlServicer):
         # Note we're using kill here!
         result = self.process_manager_driver.kill(session_query)
 
-        ## There is a delete controller driver here which will come in handy later on
-        # obj.delete_driver("controller")
+        self.controller_address = None
+        self.controller_driver = None
 
         return result
