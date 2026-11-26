@@ -179,7 +179,7 @@ class ConnectivityServiceClient:
 
     def resolve(
         self, uid_regex: str, data_type: str, ntries: int = 50
-    ) -> dict[str, object]:
+    ) -> list[dict[str, object]]:
         data = {"data_type": data_type, "uid_regex": uid_regex}
         for i in range(ntries):
             try:
@@ -195,7 +195,7 @@ class ConnectivityServiceClient:
                     ignore_errors=True,
                 )
                 response.raise_for_status()
-                content: dict[str, object] = response.json()
+                content: list[dict[str, object]] = response.json()
                 if content:
                     return content
                 else:

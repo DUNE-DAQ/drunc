@@ -11,9 +11,10 @@ on:
     branches:
       - develop
       - "prep-release/**"
-    types: [opened, synchronize, reopened, ready_for_review]
+    types: [synchronize, ready_for_review]
     paths-ignore:
       - "docs/**"
+      - "scripts/**"
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.head_ref || github.ref }}
@@ -93,12 +94,23 @@ jobs:
           check_name: "Pytest Results"
           report_paths: 'nightly/NFD_DEV*/pythoncode/drunc/junit/test-results.xml'
 
+      - name: Prepare HTML coverage report
+        run: |
+          report_dir=$(find nightly -type d -path '*/pythoncode/drunc/htmlcov' -print -quit)
+          if [[ -z "$report_dir" || ! -f "$report_dir/index.html" ]]; then
+            echo "::error::Could not find the HTML coverage report"
+            exit 1
+          fi
+
+          mkdir -p coverage-report
+          cp -a "$report_dir"/. coverage-report/
+
       - name: Upload coverage report (HTML)
         uses: actions/upload-artifact@v7
         if: ${{ !cancelled() && github.event_name == 'push' }}
         with:
           name: html-coverage-report
-          path: nightly/NFD_DEV*/pythoncode/drunc/htmlcov/
+          path: coverage-report/
           retention-days: 1
 
 

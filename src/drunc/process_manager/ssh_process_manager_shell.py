@@ -10,11 +10,9 @@ class SSHProcessManagerShell(SSHProcessManager):
         self,
         configuration: ProcessManagerConfHandler,
         name: str = "process_manager",
-        **kwargs: object,
     ) -> None:
         super().__init__(
             configuration=configuration,
             LifetimeManagerClass=SSHProcessLifetimeManagerShellOnForkedProcess,
             name=name,
-            **kwargs,
         )

@@ -1,11 +1,10 @@
 import getpass
-from typing import Callable
+from typing import Callable, get_args
 
 import click
 from click.decorators import FC
 from druncschema.common_pb2 import LoggerTarget
 from druncschema.process_manager_pb2 import LogRequest, ProcessQuery
-from rich.markup import escape
 from rich.panel import Panel
 
 from drunc.process_manager.interface.cli_argument import (
@@ -14,11 +13,21 @@ from drunc.process_manager.interface.cli_argument import (
 )
 from drunc.process_manager.interface.context import ProcessManagerContext
 from drunc.process_manager.process_manager_driver import ProcessManagerDriver
-from drunc.process_manager.utils import tabulate_process_instance_list
+from drunc.process_manager.utils import (
+    ControllerLogLevel,
+    print_logs,
+    print_ps_table,
+    tabulate_process_instance_list,
+)
 from drunc.unified_shell.context import UnifiedShellContext
-from drunc.utils.shell_utils import InterruptedCommand, format_table_width, log_pm_cmd
-from drunc.utils.shell_utils import wait as shell_wait
-from drunc.utils.utils import get_logger, log_echo, resolve_context_peer
+from drunc.utils.shell_utils import InterruptedCommand, log_pm_cmd
+from drunc.utils.utils import (
+    format_table_width,
+    get_logger,
+    log_echo,
+    resolve_context_peer,
+)
+from drunc.utils.utils import wait as shell_wait
 
 
 def _pm_driver(
@@ -48,6 +57,7 @@ def _pm_driver(
 @click.option(
     "-cl",
     "--controller-log-level",
+    type=click.Choice(get_args(ControllerLogLevel), case_sensitive=False),
     default=None,
     help="Overrides the config-defined log level of the controller",
 )
@@ -62,7 +72,7 @@ def boot(
     configuration_file: str,
     configuration_id: str,
     override_logs: bool,
-    controller_log_level: str | None,
+    controller_log_level: ControllerLogLevel | None,
 ) -> None:
     """
     Boot a session with the given configuration file and configuration ID.
@@ -128,8 +138,8 @@ def boot(
         raise e
 
     controller_address = pm_driver.controller_address
-    controller_address = resolve_context_peer(controller_address)
     if controller_address:
+        controller_address = resolve_context_peer(controller_address)
         obj.print(
             Panel(
                 f"Controller endpoint: '{controller_address}', point your 'drunc-controller-shell' to it.",
@@ -284,7 +294,7 @@ def terminate(obj: ProcessManagerContext, width: int | None, fit: bool) -> None:
     table = tabulate_process_instance_list(
         result, "Terminated process", False, width=width
     )
-    table = format_table_width(obj, table, fit)
+    table = format_table_width(obj._console, table, fit)
     obj.print(table, soft_wrap=not fit)
     obj.delete_driver("controller")
 
@@ -382,7 +392,7 @@ def kill_impl(
     if not result:
         return
     table = tabulate_process_instance_list(result, "Killed process", False, width=width)
-    table = format_table_width(obj, table, fit)
+    table = format_table_width(obj._console, table, fit)
     obj.print(table, soft_wrap=not fit)
 
 
@@ -475,7 +485,7 @@ def flush_impl(
     table = tabulate_process_instance_list(
         result, "Flushed process", False, width=width
     )
-    table = format_table_width(obj, table, fit)
+    table = format_table_width(obj._console, table, fit)
     obj.print(table, soft_wrap=not fit)
 
 
@@ -566,32 +576,7 @@ def logs_impl(
     if result is None:
         return
 
-    display_name = result.name or result.uuid.uuid or ""
-    if result.name is not None:
-        obj.rule(f"[yellow]{display_name}[/yellow] logs")
-
-    for line in result.lines:
-        if not line.strip():  # keep empty lines for visual clarity
-            obj.print("")
-            continue
-
-        line = line.rstrip("\n")  # remove trailing newline
-
-        if grep is not None and grep not in line:
-            continue
-
-        if grep is not None and grep:
-            # Highlight grep term by splitting on it, escaping each part separately,
-            # then rejoining with Rich underline markup around the escaped grep term
-            escaped_grep = escape(grep)
-            parts = line.split(grep)
-            escaped_line = f"[u]{escaped_grep}[/u]".join(escape(part) for part in parts)
-        else:
-            escaped_line = escape(line)
-
-        obj.print(escaped_line, soft_wrap=True)
-    if result.name is not None:
-        obj.rule(f"[yellow]{display_name}[/yellow] end")
+    print_logs(obj, result, grep)
 
 
 @click.command("restart")
@@ -741,33 +726,7 @@ def ps_impl(
     pm_driver = obj.get_pm_driver()
     results = pm_driver.ps(query)
 
-    # Inject session name if exits
-    ## Session name can come from either the process manager shell with --session
-    ## Or in the unified shell, where the session name is injected automatically
-
-    session_name = (
-        getattr(query, "session", None) or getattr(obj, "session_name", None) or ""
-    )
-    title = f"Processes running{f' in session {session_name}' if session_name else ''}"
-    # If there are processes running, tabulate them, otherwise log that there are no
-    # processes running.
-    if results.values:
-        table = tabulate_process_instance_list(
-            results,
-            title=title,
-            long=long_format,
-            width=width,
-        )
-
-        table = format_table_width(obj, table, fit)
-        obj.print(table, soft_wrap=not fit)
-    else:
-        if session_name:
-            log.info(
-                f"No processes running in session [green]{escape(session_name)}[/green]"
-            )
-        else:
-            log.info("No processes running")
+    print_ps_table(query, results, obj, log, long_format, width, fit)
 
 
 @click.command("echo")
