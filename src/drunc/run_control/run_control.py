@@ -1,6 +1,5 @@
 import abc
 import getpass
-from collections.abc import MutableMapping
 from dataclasses import asdict, dataclass, fields
 from urllib.parse import ParseResult, urlparse
 
@@ -48,7 +47,6 @@ class SessionConfig:
 
 class RunControl(abc.ABC, RunControlServicer):
     rc_type = "run_control"
-    process_manager_driver: ProcessManagerDriver
 
     def __init__(self):
         # TODO: This needs to contain the configuration name
@@ -57,9 +55,7 @@ class RunControl(abc.ABC, RunControlServicer):
         self.address_pm = None
         self.session_config = SessionConfig()
         self.override_logs = True
-        self.drivers: MutableMapping[str, object] = {}
-
-
+        self.process_manager_driver: ProcessManagerDriver | None = None
 
         dach = DummyAuthoriserConfHandler.from_pyobject(
             data=None  # TODO Skeleton: CONFIGURATION NEEDS UPDATING HERE
@@ -113,16 +109,14 @@ class RunControl(abc.ABC, RunControlServicer):
         ]
 
     def set_session_config(
-        self,
-        config: SessionConfiguration,
-        context: ServicerContext,
+        self, request: SessionConfiguration, context: ServicerContext
     ) -> RCSessionConfigResponse:
         self.session_config.valid = False
 
         for field in fields(self.session_config):
             if field.name == "valid":
                 continue
-            value = getattr(config, field.name)
+            value = getattr(request, field.name)
             if value:
                 setattr(self.session_config, field.name, value)
 
@@ -137,7 +131,7 @@ class RunControl(abc.ABC, RunControlServicer):
                 )(self.session_config.configuration_file)
 
         return RCSessionConfigResponse(
-            token=config.token,
+            token=request.token,
             name=self.name,
             flag=ResponseFlag.EXECUTED_SUCCESSFULLY,
         )
@@ -202,9 +196,7 @@ class RunControl(abc.ABC, RunControlServicer):
         )
 
     def send_log(
-        self,
-        request: SendLogRequest,
-        context: ServicerContext,
+        self, request: SendLogRequest, context: ServicerContext
     ) -> SendLogResponse:
         """
         Log a message on the server with the specified severity.
@@ -247,9 +239,7 @@ class RunControl(abc.ABC, RunControlServicer):
 
     # Almost certianly not a read actiontype..
     @authentified_and_authorised(action=ActionType.READ, system=SystemType.RUN_CONTROL)
-    def boot(
-        self, breq: RCBootRequest, context: ServicerContext
-    ) -> RCBootResponse:
+    def boot(self, breq: RCBootRequest, context: ServicerContext) -> RCBootResponse:
         # workflow:
         """
         1. add a 'valid' in the dataclass
@@ -262,9 +252,7 @@ class RunControl(abc.ABC, RunControlServicer):
                 StatusCode.INVALID_ARGUMENT, "session config not valid! please validate"
             )
 
-        try:
-            pm_driver = self.process_manager_driver
-        except ValueError:
+        if self.process_manager_driver is None:
             message = "Cannot boot: process manager is not connected"
             self.log.error(message)
             context.abort(StatusCode.INVALID_ARGUMENT, message)
@@ -272,7 +260,7 @@ class RunControl(abc.ABC, RunControlServicer):
         expected_booted_processes = 0
 
         # check if we can boot first by diong a ps
-        processes = pm_driver.ps(
+        processes = self.process_manager_driver.ps(
             ProcessQuery(user=breq.user, session=self.session_config.session_name)
         )
 
@@ -291,7 +279,7 @@ class RunControl(abc.ABC, RunControlServicer):
             )
 
         try:
-            results = pm_driver.boot(
+            results = self.process_manager_driver.boot(
                 conf_file=self.session_config.configuration_file,
                 conf_id=self.session_config.configuration_id,
                 user=breq.user,
@@ -339,7 +327,7 @@ class RunControl(abc.ABC, RunControlServicer):
                 message=str(e),
             )
 
-        processes = pm_driver.ps(
+        processes = self.process_manager_driver.ps(
             ProcessQuery(user=breq.user, session=self.session_config.session_name)
         )
         if not processes.values:
@@ -360,7 +348,7 @@ class RunControl(abc.ABC, RunControlServicer):
         )
 
         ## To be dealt with later!
-        # controller_address = pm_driver.controller_address
+        # controller_address = self.process_manager_driver.controller_address
         # if controller_address:
         #     self.log.debug(f"Controller endpoint is '{controller_address}'")
         #     self.log.debug("Connecting the unified_shell to the controller endpoint")
@@ -376,21 +364,16 @@ class RunControl(abc.ABC, RunControlServicer):
     def connect_to_pm(
         self, request: ConnectToPMRequest, context: ServicerContext
     ) -> ConnectToPMResponse:
-        address_raw = request.address
-        self.log.info("PM address received: %s", address_raw)
+        self.log.info("PM address received: %s", request.address)
 
-        address_raw: ParseResult = urlparse(address_raw)
-        address_raw = str(address_raw.netloc) if address_raw.netloc is not None else ""
-        address_raw = resolve_localhost_to_hostname(address_raw)
+        address_raw: ParseResult = urlparse(request.address)
+        self.address_pm = (
+            str(address_raw.netloc) if address_raw.netloc is not None else ""
+        )
+        self.address_pm = resolve_localhost_to_hostname(self.address_pm)
 
-        self.address_pm = address_raw
-
-        
-
-        
         self.process_manager_driver = ProcessManagerDriver(
-            self.address_pm,
-            request.token,
+            self.address_pm, request.token
         )
 
         self.log.debug("made process manager driver")
@@ -424,9 +407,7 @@ class RunControl(abc.ABC, RunControlServicer):
 
         request.session = self.session_config.session_name
 
-        try:
-            pm_driver = self.process_manager_driver
-        except ValueError:
+        if self.process_manager_driver is None:
             message = "Cannot list processes: process manager is not connected"
             self.log.error(message)
             context.abort(StatusCode.INVALID_ARGUMENT, message)
@@ -434,17 +415,13 @@ class RunControl(abc.ABC, RunControlServicer):
         # Will need cleaning later
         args = f" with request {request}" if request else ""
         msg = f"{getpass.getuser()} sent ps{args} via {self.rc_type}"
-        pm_driver.send_log(msg)
+        self.process_manager_driver.send_log(msg)
 
-        results = pm_driver.ps(request)
+        results = self.process_manager_driver.ps(request)
         return results
 
     @authentified_and_authorised(action=ActionType.READ, system=SystemType.RUN_CONTROL)
-    def logs(
-        self,
-        log_req: LogRequest,
-        context: ServicerContext,
-    ) -> LogLines | None:
+    def logs(self, log_req: LogRequest, context: ServicerContext) -> LogLines | None:
         if not self.session_config.valid:
             context.abort(
                 StatusCode.INVALID_ARGUMENT, "session config not valid! please validate"
@@ -452,25 +429,19 @@ class RunControl(abc.ABC, RunControlServicer):
 
         self.log.info(f"{self.name} running log")
 
-        # I feel like these lines can be a decorater to grab the process manager
-        # maybe @with_process_manager ?
-
         log_req.query.session = self.session_config.session_name
-        try:
-            pm_driver = self.process_manager_driver
-        except ValueError:
+
+        if self.process_manager_driver is None:
             message = "Cannot list processes: process manager is not connected"
             self.log.error(message)
             context.abort(StatusCode.INVALID_ARGUMENT, message)
 
-        result = pm_driver.logs(log_req, raise_on_error=True)
+        result = self.process_manager_driver.logs(log_req, raise_on_error=True)
         return result
 
     @authentified_and_authorised(action=ActionType.READ, system=SystemType.RUN_CONTROL)
     def terminate(
-        self,
-        terminate_req: Request,  # not sure what to do with this token
-        context: ServicerContext,
+        self, request: Request, context: ServicerContext
     ) -> ProcessInstanceList:
         if not self.session_config.valid:
             context.abort(
@@ -486,18 +457,15 @@ class RunControl(abc.ABC, RunControlServicer):
             f"Terminating session [green]{self.session_config.session_name}[/]"
         )
 
-        try:
-            pm_driver = self.process_manager_driver
-        except ValueError:
+        if self.process_manager_driver is None:
             message = "Cannot list processes: process manager is not connected"
             self.log.error(message)
             context.abort(StatusCode.INVALID_ARGUMENT, message)
 
         # Note we're using kill here!
-        result = pm_driver.kill(session_query)
+        result = self.process_manager_driver.kill(session_query)
 
         ## There is a delete controller driver here which will come in handy later on
         # obj.delete_driver("controller")
 
         return result
-
