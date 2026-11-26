@@ -15,7 +15,7 @@ runs:
     - name: Install dependencies and unpack
       shell: bash
       run: |
-        dnf install -y zstd
+        dnf install -y --disablerepo=epel zstd
         tar --zstd -xf nightly.tar.zst
 
     - name: Setup Temp Directory

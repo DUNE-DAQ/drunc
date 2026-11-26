@@ -42,14 +42,14 @@ from drunc.utils.utils import get_logger, log_echo, pid_info_str
 
 
 class BadQuery(DruncCommandException):
-    def __init__(self, txt):
+    def __init__(self, txt: str):
         super(BadQuery, self).__init__(txt, code_pb2.INVALID_ARGUMENT)
 
 
 class ProcessManager(abc.ABC, ProcessManagerServicer):
     pm_type = ProcessManagerTypes.Unknown  # Used for describe (and possibly others)
 
-    def set_running_mode(self, running_mode):
+    def set_running_mode(self, running_mode: ProcessManagerRunningMode) -> None:
         self.running_mode = running_mode
 
     def __init__(
@@ -87,7 +87,7 @@ class ProcessManager(abc.ABC, ProcessManagerServicer):
         )
         self.opmon_publisher = getattr(self.configuration, "opmon_publisher", None)
         interval_s = 10.0
-        if getattr(self.configuration, "opmon_conf", None):
+        if self.configuration.opmon_conf is not None:
             interval_raw = self.configuration.opmon_conf.get("interval_s", 10.0)
             try:
                 interval_s = float(interval_raw)
@@ -95,12 +95,11 @@ class ProcessManager(abc.ABC, ProcessManagerServicer):
                 interval_s = 10.0
         self.authoriser = DummyAuthoriser(dach, SystemType.PROCESS_MANAGER)
 
-        self.process_store = {}  # dict[str, sh.RunningCommand] # str = uuid
-        self.boot_request = {}  # dict[str, BootRequest] # str = uuid
+        self.boot_request: dict[str, BootRequest] = {}  # str = uuid
 
         # Define a list of applications that we expect to die, and a lock to read the memory
         self.dead_process_lock = threading.Lock()
-        self.expected_dead_applications = {}  # dict[str, BootRequest] # str == uuid
+        self.expected_dead_applications: dict[str, BootRequest] = {}  # str == uuid
 
         # TODO, probably need to think of a better way to do this?
         # Maybe I should "bind" the commands to their methods, and have something looping over this list to generate the gRPC functions
@@ -165,21 +164,21 @@ class ProcessManager(abc.ABC, ProcessManagerServicer):
             )
             self.thread.start()
 
-    def get_log_path(self):
+    def get_log_path(self) -> str:
         return self.configuration.get_log_path()
 
-    def __del__(self):
+    def __del__(self) -> None:
         if hasattr(self, "opmon_publisher") and self.opmon_publisher is not None:
             self.stop_event.set()
             self.thread.join()
 
-    def publish(self, q: ProcessQuery, interval_s: float = 10.0):
+    def publish(self, q: ProcessQuery, interval_s: float = 10.0) -> None:
         tech_name = self.configuration.pm_type.name
         while not self.stop_event.is_set():
             results = self._ps_impl(q)
 
-            session_running = Counter()
-            session_dead = Counter()
+            session_running: Counter[str] = Counter()
+            session_dead: Counter[str] = Counter()
             dead_processes = set()
 
             for process in results.values:
@@ -198,14 +197,15 @@ class ProcessManager(abc.ABC, ProcessManagerServicer):
 
             # For future developers, if this is still slow consider using async.
             for sesh in all_sessions:
-                self.opmon_publisher.publish(
-                    message=ProcessStatus(
-                        n_running=session_running[sesh],
-                        n_dead=session_dead[sesh],
-                        n_session=1,
-                    ),
-                    custom_origin={"drunc_session": sesh},
-                )
+                if self.opmon_publisher is not None:
+                    self.opmon_publisher.publish(
+                        message=ProcessStatus(
+                            n_running=session_running[sesh],
+                            n_dead=session_dead[sesh],
+                            n_session=1,
+                        ),
+                        custom_origin={"drunc_session": sesh},
+                    )
 
             time.sleep(interval_s)
 
@@ -500,31 +500,23 @@ class ProcessManager(abc.ABC, ProcessManagerServicer):
         getattr(target_log, level, target_log.info)(request.text)
         return response
 
-    def _ensure_one_process(
-        self, uuids: list[str], in_boot_request: bool = False
-    ) -> str:
+    def _ensure_one_process(self, uuids: list[str]) -> str:
         if uuids == []:
             raise BadQuery("The process corresponding to the query doesn't exist")
         elif len(uuids) > 1:
             raise BadQuery("There are more than 1 processes corresponding to the query")
 
-        if in_boot_request:
-            if uuids[0] not in self.boot_request:
-                raise BadQuery(
-                    f"Couldn't find the process corresponding to the UUID {uuids[0]} in the boot requests"
-                )
-        else:
-            if uuids[0] not in self.process_store:
-                raise BadQuery(
-                    f"Couldn't find the process corresponding to the UUID {uuids[0]} in the process store"
-                )
+        if uuids[0] not in self.boot_request:
+            raise BadQuery(
+                f"Couldn't find the process corresponding to the UUID {uuids[0]} in the boot requests"
+            )
         return uuids[0]
 
     @staticmethod
     def _match_processes_against_query(
         query: ProcessQuery,
         available_uuids: list[str],
-        boot_request_dict: dict,
+        boot_request_dict: dict[str, BootRequest],
         order_by: str = "random",
     ) -> list[str]:
         """
@@ -600,18 +592,11 @@ class ProcessManager(abc.ABC, ProcessManagerServicer):
 
         return processes
 
-    def _find_by_uuid(self, pi_list, target_uuid: str):
-        """Identifies the process from a list by uuid"""
-        for pi in pi_list.values:
-            if pi.uuid.uuid == target_uuid:
-                return pi
-        return None
-
-    def _unexpected_death_handling(self, uuid: str):
+    def _unexpected_death_handling(self, uuid: str) -> None:
         empty_query = ProcessQuery()
         empty_results = self._ps_impl(empty_query)
-        pi = self._find_by_uuid(empty_results, uuid)
-        if not pi:
+        pi = next((p for p in empty_results.values if p.uuid.uuid == uuid), None)
+        if pi is None:
             return
 
         pi_return_code = pi.return_code if pi.HasField("return_code") else "NONE"
@@ -717,7 +702,6 @@ class ProcessManager(abc.ABC, ProcessManagerServicer):
     def _get_process_uid(
         self,
         query: ProcessQuery,
-        in_boot_request: bool = False,
         order_by: str = "random",
     ) -> list[str]:
         """
@@ -728,18 +712,12 @@ class ProcessManager(abc.ABC, ProcessManagerServicer):
 
         Args:
             query: ProcessQuery containing selection criteria
-            in_boot_request: If True, search boot_request keys; if False, search process_store keys
             order_by: Sort order - "random", "leaf_first", or "root_first"
 
         Returns:
             List of process UUIDs matching the query criteria
         """
-        # Determine which UUID collection to search
-        all_the_uuids = (
-            list(self.process_store.keys())
-            if not in_boot_request
-            else list(self.boot_request.keys())
-        )
+        all_the_uuids = list(self.boot_request.keys())
 
         # Use static method to perform matching
         matched_processes = self._match_processes_against_query(
@@ -751,9 +729,10 @@ class ProcessManager(abc.ABC, ProcessManagerServicer):
         return matched_processes
 
     @staticmethod
-    def get(conf, **kwargs):
+    def get(
+        conf: ProcessManagerConfHandler, name: str = "process_manager"
+    ) -> "ProcessManager":
         log = get_logger("process_manager.get")
-        name = kwargs.pop("name", "process_manager")
 
         if conf.pm_type == ProcessManagerTypes.SSH_SHELL:
             from drunc.process_manager.ssh_process_manager_shell import (
@@ -761,19 +740,19 @@ class ProcessManager(abc.ABC, ProcessManagerServicer):
             )
 
             log.debug("Starting [green]SSH Shell process_manager[/green]")
-            return SSHProcessManagerShell(conf, name=name, **kwargs)
+            return SSHProcessManagerShell(conf, name=name)
         elif conf.pm_type == ProcessManagerTypes.K8s:
             from drunc.process_manager.k8s_process_manager import K8sProcessManager
 
             log.debug("Starting [green]K8s process_manager[/green]")
-            return K8sProcessManager(conf, name=name, **kwargs)
+            return K8sProcessManager(conf, name=name)
         elif conf.pm_type == ProcessManagerTypes.SSH_PARAMIKO:
             from drunc.process_manager.ssh_process_manager_paramiko_client import (
                 SSHProcessManagerParamikoClient,
             )
 
             log.debug("Starting [green]SSH Paramiko process_manager[/green]")
-            return SSHProcessManagerParamikoClient(conf, name=name, **kwargs)
+            return SSHProcessManagerParamikoClient(conf, name=name)
         else:
             log.error(f"ProcessManager type {conf.pm_type} is unsupported!")
             raise RuntimeError(f"ProcessManager type {conf.pm_type} is unsupported!")

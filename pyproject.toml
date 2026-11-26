@@ -84,6 +84,11 @@ drunc-ssh-doctor = "drunc.apps.ssh_doctor:main"
 drunc-unified-shell = "drunc.apps.unified_shell:main"
 fake_daq_application = "drunc.apps.fake_daqapp_rest:main"
 
+drunc-run-control = "drunc.apps.rc:main"
+drunc-run-control-shell = "drunc.apps.rc_shell:main"
+
+
+
 [tool.setuptools.packages.find]
 where = ["src"]
 

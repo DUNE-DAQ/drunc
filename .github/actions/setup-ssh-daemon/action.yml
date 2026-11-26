@@ -7,7 +7,8 @@ runs:
     - name: Install SSH and run the daemon
       shell: bash
       run: |
-        dnf install -y openssh-server openssh-clients procps-ng jq
+        # EPEL is not needed and its random mirrors are flaky
+        dnf install -y --disablerepo=epel openssh-server openssh-clients procps-ng jq
         ssh-keygen -A
         mkdir -p /root/.ssh
         # ed25519 is faster, shorter, and compliant with EL9 crypto policies

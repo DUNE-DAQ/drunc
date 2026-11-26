@@ -2,12 +2,14 @@ import json
 
 import click
 from druncschema.common_pb2 import LoggerTarget
+from druncschema.controller_pb2 import ExecuteExpertCommandResponse
 
+from drunc.controller.controller_driver import ControllerDriver
 from drunc.controller.interface.context import ControllerContext
 from drunc.controller.interface.shell_utils import controller_setup, render_status_table
-from drunc.utils.shell_utils import format_table_width
-from drunc.utils.shell_utils import wait as shell_wait
-from drunc.utils.utils import get_logger, log_echo
+from drunc.unified_shell.context import UnifiedShellContext
+from drunc.utils.utils import format_table_width, get_logger, log_echo
+from drunc.utils.utils import wait as shell_wait
 
 log = get_logger("controller.iface", rich_handler=True)
 
@@ -23,11 +25,11 @@ log = get_logger("controller.iface", rich_handler=True)
 @click.option("--target", type=str, help="The target to address", default="")
 @click.pass_obj
 def list_transitions(obj: ControllerContext, all: bool, target: str) -> None:
-    desc = obj.get_driver("controller").describe_fsm(
+    desc = obj.get_controller_driver().describe_fsm(
         target=target,
         execute_along_path=False,
         execute_on_all_subsequent_children_in_path=False,
-        key="all-transitions" if all else None,
+        key="all-transitions" if all else "",
     )
     if not desc:
         log.error("Could not get the list of commands available")
@@ -136,7 +138,7 @@ def status(
         show_ip_address=extended,
         width=width,
     )
-    table = format_table_width(obj, table, fit)
+    table = format_table_width(obj._console, table, fit)
     obj.print(table, soft_wrap=not fit)
     obj.print_status_summary()
 
@@ -164,7 +166,7 @@ def recompute_status(
     execute_along_path: bool,
     execute_on_all_subsequent_children_in_path: bool,
 ) -> None:
-    obj.get_driver("controller").recompute_status(
+    obj.get_controller_driver().recompute_status(
         target=target,
         execute_along_path=execute_along_path,
         execute_on_all_subsequent_children_in_path=execute_on_all_subsequent_children_in_path,
@@ -175,9 +177,11 @@ def recompute_status(
 @click.argument("controller_address", type=str)
 @click.option("-f", "--force", is_flag=True, help="Confirm the disconnect")
 @click.pass_obj
-def connect(obj: ControllerContext, controller_address: str, force: bool) -> None:
+def connect(
+    obj: ControllerContext | UnifiedShellContext, controller_address: str, force: bool
+) -> None:
     if obj.has_driver("controller"):
-        driver = obj.get_driver("controller")
+        driver = obj.get_controller_driver()
         log.info(f"Already connected to a controller ({driver.name}@{driver.address})")
         if not force:
             click.confirm("Do you want to disconnect from it before?", abort=True)
@@ -189,7 +193,14 @@ def connect(obj: ControllerContext, controller_address: str, force: bool) -> Non
     if controller_address.startswith("grpc://"):
         controller_address = controller_address.replace("grpc://", "")
 
-    obj.set_controller_driver(controller_address)
+    # only the UnifiedShellContext has 'set_controller_driver'
+    if isinstance(obj, UnifiedShellContext):
+        obj.set_controller_driver(controller_address)
+    else:
+        obj.set_driver(
+            "controller", ControllerDriver(controller_address, obj.get_token())
+        )
+        obj.address = controller_address
     controller_setup(obj, controller_address)
 
 
@@ -201,7 +212,7 @@ def disconnect(obj: ControllerContext, force: bool) -> None:
         log.info("You are not connected to any controller.")
         return
 
-    driver = obj.get_driver("controller")
+    driver = obj.get_controller_driver()
 
     if not force:
         log.info(
@@ -250,7 +261,7 @@ def take_control(
     execute_along_path: bool,
     execute_on_all_subsequent_children_in_path: bool,
 ) -> None:
-    obj.get_driver("controller").take_control(
+    obj.get_controller_driver().take_control(
         target=target,
         execute_along_path=execute_along_path,
         execute_on_all_subsequent_children_in_path=execute_on_all_subsequent_children_in_path,
@@ -280,7 +291,7 @@ def surrender_control(
     execute_along_path: bool,
     execute_on_all_subsequent_children_in_path: bool,
 ) -> None:
-    obj.get_driver("controller").surrender_control(
+    obj.get_controller_driver().surrender_control(
         target=target,
         execute_along_path=execute_along_path,
         execute_on_all_subsequent_children_in_path=execute_on_all_subsequent_children_in_path,
@@ -309,6 +320,16 @@ def who_am_i(obj: ControllerContext) -> None:
     default=False,
 )
 @click.option(
+    "-s",
+    "--severity",
+    type=str,
+    default="INFO",
+    help=(
+        "Severity level of the log message (default INFO). Options: DEBUG, INFO, "
+        "WARNING, ERROR, CRITICAL"
+    ),
+)
+@click.option(
     "--logger",
     type=click.Choice(["echo", "main"]),
     default="echo",
@@ -327,7 +348,8 @@ def echo(
     obj: ControllerContext,
     text: str,
     server: bool,
-    logger: int,
+    logger: LoggerTarget.ValueType,
+    severity: str,
     target: str,
     execute_along_path: bool,
     execute_on_all_subsequent_children_in_path: bool,
@@ -335,12 +357,14 @@ def echo(
     """Log a message locally or send it to the controller server."""
     if not server:
         # Local-only path, no RPC — mirrors the old bare `echo` command.
-        (log_echo if logger == LoggerTarget.ECHO else log).info(text)
+        echo_logger = log_echo if logger == LoggerTarget.ECHO else log
+        getattr(echo_logger, severity.lower(), echo_logger.info)(text)
         return
 
-    obj.get_driver("controller").send_log(
+    obj.get_controller_driver().send_log(
         text=text,
         target=target,
+        severity=severity,
         execute_along_path=execute_along_path,
         execute_on_all_subsequent_children_in_path=execute_on_all_subsequent_children_in_path,
         logger=logger,
@@ -370,7 +394,7 @@ def who_is_in_charge(
     execute_along_path: bool,
     execute_on_all_subsequent_children_in_path: bool,
 ) -> None:
-    result = obj.get_driver("controller").who_is_in_charge(
+    result = obj.get_controller_driver().who_is_in_charge(
         target=target,
         execute_along_path=execute_along_path,
         execute_on_all_subsequent_children_in_path=execute_on_all_subsequent_children_in_path,
@@ -386,7 +410,7 @@ def include(
     obj: ControllerContext,
     target: str,
 ) -> None:
-    result = obj.get_driver("controller").include(
+    result = obj.get_controller_driver().include(
         target=target,
         execute_along_path=False,
         execute_on_all_subsequent_children_in_path=True,
@@ -403,7 +427,7 @@ def exclude(
     obj: ControllerContext,
     target: str,
 ) -> None:
-    result = obj.get_driver("controller").exclude(
+    result = obj.get_controller_driver().exclude(
         target=target,
         execute_along_path=False,
         execute_on_all_subsequent_children_in_path=True,
@@ -446,14 +470,14 @@ def expert_command(
         log.error(f"JSON decode error: {e}")
         return
 
-    result = obj.get_driver("controller").execute_expert_command(
+    result = obj.get_controller_driver().execute_expert_command(
         json.dumps(data),
         target=target,
         execute_along_path=False,
         execute_on_all_subsequent_children_in_path=True,
     )
 
-    def print_result(result, prefix=""):
+    def print_result(result: ExecuteExpertCommandResponse, prefix: str = "") -> None:
         log.info(f"{prefix}[yellow]{result.name}[/yellow] [green]{result.data}[/green]")
 
         for child in result.children:
@@ -485,7 +509,7 @@ def to_error(
     execute_along_path: bool,
     execute_on_all_subsequent_children_in_path: bool,
 ) -> None:
-    obj.get_driver("controller").to_error(
+    obj.get_controller_driver().to_error(
         target=target,
         execute_along_path=execute_along_path,
         execute_on_all_subsequent_children_in_path=execute_on_all_subsequent_children_in_path,

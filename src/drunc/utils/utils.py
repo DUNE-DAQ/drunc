@@ -1,5 +1,7 @@
 """A set of utility functions for drunc."""
 
+from __future__ import annotations
+
 import ctypes
 import ipaddress
 import logging
@@ -14,14 +16,15 @@ import time
 from contextlib import closing
 from datetime import datetime
 from enum import Enum
-from typing import Protocol, cast
+from typing import TYPE_CHECKING, cast
 from urllib.parse import ParseResult, urlparse
 
 from click import BadParameter, Context, Parameter
 from daqpytools.logging import get_daq_logger, setup_root_logger
 from requests import Response, delete, get, patch, post
-from rich.console import Console
+from rich.console import Console, Group
 from rich.logging import RichHandler
+from rich.measure import Measurement
 from rich.progress import (
     BarColumn,
     Progress,
@@ -30,13 +33,82 @@ from rich.progress import (
     TimeElapsedColumn,
     TimeRemainingColumn,
 )
+from rich.table import Table
 from rich.theme import Theme
 
 from drunc.connectivity_service.exceptions import ApplicationLookupUnsuccessful
 from drunc.exceptions import DruncException, DruncSetupException
 
+if TYPE_CHECKING:
+    from drunc.connectivity_service.client import ConnectivityServiceClient
+
 CONTEXT_SETTINGS = dict(help_option_names=["-h", "--help"])
 CONSOLE_THEMES = Theme({"info": "dim cyan", "warning": "magenta", "danger": "bold red"})
+
+
+def format_table_width(
+    console: Console,
+    table: Table | Group,
+    fit: bool,
+) -> Table | Group:
+    """Configure a table or group of tables for single-line row formatting.
+
+    Args:
+        console: Rich Console instance used to measure the table.
+        table: Table or Group of tables to format.
+        fit: If True, constrains the table to the console width (using ellipsis
+            truncation). If False, measures its content up to 10,000 characters.
+
+    Returns:
+        The formatted table or group.
+    """
+    if isinstance(table, Group):
+        for renderable in table.renderables:
+            if isinstance(renderable, (Table, Group)):
+                format_table_width(console, renderable, fit=fit)
+        return table
+
+    table.expand = False
+    for col in table.columns:
+        col.no_wrap = True
+
+    if fit:
+        table.width = console.width
+    else:
+        options = console.options.update(max_width=10000)
+        table.width = Measurement.get(console, options, table).maximum
+
+    return table
+
+
+def wait(
+    log: logging.Logger, sleep_time: int, progress_steps: int | None = None
+) -> None:
+    """Wait for the requested duration, optionally logging progress.
+
+    Args:
+        log: Logger used for command and progress messages.
+        sleep_time: Duration in seconds.
+        progress_steps: Number of progress intervals to log.
+    """
+    extra_info = "" if not progress_steps else f" with {progress_steps} steps printed"
+
+    log.info(
+        f"Command [green]wait[/green] running for {sleep_time} seconds{extra_info}."
+    )
+
+    if not progress_steps or progress_steps <= 0:
+        time.sleep(sleep_time)
+    else:
+        interval = sleep_time / max(progress_steps, 1)
+        elapsed = 0.0
+        while elapsed < sleep_time:
+            chunk = min(interval, sleep_time - elapsed)
+            time.sleep(chunk)
+            elapsed += chunk
+            log.info(f"Progress: {elapsed:g} / {sleep_time} seconds")
+
+    log.info(f"Command [green]wait[/green] ran for {sleep_time} seconds.")
 
 
 def get_root_logger(log_level: str) -> logging.Logger:
@@ -523,11 +595,6 @@ def http_delete(
     if not ignore_errors:
         r.raise_for_status()
 
-
-class _ConnectivityService(Protocol):
-    def resolve(self, name: str, message_type: str) -> list[dict[str, object]]: ...
-
-
 class ControlType(Enum):
     """Enumeration of control types for DUNE DAQ services."""
 
@@ -562,7 +629,7 @@ def get_control_type_and_uri_from_cli(cli_args: list[str]) -> tuple[ControlType,
 
 
 def get_control_type_and_uri_from_connectivity_service(
-    connectivity_service: _ConnectivityService,
+    connectivity_service: ConnectivityServiceClient,
     name: str,
     timeout: int = 10,  # seconds
     retry_wait: float = 0.1,  # seconds
@@ -627,7 +694,7 @@ def get_control_type_and_uri_from_connectivity_service(
 
     else:
         # If a bar was requested but we are in a file, print a static log entry instead
-        if progress_bar:
+        if progress_bar and shared_console is not None:
             shared_console.print(f"[yellow]{title}[/yellow] (Waiting...)")
 
         while elapsed < timeout:
