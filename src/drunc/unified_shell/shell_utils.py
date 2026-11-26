@@ -176,16 +176,16 @@ def generate_fsm_sequence_command(
     sequence_options: dict[str, SequenceOptionLike] = {}
     command_group = cast(click.Group, ctx.command)
 
-    command_ids: list[str] = [command.id for command in sequence.sequence]
+    command_ids: list[str] = [command.cmd for command in sequence.sequence]
 
     # Build the command string for help
     sequence_str: str = ""
     middle_text: str = "[optionally], then "
 
     # Special handling for start_run and shutdown sequences
-    if sequence.id == "start_run":
+    if sequence.add_initial_boot:
         command_ids = ["boot"] + command_ids
-    elif sequence.id == "shutdown":
+    if sequence.add_final_terminate:
         command_ids = command_ids + ["terminate"]
 
     # Parse the sequence commands, construct the command string, and gather parameters
@@ -238,8 +238,8 @@ def generate_fsm_sequence_command(
 
     # Transform the function into a Click command
     cmd = click.command(
-        name=format_name_for_cli(sequence.id),
-        help=f"Run the sequence {sequence.id}: {sequence_str}",
+        name=format_name_for_cli(sequence.name),
+        help=f"Run the sequence {sequence.name}: {sequence_str}",
     )(cmd_fn_with_obj)
 
-    return cmd, format_name_for_cli(sequence.id)
+    return cmd, format_name_for_cli(sequence.name)
