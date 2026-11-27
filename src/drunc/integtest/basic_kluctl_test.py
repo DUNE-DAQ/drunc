@@ -35,19 +35,41 @@ from integ_test_utils import (
 # not reachable through localhost).
 from pm_pms_test import (
     daq_session_name,
-    dunerc_commands,
     test_boot_pm,
     test_boot_pms,
-    test_flush,
-    test_kill_removes_mlt_from_ps_table,
-    test_mlt_recovers_after_kill,
-    test_restart_mlt_logs_pm,
-    test_restart_mlt_logs_pms,
     test_root_controller_logs,
     test_terminate,
     test_unknown_log_command,
     test_wait_command_duration_from_logs,
 )
+
+dunerc_commands = f"""
+    echo pre_boot
+    echo --server  pre_boot
+    ps
+    boot <config_data_file> local-1x1-config {daq_session_name}
+    wait 15
+    echo post_boot
+    echo --server  post_boot
+    ps
+
+    echo test_logs
+    logs --name unknown
+    logs --name root-controller --how-far 5
+    logs --name mlt --how-far 5
+    echo test_logs_done
+
+    echo test_wait
+    wait 10
+    echo test_wait_done
+
+    echo test_terminate
+    echo --server  test_terminate
+    terminate
+    echo test_terminate_done
+    echo --server  test_terminate_done
+
+    """.split()
 
 print = functools.partial(print, flush=True)  # always flush print() output
 
