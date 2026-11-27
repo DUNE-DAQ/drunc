@@ -10,65 +10,7 @@ import sys
 from datetime import date, datetime, timedelta, timezone
 
 from lib_github_api import GitHubApi, RoutingError, append_summary
-
-# GraphQL queries and mutations for interacting with GitHub project sprints.
-## Retrieve project field information
-FIELD_QUERY = """
-query($org: String!, $num: Int!, $name: String!) {
-  organization(login: $org) {
-    projectV2(number: $num) {
-      id
-      field(name: $name) {
-        ... on ProjectV2IterationField {
-          id
-          configuration {
-            iterations { id title startDate duration }
-            completedIterations { id title startDate duration }
-          }
-        }
-      }
-    }
-  }
-}
-"""
-
-## Retrieve project items for a given sprint field
-ITEMS_QUERY = """
-query($project: ID!, $name: String!, $after: String) {
-  node(id: $project) {
-    ... on ProjectV2 {
-      items(first: 100, after: $after) {
-        nodes {
-          id
-          isArchived
-          content {
-            ... on Issue { title url }
-            ... on PullRequest { title url }
-            ... on DraftIssue { title }
-          }
-          status: fieldValueByName(name: "Status") {
-            ... on ProjectV2ItemFieldSingleSelectValue { name }
-          }
-          sprint: fieldValueByName(name: $name) {
-            ... on ProjectV2ItemFieldIterationValue { iterationId }
-          }
-        }
-        pageInfo { hasNextPage endCursor }
-      }
-    }
-  }
-}
-"""
-
-## Move an item to a different sprint iteration
-MOVE_MUTATION = """
-mutation($project: ID!, $item: ID!, $field: ID!, $iteration: String!) {
-  updateProjectV2ItemFieldValue(input: {
-    projectId: $project, itemId: $item, fieldId: $field,
-    value: { iterationId: $iteration }
-  }) { projectV2Item { id } }
-}
-"""
+from lib_graphql_queries import FIELD_QUERY, ITEMS_QUERY, MOVE_MUTATION
 
 
 def sprint_end(sprint: dict) -> date:

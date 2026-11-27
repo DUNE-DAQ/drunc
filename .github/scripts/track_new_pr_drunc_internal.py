@@ -18,50 +18,10 @@ from datetime import date, datetime, timezone
 from pathlib import Path
 
 from lib_github_api import GitHubApi, RoutingError, append_summary
+from lib_graphql_queries import ADD_ITEM_MUTATION, PROJECT_QUERY, SET_FIELD_MUTATION
 from sprint_rollover import sprint_end
 
 ORG = "DUNE-DAQ"
-
-# Retrieve a project's ID and two named fields. Fields that do not exist (or are
-# of a different type) come back as null or as an empty object.
-PROJECT_QUERY = """
-query($org: String!, $num: Int!, $f1: String!, $f2: String!) {
-  organization(login: $org) {
-    projectV2(number: $num) {
-      id
-      title
-      f1: field(name: $f1) { ...FieldInfo }
-      f2: field(name: $f2) { ...FieldInfo }
-    }
-  }
-}
-fragment FieldInfo on ProjectV2FieldConfiguration {
-  ... on ProjectV2SingleSelectField { id name options { id name } }
-  ... on ProjectV2IterationField {
-    id name configuration { iterations { id title startDate duration } }
-  }
-}
-"""
-
-# Add the pull request to a project. Returns the existing item if it is already there.
-ADD_ITEM_MUTATION = """
-mutation($project: ID!, $content: ID!) {
-  addProjectV2ItemById(input: {projectId: $project, contentId: $content}) {
-    item { id }
-  }
-}
-"""
-
-# Set one field on a project item. `value` is either {singleSelectOptionId: ...} or
-# {iterationId: ...}.
-SET_FIELD_MUTATION = """
-mutation($project: ID!, $item: ID!, $field: ID!,
-         $value: ProjectV2FieldValue!) {
-  updateProjectV2ItemFieldValue(input: {
-    projectId: $project, itemId: $item, fieldId: $field, value: $value
-  }) { projectV2Item { id } }
-}
-"""
 
 # Matches "In Progress", "In progress", "🏗 In progress", ...
 IN_PROGRESS = re.compile(r"in progress$", re.IGNORECASE)

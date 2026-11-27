@@ -21,7 +21,7 @@ jobs:
       contents: read # Check out the scripts
       pull-requests: write # Assign the PR author
     env:
-      # Bot secrets are required for tracking the DRUNC Internal project. If running from a fork, the bot token will not be available.
+      # Bot secrets are required for writing to a PR. If running from a fork, the bot token will not be available.
       HAS_BOT_TOKEN: ${{ secrets.BOT_CI_ISSUES != '' }}
     steps:
       - name: Note skipped project tracking
