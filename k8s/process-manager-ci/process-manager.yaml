@@ -1,0 +1,169 @@
+# Runs the drunc Kubernetes process manager as a Pod in the CI Kind cluster.
+#
+# This is a kluctl (Jinja2) template; it cannot be applied with plain kubectl.
+# The kluctl project that deploys it is created by CI and must pass these args:
+#   port        gRPC port the process manager listens on (on the node network)
+#   image       image for the Pod, e.g. ghcr.io/dune-daq/alma9:ci-local
+#   workarea    dbt workarea created with `dbt-create -n last_fddaq`
+#   host_mount  host directory mounted into the Pod at the same path; must
+#               contain the workarea and the process manager config
+#   pm_config   process manager config passed to drunc-process-manager,
+#               e.g. `k8s` or a path to a k8s.json file
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: kube-services
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: drunc-process-manager
+  namespace: kube-services
+---
+# API calls made by drunc/process_manager/k8s_process_manager.py.
+# Cluster-wide because the manager creates a namespace per session.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: drunc-process-manager
+rules:
+  - apiGroups: [""]
+    resources: ["nodes"]
+    verbs: ["get"]
+  - apiGroups: [""]
+    resources: ["namespaces"]
+    verbs: ["get", "list", "create", "delete"]
+  - apiGroups: [""]
+    resources: ["pods"]
+    verbs: ["get", "list", "watch", "create", "delete"]
+  - apiGroups: [""]
+    resources: ["pods/status", "pods/log"]
+    verbs: ["get"]
+  - apiGroups: [""]
+    resources: ["services"]
+    verbs: ["get", "list", "create"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: drunc-process-manager
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: drunc-process-manager
+subjects:
+  - kind: ServiceAccount
+    name: drunc-process-manager
+    namespace: kube-services
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: drunc-process-manager-config
+  namespace: kube-services
+data:
+  # drunc only calls load_kube_config(), so give it a kubeconfig that uses the
+  # Pod's service-account token.
+  kubeconfig: |
+    apiVersion: v1
+    kind: Config
+    current-context: in-cluster
+    clusters:
+      - name: in-cluster
+        cluster:
+          server: https://kubernetes.default.svc
+          certificate-authority: /var/run/secrets/kubernetes.io/serviceaccount/ca.crt
+    contexts:
+      - name: in-cluster
+        context:
+          cluster: in-cluster
+          user: service-account
+    users:
+      - name: service-account
+        user:
+          exec:
+            apiVersion: client.authentication.k8s.io/v1beta1
+            command: python3
+            args:
+              - -c
+              - |
+                import datetime, json
+                from pathlib import Path
+                token = Path('/var/run/secrets/kubernetes.io/serviceaccount/token').read_text().strip()
+                expiration = datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(minutes=10)
+                print(json.dumps({'apiVersion': 'client.authentication.k8s.io/v1beta1', 'kind': 'ExecCredential', 'status': {'token': token, 'expirationTimestamp': expiration.strftime('%Y-%m-%dT%H:%M:%SZ')}}))
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: drunc-process-manager
+  namespace: kube-services
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate  # Two managers on hostNetwork would clash on the same port.
+  selector:
+    matchLabels:
+      app: drunc-process-manager
+  template:
+    metadata:
+      labels:
+        app: drunc-process-manager
+    spec:
+      serviceAccountName: drunc-process-manager
+      # Share the node's network so drunc's host lookups and NodePort checks
+      # behave as when the process manager runs directly on the node.
+      hostNetwork: true
+      dnsPolicy: ClusterFirstWithHostNet
+      containers:
+        - name: process-manager
+          image: "{{ args.image }}"
+          imagePullPolicy: IfNotPresent
+          workingDir: "{{ args.workarea }}"
+          command: ["/bin/bash", "-c"]
+          args:
+            - |
+              source /cvmfs/dunedaq.opensciencegrid.org/setup_dunedaq.sh
+              setup_dbt latest
+              cd "{{ args.workarea }}"
+              source env.sh
+              dbt-workarea-env
+              exec drunc-process-manager "{{ args.pm_config }}" {{ args.port }}
+          env:
+            - name: KUBECONFIG
+              value: /etc/drunc/kubeconfig
+          ports:
+            - name: grpc
+              containerPort: {{ args.port }}
+          readinessProbe:
+            tcpSocket:
+              port: grpc
+            periodSeconds: 10
+          volumeMounts:
+            - name: config
+              mountPath: /etc/drunc
+              readOnly: true
+            - name: host
+              mountPath: "{{ args.host_mount }}"
+      volumes:
+        - name: config
+          configMap:
+            name: drunc-process-manager-config
+        - name: host
+          hostPath:
+            path: "{{ args.host_mount }}"
+            type: Directory
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: drunc-process-manager
+  namespace: kube-services
+spec:
+  type: ClusterIP
+  selector:
+    app: drunc-process-manager
+  ports:
+    - name: grpc
+      port: {{ args.port }}
+      targetPort: grpc
