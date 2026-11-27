@@ -1,5 +1,5 @@
 # The goal of this test is to deploy the k8s process manager as a Pod with kluctl,
-# and check that a process manager shell can connect to it and run ps.
+# and run the pm_pms_test process manager shell sequence against it.
 #
 # The kluctl project (.kluctl.yaml and deployment.yaml pointing at the
 # process-manager-ci manifest) and the Kind cluster are expected to be set up
@@ -26,9 +26,27 @@ import integrationtest.utility_functions as utility_functions
 import pytest
 from daqconf.utils import find_free_port
 from integ_test_utils import (
-    assert_contains_between_markers,
     require_drunc,
     strip_ansi,
+)
+
+# Reuse the pm_pms_test command sequence and the checks that don't depend on the
+# process manager running locally (its log files live inside the Pod, and it is
+# not reachable through localhost).
+from pm_pms_test import (
+    daq_session_name,
+    dunerc_commands,
+    test_boot_pm,
+    test_boot_pms,
+    test_flush,
+    test_kill_removes_mlt_from_ps_table,
+    test_mlt_recovers_after_kill,
+    test_restart_mlt_logs_pm,
+    test_restart_mlt_logs_pms,
+    test_root_controller_logs,
+    test_terminate,
+    test_unknown_log_command,
+    test_wait_command_duration_from_logs,
 )
 
 print = functools.partial(print, flush=True)  # always flush print() output
@@ -39,7 +57,9 @@ kluctl_project = os.environ.get("DRUNC_KLUCTL_PROJECT")
 kluctl_target = os.environ.get("DRUNC_KLUCTL_TARGET", "ci")
 pm_image = os.environ.get("DRUNC_PM_POD_IMAGE")
 pm_host_mount = os.environ.get("DRUNC_PM_POD_HOST_MOUNT")
-pm_workarea = os.environ.get("DRUNC_PM_POD_WORKAREA", os.environ.get("DBT_AREA_ROOT", ""))
+pm_workarea = os.environ.get(
+    "DRUNC_PM_POD_WORKAREA", os.environ.get("DBT_AREA_ROOT", "")
+)
 pm_config = os.environ.get(
     "DRUNC_PM_POD_CONFIG",
     os.path.join(
@@ -74,8 +94,6 @@ pytestmark = [
     ),
 ]
 
-daq_session_name = "kluctl-test"
-
 conf_dict = idc.integtest_params_for_predefined_dunedaq_config()
 conf_dict.predefined_config_db = (
     os.environ.get("DAQSYSTEMTEST_SHARE", "")
@@ -84,12 +102,6 @@ conf_dict.predefined_config_db = (
 conf_dict.daq_session_name = daq_session_name
 
 confgen_arguments = {"SmallFootprint": conf_dict}
-
-pmshell_commands = """
-    echo pre_ps
-    ps
-    echo post_ps
-    """.split()
 
 # The process manager Pod uses hostNetwork, so this port is opened on the Kind node
 pm_port = find_free_port(50020, 52000)
@@ -145,7 +157,7 @@ pmshellapp = idc.DAQControlApplication(
 
 cmd_set = idc.DAQCommandSet(
     "pmshell",
-    pmshell_commands,
+    dunerc_commands,
     idc.EchoCommandWaitParameters(),
 )
 
@@ -181,8 +193,3 @@ def test_connections(run_dunerc) -> None:
         f"Did not find '{pms_connect}' in the process manager shell output.\nOutput:\n"
         + "\n".join(lines_pms)
     )
-
-
-def test_ps(run_dunerc) -> None:
-    lines = strip_ansi(run_dunerc.completed_processes["pmshell"].stdout).splitlines()
-    assert_contains_between_markers(lines, "pre_ps", "post_ps", "No processes running")
