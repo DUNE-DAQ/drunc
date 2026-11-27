@@ -30,6 +30,7 @@ from drunc.process_manager.process_manager import ProcessManager
 from drunc.process_manager.utils import get_log_path
 from drunc.utils.configuration import ConfTypes, parse_conf_url
 from drunc.utils.grpc_utils import RichErrorServerInterceptor
+from drunc.utils.shell_utils import check_and_cd_execution_path
 from drunc.utils.utils import (
     get_logger,
     get_root_logger,
@@ -50,6 +51,7 @@ def run_pm(
     signal_handler: Callable[[], None] | None = None,
     generated_port: Synchronized[int] | None = None,
     running_mode: ProcessManagerRunningMode = ProcessManagerRunningMode.Unknown,
+    execution_path: str | None = None,
 ) -> None:
     appName = "process_manager"
     log = get_logger(logger_name=appName, rich_handler=True)
@@ -59,6 +61,9 @@ def run_pm(
         signal_handler()
 
     parent_death_pact()  # If the parent dies (for example unified shell), we die too
+
+    # Check the execution path is a writable directory, switch to it if it is
+    check_and_cd_execution_path(log, execution_path)
 
     log.debug(f"Validating process_manager configuration: {pm_conf}")
     if not validate_pm_config(pm_conf):
@@ -196,8 +201,23 @@ def run_pm(
     default=None,
     help="Log path of process_manager logs.",
 )
+@click.option(
+    "-e",
+    "--execution-path",
+    type=str,
+    default=None,
+    help=(
+        "Define the working path for which the unified shell will operate. Sets the "
+        "current working directory for all operations."
+    ),
+)
 def process_manager_cli(
-    pm_conf: str, pm_port: int, log_level: str, override_logs: bool, log_path: str
+    pm_conf: str,
+    pm_port: int,
+    log_level: str,
+    override_logs: bool,
+    log_path: str,
+    execution_path: str,
 ) -> None:
     get_root_logger(log_level)
     pm_conf = get_process_manager_configuration(pm_conf)
@@ -208,4 +228,5 @@ def process_manager_cli(
         override_logs=override_logs,
         log_path=log_path,
         running_mode=ProcessManagerRunningMode.Subprocess,
+        execution_path=execution_path,
     )

@@ -66,6 +66,7 @@ from drunc.unified_shell.context import UnifiedShellMode
 from drunc.unified_shell.shell_utils import generate_fsm_sequence_command
 from drunc.utils.configuration import OKSKey
 from drunc.utils.grpc_utils import ServerUnreachable
+from drunc.utils.shell_utils import check_and_cd_execution_path
 from drunc.utils.utils import (
     format_name_for_cli,
     get_logger,
@@ -127,6 +128,16 @@ from drunc.utils.utils import (
         "continue executing commands, mainly for use in testing scenarios."
     ),
 )
+@click.option(
+    "-e",
+    "--execution-path",
+    type=str,
+    default=None,
+    help=(
+        "Define the working path for which the unified shell will operate. Sets the "
+        "current working directory for all operations."
+    ),
+)
 @click.pass_context
 def unified_shell(
     ctx: click.core.Context,
@@ -139,6 +150,7 @@ def unified_shell(
     log_path: str,
     safe_mode: bool,
     no_stop_error_batch_mode: bool,
+    execution_path: str,
 ) -> None:
     """
     The unified shell is a command line interface to interact with the process manager
@@ -172,6 +184,9 @@ def unified_shell(
     ctx.obj.log.info(
         f"User {getpass.getuser()} [green]starting the unified_shell[/green]"
     )
+
+    # Check the execution path is a writable directory, switch to it if it is
+    check_and_cd_execution_path(ctx.obj.log, execution_path)
 
     # Parse the process manager argument to determine if it's a config or an address
     # If the process manager is already running, connect to it.
@@ -266,6 +281,7 @@ def unified_shell(
                 # sigint gets sent to the PM, so we need to ignore it, otherwise everytime the user ctrl-c on the shell, the PM goes down
                 "generated_port": port,
                 "running_mode": running_mode,
+                "execution_path": execution_path,
             },
         )
         ctx.obj.pm_process.start()

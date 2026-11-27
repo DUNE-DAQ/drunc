@@ -2,6 +2,9 @@
 
 import abc
 import getpass
+import logging
+import os
+import sys
 from collections.abc import MutableMapping
 from typing import Any
 
@@ -307,3 +310,30 @@ def shell_cmd_message(
 def log_pm_cmd(obj: ShellContext) -> None:
     msg = shell_cmd_message(session_name=obj.session_name, shell_id=obj.get_shell_id())
     obj.get_pm_driver().send_log(msg)
+
+
+def check_and_cd_execution_path(log: logging.Logger, execution_path: str) -> None:
+    """
+    Check if the provided execution path is a writable directory and change the current
+    working directory to it.
+
+    Args:
+        log: Logger object for logging errors.
+        execution_path: The path to check and change to.
+
+    Returns:
+        None
+
+    Raises:
+        SystemExit: If the execution path is not a writable directory.
+    """
+    if execution_path:
+        if not os.path.isdir(execution_path) or not os.access(execution_path, os.W_OK):
+            log.error(
+                f"[red]Execution path '{execution_path}' is not a writable directory[/red]"
+            )
+            sys.exit(1)
+        log.info(f"[green]Changing execution path to '{execution_path}'[/green]")
+        os.chdir(execution_path)
+    else:
+        log.debug("[green]No execution path provided, using the default path[/green]")
