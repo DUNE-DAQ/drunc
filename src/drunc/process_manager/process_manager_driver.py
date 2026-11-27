@@ -132,6 +132,7 @@ class ProcessManagerDriver:
         sleep_between_app_boot: (
             int | float
         ) = 0,  # This may be useful if you have are using SSHPM, and have SSHD's maxstartups setting set to a low value.
+        execution_path: str | None = None,
     ) -> Iterator[ProcessInstanceList]:
         self.log.info(f"Booting session [green]{session_name}[/green]")
 
@@ -170,6 +171,7 @@ class ProcessManagerDriver:
             session_dal=session_dal,
             session_name=session_name,
             override_logs=override_logs,
+            execution_path=execution_path,
         ):
             if not request:
                 self.log.error("[red]No boot request was generated, ending boot.[/red]")
@@ -306,7 +308,7 @@ class ProcessManagerDriver:
         session_dal: Session,
         session_log_path: str,
         override_logs: bool,
-        pwd: str,
+        execution_path: str | None = None,
     ) -> BootRequest:
         # Temporary hack while resource management is under development: the hostname
         # is taken as-is from the app restriction (only localhost is resolved).
@@ -379,7 +381,7 @@ class ProcessManagerDriver:
                 ),
                 executable_and_arguments=executable_and_arguments,
                 env=env,
-                process_execution_directory=pwd,
+                process_execution_directory=execution_path,
                 process_logs_path=log_path,
             ),
             process_restriction=process_restriction,
@@ -394,14 +396,16 @@ class ProcessManagerDriver:
         session_dal: Session,
         session_name: str,
         override_logs: bool,
+        execution_path: str | None = None,
     ) -> Iterator[BootRequest | None]:
         apps = self._collect_all_apps(oks_conf, session_dal, session_name)
 
-        pwd = os.getcwd()
+        if not execution_path:
+            execution_path = os.getcwd()
 
         session_log_path = session_dal.log_path
         if session_log_path == "./":
-            session_log_path = pwd
+            session_log_path = execution_path
 
         for app in apps:
             try:
@@ -412,7 +416,7 @@ class ProcessManagerDriver:
                     session_dal,
                     session_log_path,
                     override_logs,
-                    pwd,
+                    execution_path,
                 )
             except DruncSetupException as e:
                 log = get_logger("utils.boot_req_generator")

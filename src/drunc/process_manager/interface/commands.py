@@ -64,6 +64,16 @@ def _pm_driver(
 @click.argument("configuration-file", type=str, callback=validate_conf_string)
 @click.argument("configuration-id", type=str)
 @click.argument("session-name", type=str)
+@click.option(
+    "-e",
+    "--execution-path",
+    type=click.Path(exists=True, file_okay=False, writable=True, resolve_path=True),
+    default=None,
+    help=(
+        "Define the working path for which the unified shell will operate. Sets the "
+        "current working directory for all operations."
+    ),
+)
 @click.pass_obj
 def boot(
     obj: ProcessManagerContext,
@@ -73,6 +83,7 @@ def boot(
     configuration_id: str,
     override_logs: bool,
     controller_log_level: ControllerLogLevel | None,
+    execution_path: str | None,
 ) -> None:
     """
     Boot a session with the given configuration file and configuration ID.
@@ -93,6 +104,8 @@ def boot(
         override_logs: A boolean indicating whether to override existing logs or not.
         controller_log_level: An optional log level to override the configuration
             defined log level of the controller.
+        execution_path: The working path for which the applications will operate. Sets
+            the current working directory for all operations.
 
     Returns:
         None
@@ -124,6 +137,7 @@ def boot(
             session_name=session_name,
             log_level=controller_log_level,
             override_logs=override_logs,
+            execution_path=execution_path,
         )
         for result in results:
             if not result:
