@@ -252,6 +252,34 @@ def require_pattern_match(
     return match
 
 
+def require_graceful_termination_logs(
+    text: str, name: str, process_manager_type: str
+) -> None:
+    """Assert the log lines a process manager prints when it gracefully stops `name`.
+
+    The SSH process managers report the SIGQUIT sent through the remote PID; the
+    K8s process manager reports the termination of the process's pod.
+    """
+    if process_manager_type.startswith("k8s"):
+        patterns = [
+            rf"Pod '{name}' \(.*?\) terminated with exit code 0\. "
+            r"Reason: GracefulShutdown",
+        ]
+    else:
+        patterns = [
+            r"Remote process .*?terminated gracefully following SIGQUIT signal\.",
+            rf"Process '{name}' \(.*?\) was terminated by the process manager through "
+            r"the remote pid\. Reported exit code: 0\.",
+        ]
+    for pattern in patterns:
+        require_pattern_match(
+            text,
+            re.compile(pattern, re.DOTALL),
+            error_message=f"Did not find the graceful termination log line for {name} "
+            f"after restart request ({pattern}).",
+        )
+
+
 def get_lines_between_markers(
     lines: list[str],
     start_marker: str,

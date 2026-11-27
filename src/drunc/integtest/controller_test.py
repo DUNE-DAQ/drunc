@@ -34,6 +34,10 @@ ignored_logfile_problems = {
     "SSH_SHELL_process_manager": [
         "was terminated unexpectedly through the remote pid by a SIGKILL",
     ],
+    "K8s_process_manager": [
+        r"terminated with exit code \d+\. Reason: Error",
+        r"Timeout\. Remaining:",
+    ],
     "connectivity-service": [
         "errorlog: -",
     ],

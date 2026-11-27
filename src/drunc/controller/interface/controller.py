@@ -12,6 +12,7 @@ from druncschema.token_pb2 import Token
 from drunc.controller.configuration import ControllerConfHandler
 from drunc.controller.controller import Controller
 from drunc.grpc_settings import (
+    CONTROLLER_ADVERTISE_ADDRESS_ENV,
     CONTROLLER_SERVER_GRPC_CONFIG,
     CONTROLLER_SERVER_GRPC_MAX_WORKERS,
 )
@@ -146,7 +147,13 @@ def controller_cli(
     try:
         server, port = serve(commandfacility)
         server_name = commandfacility.split(":")[0]
-        ctrlr.advertise_control_address(f"grpc://{server_name}:{port}")
+        # The bind address may not be reachable by clients (e.g. a K8s pod IP
+        # behind a NodePort service), so the advertised one can be overridden
+        ctrlr.advertise_control_address(
+            os.environ.get(
+                CONTROLLER_ADVERTISE_ADDRESS_ENV, f"grpc://{server_name}:{port}"
+            )
+        )
         ctrlr.init_controller()
 
         # Add signal handling for gRPC server
