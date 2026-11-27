@@ -20,15 +20,25 @@ jobs:
     permissions:
       contents: read # Check out the scripts
       pull-requests: write # Assign the PR author
+    env:
+      # Bot secrets are required for tracking the DRUNC Internal project. If running from a fork, the bot token will not be available.
+      HAS_BOT_TOKEN: ${{ secrets.BOT_CI_ISSUES != '' }}
     steps:
+      - name: Note skipped project tracking
+        if: ${{ env.HAS_BOT_TOKEN != 'true' }}
+        run: echo "::notice::BOT_CI_ISSUES is not available; skipping DRUNC Internal project tracking"
+
       - uses: actions/checkout@v4
+        if: ${{ env.HAS_BOT_TOKEN == 'true' }}
         with:
           persist-credentials: false
 
       - uses: ./.github/actions/setup-scripts
+        if: ${{ env.HAS_BOT_TOKEN == 'true' }}
 
       # Add the pull request to the DRUNC Internal project and sets its fields
       - name: Add PR to DRUNC Internal and set its fields
+        if: ${{ env.HAS_BOT_TOKEN == 'true' }}
         env:
           GITHUB_TOKEN: ${{ secrets.BOT_CI_ISSUES }} # Bot token with org project access
         run: python .github/scripts/track_new_pr_drunc_internal.py
@@ -44,5 +54,5 @@ jobs:
               owner: context.repo.owner,
               repo: context.repo.repo,
               issue_number: context.issue.number,
-              assignees: [context.actor]
+              assignees: [context.payload.pull_request.user.login]
             })

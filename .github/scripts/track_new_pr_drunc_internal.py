@@ -275,6 +275,24 @@ def track(api: GitHubApi, content_id: str, today: date) -> list[str]:
     return lines
 
 
+def report(lines: list[str]) -> None:
+    """
+    Print the summary lines and append them to the workflow step summary.
+
+    Args:
+        lines (list[str]): The summary lines to report.
+
+    Returns:
+        None
+    """
+    # Join the summary lines and print them to the workflow log
+    summary = "\n".join(lines)
+    print(summary)
+
+    # Append the summary to the workflow summary section
+    append_summary(summary)
+
+
 def main() -> int:
     """
     Track the pull request on the DRUNC Internal project.
@@ -305,14 +323,11 @@ def main() -> int:
         workflow_stdout.append(
             f"- **Project {ORG}#{PROJECT_NUMBER}**: failed ({error})"
         )
+        report(workflow_stdout)
         return 1
 
-    # Print the summary of the pull request tracking
-    summary = "\n".join(workflow_stdout)
-    print(summary)
-
-    # Append the summary to the workflow summary section
-    append_summary(summary)
+    # Report the successful tracking
+    report(workflow_stdout)
 
     return 0
 
