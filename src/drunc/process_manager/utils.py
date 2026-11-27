@@ -370,8 +370,11 @@ def get_log_path(
     override_logs: bool,
     app_log_path: str | None = None,
     session_log_path: str | None = None,
+    execution_path: str | None = None,
 ) -> str:
-    pwd = os.getcwd()
+    # Relative and default log paths are placed in the execution path, falling back to
+    # the current working directory if none is given
+    pwd = execution_path or os.getcwd()
     if app_log_path == "./":
         app_log_path = pwd
     log_path = None

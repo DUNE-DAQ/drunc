@@ -70,8 +70,9 @@ def _pm_driver(
     type=click.Path(exists=True, file_okay=False, writable=True, resolve_path=True),
     default=None,
     help=(
-        "Define the working path for which the unified shell will operate. Sets the "
-        "current working directory for all operations."
+        "Define the working path for the booted applications. They run in this "
+        "directory, and their logs are written to it unless the configuration sets a "
+        "log path. Defaults to the current working directory."
     ),
 )
 @click.pass_obj
@@ -196,6 +197,16 @@ def boot(
     "--n_sleeps", type=int, default=6, help="Select the number of timeouts (default 5)"
 )
 @click.argument("session-name", type=str)
+@click.option(
+    "-e",
+    "--execution-path",
+    type=click.Path(exists=True, file_okay=False, writable=True, resolve_path=True),
+    default=None,
+    help=(
+        "Define the working path for the dummy processes. They run in this directory "
+        "and write their logs to it. Defaults to the current working directory."
+    ),
+)
 @click.pass_obj
 def dummy_boot(
     obj: ProcessManagerContext,
@@ -204,6 +215,7 @@ def dummy_boot(
     sleep: int,
     n_sleeps: int,
     session_name: str,
+    execution_path: str | None,
 ) -> None:
     """
     Boot a session with the given number of dummy processes.
@@ -219,6 +231,8 @@ def dummy_boot(
         sleep: The duration in seconds for which each dummy process will sleep.
         n_sleeps: The number of times each dummy process will sleep.
         session_name: The name of the session to be booted.
+        execution_path: The working path for the dummy processes. Sets their current
+            working directory and the directory of their logs.
 
     Returns:
         None
@@ -239,6 +253,7 @@ def dummy_boot(
             n_processes=n_processes,
             sleep=sleep,
             n_sleeps=n_sleeps,
+            execution_path=execution_path,
         )
         for result in results:
             if not result:

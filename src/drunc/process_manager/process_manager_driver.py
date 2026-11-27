@@ -356,6 +356,7 @@ class ProcessManagerDriver:
             override_logs=override_logs,
             app_log_path=app_log_path,
             session_log_path=session_log_path,
+            execution_path=execution_path,
         )
 
         if host_is_local(host) and not os.path.exists(os.path.dirname(log_path)):
@@ -850,8 +851,11 @@ To debug it, close drunc and run the following command:
         sleep: int,
         n_sleeps: int,
         timeout: int | float = 60,
+        execution_path: str | None = None,
     ) -> Iterator[ProcessInstanceList]:
-        pwd = os.getcwd()
+        # Run the dummy processes and write their logs in the execution path, falling
+        # back to the current working directory if none is given
+        pwd = execution_path or os.getcwd()
 
         # Construct the list of commands to send to the dummy_boot process
         executable_and_arguments = self._prepare_exec_and_args_dummy_boot(
