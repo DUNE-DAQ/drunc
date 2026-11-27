@@ -1,8 +1,8 @@
 """
 Keep a pull request's Status on the DRUNC Internal project board in step with its draft
 state:
- - converted to draft -> Status = In progress
- - ready for review   -> Status = Ready for review
+ - Converted to draft -> Status = In progress
+ - Ready for review   -> Status = Ready for review
 
 The status options are matched by the end of their name, so icons in front of the name
 (for example "🏗 In progress") are kept. If the pull request is not on the board yet, it
