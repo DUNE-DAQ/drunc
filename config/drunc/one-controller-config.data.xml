@@ -80,7 +80,7 @@
 
 <obj class="Service" id="controller_control">
  <attr name="protocol" type="string" val="grpc"/>
- <attr name="port" type="u16" val="0"/>
+ <attr name="port" type="u16" val="30006"/>
 </obj>
 
 
