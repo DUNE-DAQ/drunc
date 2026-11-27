@@ -13,7 +13,13 @@ jobs:
   enforce-draft-if-new:
     if: ( github.event.action == 'opened' || github.event.action == 'reopened' ) && !github.event.pull_request.draft
     runs-on: ubuntu-latest
+    env:
+      # Bot secrets are required for writing to a PR. If running from a fork, the bot token will not be available.
+      HAS_BOT_TOKEN: ${{ secrets.BOT_CI_ISSUES != '' }}
     steps:
+      - name: Note skipped status sync
+        if: ${{ env.HAS_BOT_TOKEN != 'true' }}
+        run: echo "::notice::BOT_CI_ISSUES is not available; skipping draft enforcement and DRUNC Internal status sync"
       - uses: actions/checkout@v4
         with:
           ref: ${{ github.sha }}
@@ -22,12 +28,14 @@ jobs:
       - uses: ./.github/actions/setup-scripts
 
       - name: Convert to draft
+        if: ${{ env.HAS_BOT_TOKEN == 'true' }}
         env:
-          GITHUB_TOKEN: ${{ secrets.DRUNC_DRAFTER }}
+          GITHUB_TOKEN: ${{ secrets.BOT_CI_ISSUES }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
         run: python .github/scripts/convert_to_draft.py
 
       - name: Explain the conversion
+        if: ${{ env.HAS_BOT_TOKEN == 'true' }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
