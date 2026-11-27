@@ -1,0 +1,51 @@
+name: Sync PR status with draft state on DRUNC Internal project
+# When a pull request's draft state changes, this workflow sets its Status on the DRUNC
+# Internal project board:
+# - Converted to draft -> In progress
+# - Ready for review   -> Ready for review
+# New PRs that are opened as non-draft are converted to draft by pr_review.yml, which
+# also triggers this workflow and sets them to In progress.
+
+on:
+  pull_request:
+    types:
+      - converted_to_draft
+      - ready_for_review
+
+# Only the latest draft state of a pull request matters, so cancel older runs
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+# Remove the default GITHUB_TOKEN permissions
+permissions: {}
+
+jobs:
+  sync_draft_status:
+    name: Set DRUNC Internal status from draft state
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read # Check out the scripts
+    env:
+      # Bot secrets are required for writing to a PR. If running from a fork, the bot token will not be available.
+      HAS_BOT_TOKEN: ${{ secrets.BOT_CI_ISSUES != '' }}
+    steps:
+      - name: Note skipped status sync
+        if: ${{ env.HAS_BOT_TOKEN != 'true' }}
+        run: echo "::notice::BOT_CI_ISSUES is not available; skipping DRUNC Internal status sync"
+
+      - uses: actions/checkout@v4
+        if: ${{ env.HAS_BOT_TOKEN == 'true' }}
+        with:
+          # Do not use the default GITHUB_TOKEN
+          persist-credentials: false
+
+      - uses: ./.github/actions/setup-scripts
+        if: ${{ env.HAS_BOT_TOKEN == 'true' }}
+
+      # Set the pull request's Status on the DRUNC Internal project
+      - name: Set DRUNC Internal status
+        if: ${{ env.HAS_BOT_TOKEN == 'true' }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.BOT_CI_ISSUES }} # Bot token with org project access
+        run: python .github/scripts/sync_pr_draft_status.py

@@ -1,0 +1,58 @@
+name: Add pull request to DRUNC Internal project
+# For new PRs, this workflow
+# - Adds them to the DRUNC Internal project board 
+# - Sets their Status and Sprint
+# - Assigns the PR author. 
+# The DUNE-DAQ tracking project is handled separately by the centrally managed track_new_prs.yml.
+
+on:
+  pull_request:
+    types:
+      - opened
+
+# Remove the default GITHUB_TOKEN permissions
+permissions: {}
+
+jobs:
+  track_prs_drunc_internal:
+    name: Add new pull request to DRUNC Internal project
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read # Check out the scripts
+      pull-requests: write # Assign the PR author
+    env:
+      # Bot secrets are required for writing to a PR. If running from a fork, the bot token will not be available.
+      HAS_BOT_TOKEN: ${{ secrets.BOT_CI_ISSUES != '' }}
+    steps:
+      - name: Note skipped project tracking
+        if: ${{ env.HAS_BOT_TOKEN != 'true' }}
+        run: echo "::notice::BOT_CI_ISSUES is not available; skipping DRUNC Internal project tracking"
+
+      - uses: actions/checkout@v4
+        if: ${{ env.HAS_BOT_TOKEN == 'true' }}
+        with:
+          persist-credentials: false
+
+      - uses: ./.github/actions/setup-scripts
+        if: ${{ env.HAS_BOT_TOKEN == 'true' }}
+
+      # Add the pull request to the DRUNC Internal project and sets its fields
+      - name: Add PR to DRUNC Internal and set its fields
+        if: ${{ env.HAS_BOT_TOKEN == 'true' }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.BOT_CI_ISSUES }} # Bot token with org project access
+        run: python .github/scripts/track_new_pr_drunc_internal.py
+
+      # Assign the PR author to the pull request
+      - name: Assign PR author
+        if: ${{ !cancelled() }} # Still assign the author if the DRUNC Internal step failed
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            github.rest.issues.addAssignees({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              assignees: [context.payload.pull_request.user.login]
+            })

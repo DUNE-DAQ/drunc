@@ -1,0 +1,43 @@
+name: Sprint rollover
+# Moves unfinished items from the DRUNC Internal project board from the previous sprint
+# to the current sprint
+on:
+  schedule:
+    - cron: '0 1 * * *' # Daily, shortly after sprints change at midnight UTC
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: List the items that would move without changing anything
+        type: boolean
+        default: true
+
+# Remove the default GITHUB_TOKEN permissions
+permissions: {}
+
+# Make sure only one instance of this workflow runs at a time
+concurrency:
+  group: sprint-rollover
+  cancel-in-progress: false
+
+jobs:
+  rollover:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read # Only needed to check out the script
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      # Prepare the environment and scripts for the sprint rollover job
+      - uses: ./.github/actions/setup-scripts
+
+      - name: Move unfinished items from the previous sprint to the current sprint
+        env:
+          GITHUB_TOKEN: ${{ secrets.BOT_CI_ISSUES }} # Use the bot token for CI issues
+          ORG: DUNE-DAQ
+          PROJECT_NUMBER: 8 # Specify which project should be scraped, this is the ID of the DRUNC Internal project
+          SPRINT_FIELD: Sprint
+          DRY_RUN: ${{ inputs.dry_run || false }}
+        run: python .github/scripts/sprint_rollover.py
