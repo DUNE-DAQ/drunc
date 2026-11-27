@@ -333,7 +333,7 @@ def main(argv: list[str] | None = None) -> int:
 
     # Prepare the summary lines for the sprint rollover.
     verb = "Would move" if args.dry_run else "Moved"
-    lines = [
+    workflow_stdout = [
         f"### Sprint rollover{' (dry run)' if args.dry_run else ''}",
         f"- From: {previous.get('title', previous['id'])}",
         f"- To: {current.get('title', current['id'])}",
@@ -345,10 +345,10 @@ def main(argv: list[str] | None = None) -> int:
         if not args.dry_run:
             move_item(api, project_id, field_id, item["id"], current["id"])
         print(f"{verb} {item_label(item)}")
-        lines.append(f"  - {item_label(item)}")
+        workflow_stdout.append(f"  - {item_label(item)}")
 
     # Append the summary lines to the overall summary.
-    append_summary("\n".join(lines))
+    append_summary("\n".join(workflow_stdout))
 
     # Log the completion of the sprint rollover.
     print("Sprint rollover completed.")
