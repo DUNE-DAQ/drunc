@@ -29,7 +29,6 @@ env:
 jobs:
   generate-release-tarball:
     name: Generate Release Tarball
-    if: github.event.pull_request.draft == false
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -61,6 +60,7 @@ jobs:
 
   unit-tests:
     name: Run Unit Tests
+    if: github.event.pull_request.draft == false
     needs: generate-release-tarball
     runs-on: ubuntu-latest
     defaults:
@@ -144,6 +144,7 @@ jobs:
 
   select-daqsystemtest-integtests:
     name: Select integration tests from daqsystemtest
+    if: github.event.pull_request.draft == false
     # Select integration tests that can run on the default 4 core runner
     runs-on: ubuntu-latest
     outputs:
@@ -159,6 +160,7 @@ jobs:
   select-drunc-integtests:
     name: Select integration tests from drunc
     runs-on: ubuntu-latest
+    if: github.event.pull_request.draft == false
     outputs:
       matrix: ${{ steps.set-matrix.outputs.matrix }}
     steps:
@@ -358,3 +360,80 @@ jobs:
           cd pythoncode/drunc
           source scripts/setup_drunc_config_path.sh
           source scripts/drunc_integtest_bundle.sh -k ${{ matrix.test_script }} --pytest-options "--process-manager-type k8s" --verbosity 5 --tmpdir "$TEST_DIR" 2>&1
+
+
+  drunc-pm-pod-k8s:
+    name: "Deploy drunc process manager as a Pod (k8s)"
+    if: github.event_name == 'pull_request'
+    needs: [generate-release-tarball]
+    runs-on: ubuntu-latest
+    env:
+      KLUCTL_VERSION: v2.28.2
+      PM_NAMESPACE: kube-services
+
+    defaults:
+      run:
+        shell: bash
+    container:
+      image: ghcr.io/dune-daq/nightly-release-alma9:development_v5
+      options: --cap-add=NET_ADMIN
+      volumes:
+        - /var/run/docker.sock:/var/run/docker.sock
+
+    steps:
+      - name: Checkout workflow repository
+        uses: actions/checkout@v7
+
+      - name: Initialize Test Environment
+        uses: ./.github/actions/setup-test-runner
+
+      - name: Setup Kind and Kubectl
+        uses: ./.github/actions/setup-kind
+        with:
+          cluster_name: daq-k8s-cluster
+
+      - name: Install kluctl
+        run: |
+          curl -fsSL "https://github.com/kluctl/kluctl/releases/download/${KLUCTL_VERSION}/kluctl_${KLUCTL_VERSION}_linux_amd64.tar.gz" \
+            | tar -xz -C /usr/local/bin kluctl
+          kluctl version
+
+      - name: Create kluctl project
+        run: |
+          cat <<'EOF' > k8s/.kluctl.yaml
+          discriminator: drunc-pm-ci
+          targets:
+            - name: ci
+          args:
+            - name: port
+            - name: image
+            - name: workarea
+            - name: host_mount
+            - name: pm_config
+          EOF
+          cat <<'EOF' > k8s/deployment.yaml
+          deployments:
+            - path: process-manager-ci
+          EOF
+
+      - name: Run basic_kluctl_test.py
+        run: |
+          export DRUNC_KLUCTL_PROJECT=$(realpath k8s)
+          export DRUNC_PM_POD_IMAGE=ghcr.io/dune-daq/alma9:ci-local
+          export DRUNC_PM_POD_HOST_MOUNT=/__w
+          cd nightly/NFD_DEV*
+          source env.sh
+          cd pythoncode/drunc
+          source scripts/setup_drunc_config_path.sh
+          source scripts/drunc_integtest_bundle.sh -k basic_kluctl_test.py --verbosity 5 --tmpdir "$TEST_DIR"
+
+      - name: Process manager logs
+        if: always()
+        run: kubectl -n "$PM_NAMESPACE" logs deployment/drunc-process-manager --all-containers=true || true
+
+      - name: Investigate failure
+        if: failure()
+        run: |
+          kubectl get pods -A -o wide || true
+          kubectl -n "$PM_NAMESPACE" describe pods || true
+          kubectl get events -A --sort-by='.metadata.creationTimestamp' || true
