@@ -312,14 +312,18 @@ def log_pm_cmd(obj: ShellContext) -> None:
     obj.get_pm_driver().send_log(msg)
 
 
-def check_and_cd_execution_path(log: logging.Logger, execution_path: str) -> None:
+def check_and_cd_execution_path(
+    log: logging.Logger, execution_path: str | None
+) -> None:
     """
     Check if the provided execution path is a writable directory and change the current
     working directory to it.
 
     Args:
         log: Logger object for logging errors.
-        execution_path: The path to check and change to.
+        execution_path: The path to check and change to. Relative paths are resolved
+            against the current working directory, so pass an absolute path to child
+            processes that may already have changed directory.
 
     Returns:
         None

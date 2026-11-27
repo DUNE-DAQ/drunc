@@ -131,7 +131,7 @@ from drunc.utils.utils import (
 @click.option(
     "-e",
     "--execution-path",
-    type=str,
+    type=click.Path(exists=True, file_okay=False, writable=True, resolve_path=True),
     default=None,
     help=(
         "Define the working path for which the unified shell will operate. Sets the "
@@ -150,7 +150,7 @@ def unified_shell(
     log_path: str,
     safe_mode: bool,
     no_stop_error_batch_mode: bool,
-    execution_path: str,
+    execution_path: str | None,
 ) -> None:
     """
     The unified shell is a command line interface to interact with the process manager
@@ -168,6 +168,8 @@ def unified_shell(
         override_logs: Whether to override logs or not.
         log_path: The log path to use.
         safe_mode: Whether to enable safe mode or not.
+        no_stop_error_batch_mode: Do not stop on errors if running in batch mode.
+        execution_path: The working path for which the unified shell will operate.
 
     Returns:
         None

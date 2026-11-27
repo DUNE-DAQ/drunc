@@ -204,10 +204,10 @@ def run_pm(
 @click.option(
     "-e",
     "--execution-path",
-    type=str,
+    type=click.Path(exists=True, file_okay=False, writable=True, resolve_path=True),
     default=None,
     help=(
-        "Define the working path for which the unified shell will operate. Sets the "
+        "Define the working path for which the process manager will operate. Sets the "
         "current working directory for all operations."
     ),
 )
@@ -217,7 +217,7 @@ def process_manager_cli(
     log_level: str,
     override_logs: bool,
     log_path: str,
-    execution_path: str,
+    execution_path: str | None,
 ) -> None:
     get_root_logger(log_level)
     pm_conf = get_process_manager_configuration(pm_conf)
