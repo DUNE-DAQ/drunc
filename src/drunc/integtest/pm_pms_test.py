@@ -10,6 +10,7 @@ from datetime import datetime
 import integrationtest.data_classes as idc
 import integrationtest.log_file_checks as log_file_checks
 import integrationtest.utility_functions as utility_functions
+import pytest
 from daqconf.utils import find_free_port
 from integ_test_utils import (
     _parse_table_from_index,
@@ -114,6 +115,14 @@ dunerc_commands = f"""
     echo test_terminate_done
     echo --server  test_terminate_done
 
+    echo test_boot_with_specified_path
+    boot <config_data_file> local-1x1-config {daq_session_name}_in_parent_dir -e ..
+    echo test_boot_with_specified_path_done
+
+    echo cleanup
+    terminate
+    echo cleanup_done
+
     """.split()
 
 # Find a free network port to use for the process manager
@@ -169,20 +178,48 @@ def test_dunerc_success(run_dunerc, caplog) -> None:
     utility_functions.basic_checks(run_dunerc, caplog, print_test_name=False)
 
 
-def test_log_files(run_dunerc) -> None:
-    """Checks that expected process-manager log files exist and are free of errors."""
+@pytest.mark.parametrize(
+    ("session_name", "log_dir"),
+    [
+        (daq_session_name, "."),
+        (f"{daq_session_name}_in_parent_dir", ".."),
+    ],
+    ids=["default_dir", "parent_dir"],
+)
+def test_log_files(run_dunerc, session_name: str, log_dir: str) -> None:
+    """
+    Checks that the expected log files of each booted session are in the expected
+    directory, and that the process-manager log files are free of errors.
+
+    Sessions:
+     - default_dir: booted without an execution path, logs go to the run directory
+     - parent_dir: booted with `-e ..`, logs go to the parent of the run directory
+
+    Args:
+        run_dunerc: The results of the integration test run.
+        session_name: The name of the booted session.
+        log_dir: The directory the session's logs are expected in, relative to the run
+            directory.
+    """
+    # Collect the log files from the directory the session should have written to. The
+    # framework only collects log files from the run directory itself.
+    search_dir = (run_dunerc.run_dir / log_dir).resolve()
+    log_names = tuple(
+        str(logname)
+        for pattern in ("log_*.txt", "log_*.log")
+        for logname in search_dir.glob(pattern)
+    )
+
     # Check that at least some of the expected log files are present
     logfile_types = ("df-01", "dfo", "mlt", "ru")
-    log_names = tuple(map(str, run_dunerc.log_files))
     missing_logfiles = [
-        f"{daq_session_name}_{logfile_type}"
+        f"{session_name}_{logfile_type}"
         for logfile_type in logfile_types
-        if not any(
-            f"{daq_session_name}_{logfile_type}" in str(logname)
-            for logname in log_names
-        )
+        if not any(f"{session_name}_{logfile_type}" in logname for logname in log_names)
     ]
-    assert not missing_logfiles, f"No logfile found for: {', '.join(missing_logfiles)}."
+    assert not missing_logfiles, (
+        f"No logfile found in {search_dir} for: {', '.join(missing_logfiles)}."
+    )
 
     # Check that there are no warnings or errors in the log files
     assert log_file_checks.logs_are_error_free(

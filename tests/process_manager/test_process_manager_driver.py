@@ -361,7 +361,7 @@ def test_build_boot_request_success(
         session_dal=MagicMock(),
         session_log_path="/log/dir",
         override_logs=False,
-        pwd="/pwd",
+        execution_path="/pwd",
     )
     assert breq == bootrequest
 
@@ -390,7 +390,7 @@ def test_build_boot_request_exception(
             session_dal=MagicMock(),
             session_log_path="/log/dir",
             override_logs=False,
-            pwd="/pwd",
+            execution_path="/pwd",
         )
 
 

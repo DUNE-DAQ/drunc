@@ -184,12 +184,12 @@ dunerc_commands = (
 
     """
     + "".join(p.to_command_block() for p in _FSM_COMMANDS)
-    + " terminate boot " # Remove when possible
+    + " terminate boot "  # Remove when possible
     + _FSM_SEQUENCES["test_srun_w_boot"].to_command_block()
     + " terminate "
     + "boot wait 10 conf"
     + _FSM_SEQUENCES["test_srunw_boot_conf"].to_command_block()
-    + " terminate boot " # Remove `boot` when possible
+    + " terminate boot "  # Remove `boot` when possible
     + _FSM_SEQUENCES["test_start_run"].to_command_block()
     + _FSM_SEQUENCES["test_stop_run"].to_command_block()
     + "start-run --run-number 3"
@@ -203,7 +203,11 @@ dunerc_commands = (
 
 
     terminate
+
     boot -no
+    terminate
+
+    boot -e ..
     terminate
     """
 ).split()
@@ -311,6 +315,17 @@ def test_log_files(run_dunerc) -> None:
         ignored_logfile_problems,
         verbosity_helper=run_dunerc.verbosity_helper,
     )
+
+
+def test_log_files_in_parent_dir(run_dunerc) -> None:
+    """Checks that log files are correctly placed in the parent directory when booted with -e .."""
+    search_dir = (run_dunerc.run_dir / "..").resolve()
+    log_names = tuple(
+        str(logname)
+        for pattern in ("log_*.txt", "log_*.log")
+        for logname in search_dir.glob(pattern)
+    )
+    assert log_names, f"No log files found in {search_dir}."
 
 
 def test_connections(run_dunerc) -> None:
