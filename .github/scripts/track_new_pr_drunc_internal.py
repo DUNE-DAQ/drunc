@@ -9,42 +9,22 @@ workflow track_new_prs.yml.
 
 from __future__ import annotations
 
-import json
-import os
-import re
 import sys
 from collections.abc import Callable
 from datetime import date, datetime, timezone
-from pathlib import Path
 
-from lib_github_api import GitHubApi, RoutingError, append_summary
+from common import (
+    IN_PROGRESS,
+    ORG,
+    PROJECT_NUMBER,
+    STATUS_FIELD,
+    option_matching,
+    pull_request_from_event,
+    report,
+)
+from lib_github_api import GitHubApi, RoutingError
 from lib_graphql_queries import ADD_ITEM_MUTATION, PROJECT_QUERY, SET_FIELD_MUTATION
 from sprint_rollover import sprint_end
-
-ORG = "DUNE-DAQ"
-
-# Matches "In Progress", "In progress", "🏗 In progress", ...
-IN_PROGRESS = re.compile(r"in progress$", re.IGNORECASE)
-
-PROJECT_NUMBER = 8  # DRUNC Internal
-
-
-def option_matching(field: dict, predicate: Callable[[str], bool]) -> dict:
-    """
-    Return the first single-select option whose name satisfies `predicate`.
-
-    Args:
-        field (dict): The project field containing single-select options.
-        predicate (Callable[[str], bool]): A function to test option names.
-
-    Returns:
-        dict: The first option that satisfies the predicate.
-    """
-    for option in field.get("options") or []:
-        if predicate(option["name"]):
-            return option
-    names = ", ".join(repr(option["name"]) for option in field.get("options") or [])
-    raise RoutingError(f"No matching option in '{field['name']}' (options: {names})")
 
 
 def current_sprint(sprints: list[dict], today: date) -> dict | None:
@@ -106,35 +86,9 @@ def choose_current_sprint(field: dict, today: date) -> tuple[dict, str] | None:
 # Fields to set on the new item, in order. Each chooser returns (value, description) for
 # the field, or None if nothing should be set.
 FIELDS: tuple[tuple[str, Callable[[dict, date], tuple[dict, str] | None]], ...] = (
-    ("Status", choose_in_progress),
+    (STATUS_FIELD, choose_in_progress),
     ("Sprint", choose_current_sprint),
 )
-
-
-def pull_request_from_event() -> dict:
-    """
-    Read the pull request from the Actions event payload.
-
-    Args:
-        None
-
-    Returns:
-        dict: The pull request data from the event payload.
-    """
-    # Read the event payload from the file specified by GITHUB_EVENT_PATH.
-    event_path = os.environ.get("GITHUB_EVENT_PATH")
-    if not event_path:
-        raise RoutingError("GITHUB_EVENT_PATH is required")
-
-    # Load the event payload from the file.
-    event = json.loads(Path(event_path).read_text(encoding="utf-8"))
-
-    # Extract the pull request from the event payload.
-    pull = event.get("pull_request")
-    if not isinstance(pull, dict) or not pull.get("node_id"):
-        raise RoutingError("The event has no pull request node ID")
-
-    return pull
 
 
 def fetch_project(api: GitHubApi) -> tuple[str, str, list[dict]]:
@@ -233,24 +187,6 @@ def track(api: GitHubApi, content_id: str, today: date) -> list[str]:
         )
         lines.append(f"  - {name}: {label}")
     return lines
-
-
-def report(lines: list[str]) -> None:
-    """
-    Print the summary lines and append them to the workflow step summary.
-
-    Args:
-        lines (list[str]): The summary lines to report.
-
-    Returns:
-        None
-    """
-    # Join the summary lines and print them to the workflow log
-    summary = "\n".join(lines)
-    print(summary)
-
-    # Append the summary to the workflow summary section
-    append_summary(summary)
 
 
 def main() -> int:

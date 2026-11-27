@@ -14,21 +14,18 @@ from __future__ import annotations
 import re
 import sys
 
-from lib_github_api import GitHubApi, RoutingError
-from lib_graphql_queries import ADD_ITEM_MUTATION, SET_FIELD_MUTATION, STATUS_QUERY
-from track_new_pr_drunc_internal import (
+from common import (
     IN_PROGRESS,
     ORG,
     PROJECT_NUMBER,
+    READY_FOR_REVIEW,
+    STATUS_FIELD,
     option_matching,
     pull_request_from_event,
     report,
 )
-
-# Matches "Ready for review", "Ready for Review", "👀 Ready for review", ...
-READY_FOR_REVIEW = re.compile(r"ready for review$", re.IGNORECASE)
-
-STATUS_FIELD = "Status"
+from lib_github_api import GitHubApi, RoutingError
+from lib_graphql_queries import ADD_ITEM_MUTATION, SET_FIELD_MUTATION, STATUS_QUERY
 
 
 def target_status(pull: dict) -> re.Pattern:
