@@ -29,7 +29,6 @@ env:
 jobs:
   generate-release-tarball:
     name: Generate Release Tarball
-    if: github.event.pull_request.draft == false
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -61,6 +60,7 @@ jobs:
 
   unit-tests:
     name: Run Unit Tests
+    if: github.event.pull_request.draft == false
     needs: generate-release-tarball
     runs-on: ubuntu-latest
     defaults:
@@ -144,6 +144,7 @@ jobs:
 
   select-daqsystemtest-integtests:
     name: Select integration tests from daqsystemtest
+    if: github.event.pull_request.draft == false
     # Select integration tests that can run on the default 4 core runner
     runs-on: ubuntu-latest
     outputs:
@@ -159,6 +160,7 @@ jobs:
   select-drunc-integtests:
     name: Select integration tests from drunc
     runs-on: ubuntu-latest
+    if: github.event.pull_request.draft == false
     outputs:
       matrix: ${{ steps.set-matrix.outputs.matrix }}
     steps:
