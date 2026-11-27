@@ -20,6 +20,7 @@ import os
 import shlex
 import shutil
 import socket
+import re
 
 import integrationtest.data_classes as idc
 import integrationtest.utility_functions as utility_functions
@@ -28,6 +29,24 @@ from daqconf.utils import find_free_port
 from integ_test_utils import (
     require_drunc,
     strip_ansi,
+    require_line_containing,
+)
+
+from integ_test_utils import (
+    _parse_table_from_index,
+    assert_contains_between_markers,
+    assert_match_contains_uuid,
+    assert_process_presence,
+    assert_rows_have_valid_uuids,
+    find_line_index,
+    get_column_for_friendly_name,
+    get_lines_between_markers,
+    get_ps_table_after_echo,
+    get_text_between_echo_markers,
+    require_echo_marker_index,
+    
+    require_pattern_match,
+    require_pattern_match_index,
 )
 
 # Reuse the pm_pms_test command sequence and the checks that don't depend on the
@@ -35,10 +54,8 @@ from integ_test_utils import (
 # not reachable through localhost).
 from pm_pms_test import (
     daq_session_name,
-    test_boot_pm,
+    UUID_RE,
     test_boot_pms,
-    test_root_controller_logs,
-    test_terminate,
     test_unknown_log_command,
     test_wait_command_duration_from_logs,
 )
@@ -215,3 +232,126 @@ def test_connections(run_dunerc) -> None:
         f"Did not find '{pms_connect}' in the process manager shell output.\nOutput:\n"
         + "\n".join(lines_pms)
     )
+
+
+def test_root_controller_logs(run_dunerc) -> None:
+    """
+    Verifies that:
+    - the stdout contains a "root-controller logs" header line and a "root-controller end" footer line
+    - there are exactly 5 lines between those two lines
+    - among those 5 lines, the one from "drunc.controller.core.init_controller" ends with "Controller ready"
+    """
+    lines = run_dunerc.completed_processes["pmshell"].stdout.splitlines()
+
+    # 1) Find the header/footer lines
+    header_idx = require_line_containing(
+        lines,
+        "root-controller logs",
+        error_message="Did not find the 'root-controller logs' header line in stdout.",
+    )
+    footer_idx = require_line_containing(
+        lines,
+        "root-controller end",
+        error_message="Did not find the 'root-controller end' footer line in stdout.",
+    )
+    assert footer_idx > header_idx, "Footer appears before header in stdout."
+
+    # 2) Check there are 6 lines between header and footer
+    # one more than the ssh compared to k8s
+    # not sure why
+    between = lines[header_idx + 1 : footer_idx]
+    assert len(between) == 6, (
+        f"Expected exactly 6 lines between header and footer, found {len(between)}.\nBetween:\n"
+        + "\n".join(between)
+    )
+
+    # 3) Check one of the init_controller line ends with "Controller ready"
+    # Example line:
+    # [2026/03/13 08:17:47 UTC] INFO ... drunc.controller.core.init_controller ... Controller ready
+    init_controller_ready_re = re.compile(
+        r"drunc\.controller\.core\.init_controller.*Controller ready\s*$"
+    )
+
+    matches = [line for line in between if init_controller_ready_re.search(line)]
+    assert len(matches) >= 1, (
+        "Did not find an init_controller line ending with 'Controller ready' within the 6 lines.\nBetween:\n"
+        + "\n".join(between)
+    )
+
+def test_terminate(run_dunerc) -> None:
+    """Test terminate by checking both pm and pms shells"""
+    lines_pms = strip_ansi(
+        run_dunerc.completed_processes["pmshell"].stdout
+    ).splitlines()
+    lines_pm = strip_ansi(run_dunerc.completed_processes["pm"].stdout).splitlines()
+
+    pre_boot_idx_pm = require_line_containing(
+        lines_pm,
+        "test_terminate",
+        error_message="Did not find the 'pre_boot' header line in stdout.",
+    )
+    post_boot_idx_pm = require_line_containing(
+        lines_pm,
+        "test_terminate_done",
+        error_message="Did not find the 'post_boot' footer line in stdout.",
+    )
+
+    pre_boot_idx_pms = require_line_containing(
+        lines_pms,
+        "test_terminate",
+        error_message="Did not find the 'pre_boot' header line in stdout.",
+    )
+
+    between_pm = lines_pm[pre_boot_idx_pm + 1 : post_boot_idx_pm]
+    shutdown_re = "--- Termination of role 'root-controller' complete ---"
+    assert any(shutdown_re in line for line in between_pm), (
+        f"Did not find '{shutdown_re}' between pre_boot and post_boot.\nBetween:\n"
+        + "\n".join(between_pm)
+    )
+
+    # TODO: This bit here is grabbing functions from the integ test utils. Maybe it can be better optimised?
+    table_start_idx = find_line_index(
+        lines_pms,
+        lambda line: "Terminated process" in line,
+        start_idx=pre_boot_idx_pms + 1,
+    )
+
+    assert table_start_idx is not None, "cannot fine terminated process table"
+
+    #! AI SAYS THIS SHOULD BE PMS, SHOULD DOUBLE CHECK THIS
+    terminated_table = _parse_table_from_index(lines_pm, table_start_idx, "ps")
+    for row in terminated_table:
+        assert UUID_RE.match(row["uuid"]), (
+            f"Expected a valid UUID for process '{row['friendly_name']}', got '{row['uuid']}'"
+        )
+
+
+
+def test_boot_pm(run_dunerc) -> None:
+    """Checks that boot starts in the pm. More lightweight, checks if root-controller boots"""
+    
+    """Shared boot-check logic: verifies markers/message, and optionally the root-controller
+    boot message (pm) or a populated, UUID-valid ps table (pmshell)."""
+    
+    process_name = "pm"
+    pre_marker = "pre_boot"
+    post_marker = "post_boot"
+    expected_message = "sent boot with arguments"
+
+    
+    lines = strip_ansi(run_dunerc.completed_processes[process_name].stdout).splitlines()
+
+    if expected_message:
+        assert_contains_between_markers(
+            lines, pre_marker, post_marker, expected_message
+        )
+    else:
+        get_lines_between_markers(lines, pre_marker, post_marker)
+
+    check_root_controller_boot = (
+        f"Drunc controller 'root-controller' is fully ready."
+    )
+    assert_contains_between_markers(
+        lines, pre_marker, post_marker, check_root_controller_boot
+    )
+
